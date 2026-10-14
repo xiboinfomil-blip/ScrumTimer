@@ -1,7 +1,6 @@
 import type { Mood } from '../types/team.ts';
 import { scoreSpeaker, type SessionSpeaker } from './session-results.ts';
 
-export const HISTORY_KEY = 'standup.history.v1';
 export interface HistoryPerson {
   id: string; name: string; mood: Mood | null; speakingSeconds: number;
   budgetSeconds: number; timeUp: boolean; score: number | null; meterTitle: string | null;
@@ -30,9 +29,6 @@ export function normalizeHistory(value: unknown, now = new Date()): HistoryRound
     seen.add(round.id);
     return [{ id: round.id, completedAt: date.toISOString(), people }];
   }).sort((a, b) => b.completedAt.localeCompare(a.completedAt));
-}
-export function readHistory(storage: Pick<Storage, 'getItem'>) {
-  return normalizeHistory(JSON.parse(storage.getItem(HISTORY_KEY) || '[]'));
 }
 export function completedRound(id: string, people: SessionSpeaker[]): HistoryRound {
   return { id, completedAt: new Date().toISOString(), people: people.map(p => ({ id: p.id, name: p.name, mood: p.mood, speakingSeconds: p.speakingSeconds, budgetSeconds: p.budgetSeconds, timeUp: p.timeUp, score: scoreSpeaker(p), meterTitle: p.moodSlide?.title ?? null })) };

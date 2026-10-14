@@ -7,7 +7,7 @@ import { Navbar } from '@/components/layout/navbar';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const { ready, persistent } = useTeam();
+  const { ready, cloudStatus, retryCloud } = useTeam();
   useEffect(() => {
     const legacy = { '#participants': '/participants', '#mood': '/mood', '#timer': '/timer' }[location.hash];
     if (legacy) router.replace(legacy);
@@ -15,9 +15,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   return <>
     <Navbar />
     <main id="main-content" tabIndex={-1} className="page mx-auto flex min-h-0 w-full max-w-480 flex-1 flex-col gap-3 overflow-hidden px-6 pt-4.5 pb-2.5 max-[1100px]:px-4 max-[1100px]:pt-3 max-[650px]:gap-2 max-[650px]:px-3 max-[650px]:py-2.5">
-      {!persistent && <p className="storage-notice shrink-0 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-[10px] leading-snug text-amber-800">Le stockage du navigateur est indisponible. Votre équipe reste utilisable pendant cette visite, mais risque d’être perdue au rechargement.</p>}
-      {ready ? children : <div className="grid flex-1 place-content-center text-muted" role="status">Chargement de votre équipe…</div>}
-      <footer className="flex h-5 shrink-0 items-center justify-between text-[9px] text-muted max-[800px]:hidden [@media(max-height:650px)]:hidden"><span><span className="mr-2 text-base text-accent" aria-hidden="true">✳</span> Moins de réunions. Plus de sens.</span><span>Au rythme de votre équipe. <span className="ml-2">Enregistré uniquement sur cet appareil.</span></span></footer>
+      {cloudStatus === 'error' && <div role="alert" className="shrink-0 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-amber-900">Neon indisponible ou conflit de sauvegarde. Aucun stockage local. Les modifications non confirmées seront perdues si vous quittez. Réessayer peut recharger l’équipe en cas de conflit.<button type="button" className="min-h-11 px-2 font-semibold underline" onClick={retryCloud}>Réessayer Neon</button></div>}
+      {ready ? children : <div className="grid flex-1 place-content-center text-muted" role="status">{cloudStatus === 'error' ? 'Connexion à Neon nécessaire pour ouvrir votre équipe.' : 'Chargement de votre équipe depuis Neon…'}</div>}
+      <footer className="flex h-5 shrink-0 items-center justify-between text-[9px] text-muted max-[800px]:hidden [@media(max-height:650px)]:hidden"><span><span className="mr-2 text-base text-accent" aria-hidden="true">✳</span> Moins de réunions. Plus de sens.</span><span>Au rythme de votre équipe. <span className="ml-2">Persistance exclusivement dans Neon.</span></span></footer>
     </main>
   </>;
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeTeam, canStartSession, hasValidSession, readTeam, STORAGE_KEY } from '../src/lib/team-storage.ts';
+import { normalizeTeam, canStartSession, hasValidSession } from '../src/lib/team-storage.ts';
 import { shuffle } from '../src/lib/shuffle.ts';
 import { secondsUntil, formatTime, shuffleEligible, timerUrgency } from '../src/lib/timer.ts';
 import { parseMoodMeterCatalog } from '../src/lib/mood-meter.ts';
@@ -61,9 +61,8 @@ test('session requires every present teammate and excludes absentees', () => {
   assert.equal(hasValidSession(state), false);
 });
 
-test('reads legacy preferences only if the current storage key is missing', () => {
-  const legacy = JSON.stringify({ people: [{ name: 'Alice' }], duration: 90 });
-  const state = readTeam({ getItem: key => key === STORAGE_KEY ? null : legacy });
+test('normalizes database team payloads without a browser storage adapter', () => {
+  const state = normalizeTeam({ roster: [{ name: 'Alice' }], duration: 90 });
   assert.equal(state.duration, 90);
   assert.equal(state.roster[0].name, 'Alice');
 });

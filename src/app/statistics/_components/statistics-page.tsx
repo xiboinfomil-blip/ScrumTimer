@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { type HistoryRound, historyLeaderboard, normalizeHistory, readHistory, summarizeDays } from '@/lib/history';
+import { type HistoryRound, historyLeaderboard, normalizeHistory, summarizeDays } from '@/lib/history';
 import { useTeam } from '@/providers/team-provider';
 import { card, routeStage, secondaryButton } from '@/components/ui/styles';
 
-type HistorySource = 'loading' | 'neon' | 'local' | 'unavailable';
+type HistorySource = 'loading' | 'neon' | 'unavailable';
 
 const numberFormat = new Intl.NumberFormat('fr-FR');
 const dayFormat = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit' });
@@ -35,44 +35,46 @@ export function StatisticsPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    let active = true;
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 15_000);
     async function loadHistory() {
       setSource('loading');
       setNotice('');
       try {
         const response = await fetch('/api/history', {
-          credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
+          method: 'GET', credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
         });
         if (!response.ok) throw new Error(response.status === 503 ? 'unconfigured' : 'request');
         const payload: { rounds?: HistoryRound[] } = await response.json();
         if (!Array.isArray(payload.rounds)) throw new Error('response');
-        if (controller.signal.aborted) return;
-        let local: HistoryRound[] = [];
-        try { local = readHistory(window.localStorage); } catch { /* Neon remains available */ }
-        const merged = normalizeHistory([...payload.rounds, ...local]);
-        setRounds(merged);
+        if (!active || controller.signal.aborted) return;
+        setRounds(normalizeHistory(payload.rounds));
         setSource('neon');
-        if (merged.length > payload.rounds.length) setNotice('Certains tours locaux attendent leur sauvegarde Neon. Réessayez la synchronisation de l’équipe.');
       } catch (error) {
-        if (controller.signal.aborted) return;
-        const message = error instanceof Error && error.message === 'unconfigured'
-          ? 'Historique Neon indisponible (service non configuré ou indisponible).'
-          : 'Impossible de charger l’historique Neon.';
-        try {
-          // readHistory normalizes the same-origin standup.history.v1 archive.
-          const localRounds = readHistory(window.localStorage);
-          setRounds(localRounds);
-          setSource('local');
-          setNotice(`${message} Affichage de l’historique local de ce navigateur uniquement.`);
-        } catch {
-          setRounds([]);
-          setSource('unavailable');
-          setNotice(`${message} Le stockage local est également inaccessible.`);
-        }
+        if (!active) return;
+        const message = timedOut
+          ? 'Le chargement de l’historique Neon a dépassé 15 secondes.'
+          : error instanceof Error && error.message === 'unconfigured'
+            ? 'Historique Neon indisponible (service non configuré ou indisponible).'
+            : 'Impossible de charger l’historique Neon.';
+        setRounds([]);
+        setSource('unavailable');
+        setNotice(`${message} Les statistiques utilisent exclusivement Neon. Aucune donnée de remplacement n’est affichée. Réessayez le chargement.`);
+      } finally {
+        clearTimeout(timeout);
       }
     }
     void loadHistory();
-    return () => controller.abort();
-  }, [refresh]);
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [refresh, cloudStatus]);
 
   const days = summarizeDays(rounds);
   const leaderboard = historyLeaderboard(rounds);
@@ -92,11 +94,9 @@ export function StatisticsPage() {
   const teamStatus = !ready || cloudStatus === 'loading' ? 'Chargement de l’équipe…'
     : cloudStatus === 'saved' ? 'Équipe enregistrée dans Neon'
       : cloudStatus === 'saving' ? 'Enregistrement de l’équipe dans Neon…'
-        : cloudStatus === 'error' ? 'Échec de synchronisation de l’équipe'
-          : 'Équipe en mode local';
+        : 'Échec de l’enregistrement de l’équipe dans Neon';
   const historyStatus = source === 'neon' ? 'Historique chargé depuis Neon'
-    : source === 'local' ? 'Historique local · ce navigateur'
-      : source === 'unavailable' ? 'Historique indisponible' : 'Chargement de l’historique…';
+    : source === 'unavailable' ? 'Historique Neon indisponible' : 'Chargement de l’historique…';
   const focus = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand';
 
   return (

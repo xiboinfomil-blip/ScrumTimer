@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { completedRound, historyCutoff, historyLeaderboard, normalizeHistory, readHistory, summarizeDays, type HistoryRound } from '../src/lib/history.ts';
+import { completedRound, historyCutoff, historyLeaderboard, normalizeHistory, summarizeDays, type HistoryRound } from '../src/lib/history.ts';
 import { chooseUnusedDeck, moodMeterId, type MoodMeterDeck } from '../src/lib/mood-meter.ts';
 import { normalizeTeam } from '../src/lib/team-storage.ts';
 
@@ -46,7 +46,7 @@ test('round snapshot retains stable id, meter label and calculated score', () =>
   assert.equal(result.id, 'stable-round');
   assert.equal(result.people[0].score, 1000);
   assert.equal(result.people[0].meterTitle, 'Used deck');
-  assert.equal(readHistory({ getItem: () => JSON.stringify([result]) }).length, 1);
+  assert.equal(normalizeHistory([result]).length, 1);
 });
 test('automatic meter selection never reuses a used deck but manual ids remain available', () => {
   const decks: MoodMeterDeck[] = [{ title: 'A', remoteId: 'a', slides: [] }, { title: 'B', remoteId: 'b', slides: [] }];

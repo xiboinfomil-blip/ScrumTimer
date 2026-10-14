@@ -1,22 +1,21 @@
 import 'server-only';
 import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
+import * as schema from '@/db/schema';
 import { cookies } from 'next/headers';
 import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { configureNeonNetwork } from './neon-network';
 
-let schema: Promise<unknown> | undefined;
-export async function database() {
+let connection: ReturnType<typeof createDatabase> | undefined;
+function createDatabase() {
   if (!process.env.DATABASE_URL) throw new Error('database unavailable');
-  const sql = neon(process.env.DATABASE_URL);
-  schema ??= sql.query(`CREATE TABLE IF NOT EXISTS standup_spaces (
-    id text PRIMARY KEY, team jsonb NOT NULL, revision integer NOT NULL DEFAULT 1, updated_at timestamptz NOT NULL DEFAULT now()
-  )`).then(() => sql.query(`CREATE TABLE IF NOT EXISTS standup_rounds (
-    space_id text NOT NULL REFERENCES standup_spaces(id) ON DELETE CASCADE,
-    id text NOT NULL, completed_at timestamptz NOT NULL, result jsonb NOT NULL,
-    PRIMARY KEY (space_id, id)
-  )`)).then(() => sql.query('CREATE INDEX IF NOT EXISTS standup_rounds_completed ON standup_rounds(completed_at)')).catch(error => { schema = undefined; throw error; });
-  await schema;
-  return sql;
+  configureNeonNetwork(process.env.DATABASE_URL);
+  return drizzle(neon(process.env.DATABASE_URL), { schema });
+}
+export function database() {
+  connection ??= createDatabase();
+  return connection;
 }
 export async function privateSpace() {
   const store = await cookies();
@@ -30,7 +29,7 @@ export function sameOrigin(request: Request) {
   return request.headers.get('origin') === new URL(request.url).origin;
 }
 export function unavailable() {
-  return NextResponse.json({ error: 'Sauvegarde Neon indisponible. Les données locales sont conservées.' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({ error: 'Neon indisponible. Aucune sauvegarde locale.' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
 }
 export async function readJson(request: Request) {
   if (!request.headers.get('content-type')?.includes('application/json')) throw new Error('invalid content type');

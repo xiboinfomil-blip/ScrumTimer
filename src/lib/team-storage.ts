@@ -7,7 +7,6 @@ export function normalizeMoodSlide(value: unknown): MoodSlideContext | null {
   return { title: slide.title.slice(0, 200), image: slide.image, slideNumber: slide.slideNumber, ...(typeof slide.meterId === 'string' && slide.meterId.length <= 200 ? { meterId: slide.meterId } : {}) };
 }
 
-export const STORAGE_KEY = 'standup.team.v2';
 export const createId = () => globalThis.crypto?.randomUUID?.() ?? `person-${Date.now()}-${Math.random()}`;
 export const defaultTeam = (): TeamState => ({ roster: [], session: [], duration: 120, warning: 30, sound: true });
 
@@ -30,10 +29,6 @@ export function normalizeTeam(value: unknown): TeamState {
   state.currentMoodSlide = normalizeMoodSlide(saved.currentMoodSlide);
   if (Array.isArray(saved.session)) state.session = [...new Set(saved.session)].filter((id): id is string => typeof id === 'string' && state.roster.some(p => p.id === id && p.present && p.mood !== null));
   return state;
-}
-
-export function readTeam(storage: Pick<Storage, 'getItem'>): TeamState {
-  return normalizeTeam(JSON.parse(storage.getItem(STORAGE_KEY) || storage.getItem('standup.preferences.v1') || 'null'));
 }
 
 export function canStartSession(state: TeamState): boolean {
