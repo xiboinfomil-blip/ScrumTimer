@@ -25,7 +25,7 @@ export function TimerPanel({ timer, className = '' }: { timer: StandupTimer; cla
   const ringColor = ended || critical ? 'text-danger' : nearly ? 'text-accent' : 'text-success';
   const statusColor = ended || critical ? 'border-red-200 bg-danger-soft text-danger' : nearly ? 'border-orange-200 bg-orange-50 text-amber-800' : complete || running || !turnStarted ? 'border-green-200 bg-success-soft text-success' : 'border-orange-200 bg-orange-50 text-amber-800';
   const feedbackColor = complete ? 'text-success' : ended || critical ? 'font-semibold text-danger' : nearly ? 'text-amber-800' : 'text-muted';
-  const panelColor = ended || critical ? 'border-red-200! bg-linear-to-b from-danger-soft to-white' : nearly ? 'border-orange-200! bg-linear-to-b from-orange-50 to-white' : complete ? 'border-green-200! bg-success-soft' : '';
+  const panelColor = ended || critical ? 'border-red-200! bg-linear-to-b from-danger-soft to-white' : nearly ? 'border-orange-200! bg-linear-to-b from-orange-50 to-white' : complete ? 'border-green-200! bg-success-soft' : running ? 'border-brand! bg-blue-50/40' : '';
   const pulse = running && critical ? 'motion-safe:animate-critical-glow' : running && nearly ? 'motion-safe:animate-warning-glow' : '';
 
   return (
@@ -40,7 +40,8 @@ export function TimerPanel({ timer, className = '' }: { timer: StandupTimer; cla
       </div>
       <div className="row-start-3 grid h-full min-h-0 min-w-0 place-items-center [container-type:size]">
         {/* Size against both dimensions of the remaining grid cell, not the viewport. */}
-        <div className={`timer-ring relative isolate aspect-square ${timer.focusMode ? 'w-[min(100cqw,100cqh,320px)] max-[650px]:w-[min(100cqw,100cqh,260px)]' : 'w-[min(100cqw,100cqh,260px)] max-[650px]:w-[min(100cqw,100cqh,220px)]'} rounded-full [container-type:inline-size] transition-colors motion-reduce:transition-none ${ringColor} ${pulse}`} id="timer-ring">
+        <div key={`${timer.activeId}-${timer.focusMode}`} className={`timer-ring relative isolate aspect-square ${timer.focusMode ? 'w-[min(100cqw,100cqh,320px)] max-[650px]:w-[min(100cqw,100cqh,260px)]' : 'w-[min(100cqw,100cqh,260px)] max-[650px]:w-[min(100cqw,100cqh,220px)]'} rounded-full [container-type:inline-size] transition-colors motion-reduce:transition-none ${ringColor} ${pulse}`} id="timer-ring">
+          {timer.focusMode && <span className="pointer-events-none absolute inset-0 rounded-full border-2 border-accent opacity-0 motion-safe:animate-turn-halo" aria-hidden="true" />}
           <svg className="size-full -rotate-90 overflow-visible" viewBox="0 0 300 300" aria-hidden="true">
             <circle className={`fill-none stroke-[6] ${ended || critical ? 'stroke-red-100' : nearly ? 'stroke-orange-100' : 'stroke-green-100'}`} cx="150" cy="150" r="136" />
             <circle className="fill-none stroke-current stroke-[6] [stroke-linecap:round] transition-[stroke-dashoffset,stroke] duration-150 ease-linear motion-reduce:transition-none" id="ring-progress" cx="150" cy="150" r="136" style={{ strokeDasharray: circumference, strokeDashoffset: circumference * (1 - ratio) }} />

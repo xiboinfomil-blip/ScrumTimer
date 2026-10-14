@@ -58,7 +58,7 @@ export function Navbar() {
             const content = <>
               <span className={`grid size-7 shrink-0 place-items-center rounded-lg max-[650px]:size-6 ${active ? 'bg-white/15 text-white' : complete ? 'bg-success-soft text-success' : 'bg-white/80 text-muted'}`}><NavIcon name={complete ? 'check' : step.icon} /></span>
               <span className="min-w-0 text-left"><span className="block text-[11px] font-semibold max-[650px]:text-[10px]">{step.label}</span><span className={`hidden text-[9px] min-[1200px]:block ${active ? 'text-blue-100' : 'text-muted'}`}>{step.detail}</span></span>
-              {active && <span className="ml-1 size-1.5 shrink-0 rounded-full bg-accent max-[800px]:hidden" aria-hidden="true" />}
+              {active && <span className="ml-1 size-1.5 shrink-0 rounded-full bg-accent motion-safe:animate-live-breathe max-[800px]:hidden" aria-hidden="true" />}
             </>;
             const className = `${navbarItem} ${active ? 'bg-linear-to-br from-brand to-brand-dark text-white shadow-[0_3px_10px_#205f9d26,inset_0_1px_0_#ffffff20]' : available ? 'text-muted hover:bg-white hover:text-brand' : 'cursor-not-allowed text-muted opacity-55'}`;
             return <li key={step.path} className="min-w-0 max-[650px]:flex-1" aria-current={active ? 'step' : undefined}>
@@ -72,13 +72,13 @@ export function Navbar() {
         <Link href="/statistics" aria-label="Statistiques" aria-current={pathname === '/statistics' ? 'page' : undefined} className={`inline-flex min-h-11 items-center rounded-lg px-2 text-xs font-semibold ${pathname === '/statistics' ? 'bg-blue-50 text-brand' : 'text-muted hover:text-brand'}`}><span aria-hidden="true">▥</span><span className="ml-1 max-[1100px]:sr-only">Statistiques</span></Link>
         {cloudStatus === 'error' && <button type="button" onClick={retryCloud} className="min-h-11 rounded-lg px-1 text-[10px] text-amber-800 underline" title="Réessayer la sauvegarde Neon">Neon · réessayer</button>}
         <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted min-[1100px]:rounded-full min-[1100px]:border min-[1100px]:border-line min-[1100px]:bg-white/80 min-[1100px]:px-2.5 min-[1100px]:py-1.5 max-[650px]:text-[9px]" role="status" title={cloudDescription}>
-          <span className={`size-1.5 shrink-0 rounded-full ${cloudLoading ? 'bg-slate-300' : cloudStatus === 'saved' ? 'bg-brand' : 'bg-accent'}`} aria-hidden="true" />
+          <span className={`size-1.5 shrink-0 rounded-full ${cloudLoading || cloudStatus === 'saving' ? 'bg-accent motion-safe:animate-live-breathe' : cloudStatus === 'saved' ? 'bg-brand' : 'bg-accent'}`} aria-hidden="true" />
           <span className="max-[1100px]:hidden max-[650px]:inline">{cloudLabel}</span>
           <span className="sr-only">{cloudDescription}</span>
         </span>
         {pathname === '/timer' && <button type="button" className="grid size-10 shrink-0 place-items-center rounded-xl border border-line bg-white text-brand transition-colors hover:border-brand/30 hover:bg-blue-50 disabled:opacity-50 motion-reduce:transition-none max-[650px]:h-7.5 max-[650px]:w-11" disabled={!ready} aria-label={state.sound ? 'Couper les alertes sonores' : 'Activer les alertes sonores'} aria-pressed={state.sound} title={state.sound ? 'Couper les alertes sonores' : 'Activer les alertes sonores'} onClick={() => updateTeam(current => ({ ...current, sound: !current.sound }))}><NavIcon name={state.sound ? 'sound' : 'muted'} className="size-4" /></button>}
       </div>
     </div>
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-brand/5 via-brand/25 to-accent/35" aria-hidden="true" />
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-brand/5 via-brand/25 to-accent/35 motion-safe:animate-brand-flow" aria-hidden="true" />
   </header>;
 }

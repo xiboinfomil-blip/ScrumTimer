@@ -1,0 +1,92 @@
+"""Speaking-turn cues with mocked Neon APIs; never writes to the live database."""
+import os
+from playwright.sync_api import sync_playwright, expect
+
+BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
+SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]
+
+with sync_playwright() as p:
+    browser = p.chromium.launch()
+    for motion in ['no-preference', 'reduce']:
+        context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion=motion)
+        team = {
+            'roster': [
+                {'id': name.lower(), 'name': name, 'present': True, 'mood': 2, 'moodUpdatedAt': None}
+                for name in ['Alice <safe>', 'Bob', 'Charlie']
+            ],
+            'session': [], 'duration': 120, 'warning': 20, 'sound': False, 'usedMoodMeters': [],
+        }
+        context.route('**/api/team', lambda route: route.fulfill(json={
+            'team': team, 'revision': 1,
+        } if route.request.method == 'GET' else {'revision': 2}))
+        context.route('**/api/history', lambda route: route.fulfill(json={'rounds': []}))
+        context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=[]))
+        page = context.new_page()
+        errors = []
+        page.on('pageerror', lambda error: errors.append(str(error)))
+        for path in ['/participants', '/statistics', '/mood']:
+            page.goto(BASE + path)
+            page.wait_for_function("document.querySelector('header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
+            stage = page.locator('#main-content > section, #main-content > div').first
+            expect(stage).to_be_visible()
+            assert stage.evaluate('el => getComputedStyle(el).animationName') == ('none' if motion == 'reduce' else 'page-reveal'), (motion, path)
+            brand_line = page.locator('.site-header > div[aria-hidden=true]')
+            assert brand_line.evaluate('el => getComputedStyle(el).animationName') == ('none' if motion == 'reduce' else 'brand-flow'), (motion, path)
+            for width, height in SIZES:
+                page.set_viewport_size({'width': width, 'height': height})
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), (path, width)
+            if motion == 'reduce':
+                assert page.evaluate("document.getAnimations().filter(a => a.playState === 'running').length") == 0, path
+        page.set_viewport_size({'width': 1366, 'height': 768})
+        page.goto(BASE + '/mood')
+        page.get_by_role('button', name='Continuer vers le minuteur', exact=False).click()
+        expect(page.locator('#speaker-turn-cue')).to_have_count(0)
+        page.locator('#start-button').click()
+        cue = page.locator('#speaker-turn-cue')
+        expect(cue).to_contain_text('À TOI DE PARLER !')
+        first = page.locator('#speaker-name').inner_text()
+        assert first in ['Alice <safe>', 'Bob', 'Charlie']
+        assert cue.locator('script').count() == 0
+        expect(cue).to_have_attribute('aria-atomic', 'true')
+        animations = cue.evaluate('el => getComputedStyle(el).animationName')
+        halo = page.locator('#timer-ring > span').first
+        halo_animation = halo.evaluate('el => getComputedStyle(el).animationName')
+        assert animations == ('none' if motion == 'reduce' else 'turn-spotlight'), animations
+        assert halo_animation == ('none' if motion == 'reduce' else 'turn-halo'), halo_animation
+
+        # Let the one-shot entrance finish before measuring geometry.
+        page.wait_for_function("document.querySelector('#speaker-turn-cue').getAnimations().every(animation => animation.playState === 'finished')")
+        for width, height in SIZES:
+            page.set_viewport_size({'width': width, 'height': height})
+            page.wait_for_function("document.documentElement.scrollWidth <= innerWidth")
+            box = cue.bounding_box()
+            assert box and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (motion, width, box)
+            ring = page.locator('#timer-ring').bounding_box()
+            assert ring and ring['width'] >= 90, (motion, width, ring)
+            for selector in ['#start-button', '#next-button', '#manage-timer-button']:
+                button = page.locator(selector).bounding_box()
+                assert button and button['height'] >= 44 and button['y'] + button['height'] <= height + 1, (motion, width, selector, button)
+
+        page.locator('#start-button').click()
+        expect(cue).to_contain_text('TON TOUR EST EN PAUSE')
+        expect(page.locator('#speaker-name')).to_have_text(first)
+        page.locator('#start-button').click()
+        expect(cue).to_contain_text('À TOI DE PARLER !')
+        page.locator('#next-button').click()
+        expect(page.locator('#speaker-name')).not_to_have_text(first)
+        expect(cue).to_contain_text('À TOI DE PARLER !')
+        expect(page.locator('#start-button')).to_contain_text('Pause')
+
+        current = page.locator('#speaker-name').inner_text()
+        page.evaluate("""() => {
+            const original = Date.now;
+            Date.now = () => original() + 130000;
+            document.dispatchEvent(new Event('visibilitychange'));
+            Date.now = original;
+        }""")
+        expect(cue).to_contain_text('Merci de passer la parole')
+        expect(page.locator('#speaker-name')).to_have_text(current)
+        assert not errors, errors
+        context.close()
+    browser.close()
+    print('PASS: sitewide page/brand motion and reduced-motion opt-out, speaking banner, start/pause/resume/handoff/expiry, safe names, all routes at six sizes; mocked Neon only')

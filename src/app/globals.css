@@ -18,6 +18,18 @@
 	--animate-enter: enter .3s ease-out both;
 	--animate-warning-glow: warning-glow 1.5s ease-in-out infinite;
 	--animate-critical-glow: critical-glow 1s ease-in-out infinite;
+	--animate-turn-spotlight: turn-spotlight .7s ease-out both;
+	--animate-turn-halo: turn-halo 1.1s ease-out both;
+	--animate-page-reveal: page-reveal .45s ease-out both;
+	--animate-live-breathe: live-breathe 3s ease-in-out infinite;
+	--animate-brand-flow: brand-flow 8s ease-in-out infinite;
+	--animate-chart-grow: chart-grow .65s ease-out both;
+	@keyframes page-reveal { from { opacity: 0; } to { opacity: 1; } }
+	@keyframes live-breathe { 50% { opacity: .55; box-shadow: 0 0 0 4px #ec8b2318; } }
+	@keyframes brand-flow { 0%, 100% { opacity: .25; transform: scaleX(.65); } 50% { opacity: 1; transform: scaleX(1); } }
+	@keyframes chart-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+	@keyframes turn-spotlight { from { opacity: .6; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+	@keyframes turn-halo { from { opacity: .7; transform: scale(.92); } to { opacity: 0; transform: scale(1.12); } }
 	@keyframes enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 	@keyframes warning-glow { 50% { box-shadow: 0 0 0 5px #ec8b231c, 0 0 24px #ec8b2326; } }
 	@keyframes critical-glow { 50% { box-shadow: 0 0 0 5px #b94b4320, 0 0 28px #b94b4330; } }
@@ -36,7 +48,9 @@
 	button:not(:disabled), a, select { cursor: pointer; }
 	:is(button, a, input, select, summary):focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
 	@media (prefers-reduced-motion: no-preference) {
-		:is(button, a) { transition: background-color .18s, color .18s, border-color .18s, box-shadow .18s, transform .18s; }
+		:is(button, a, input, select, summary) { transition: background-color .18s, color .18s, border-color .18s, box-shadow .18s, transform .18s; }
+		:is(button, a, summary):not(:disabled):hover { box-shadow: inset 0 0 0 1px #205f9d18; }
+		:is(input, select):focus { box-shadow: 0 0 0 3px #205f9d10; }
 		button:not(:disabled):active { transform: translateY(1px); }
 	}
 }

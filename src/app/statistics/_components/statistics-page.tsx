@@ -126,7 +126,7 @@ export function StatisticsPage() {
           ].map(([label, value]) => (
             <div key={label} className={`${card} p-3`}>
               <dt className="text-[11px] text-muted">{label}</dt>
-              <dd className="mt-1 text-lg font-bold tabular-nums text-brand">{value}</dd>
+              <dd key={value} className="mt-1 text-lg font-bold tabular-nums text-brand motion-safe:animate-page-reveal">{value}</dd>
             </div>
           ))}
         </dl>
@@ -143,7 +143,7 @@ export function StatisticsPage() {
                   <span className="text-[10px] font-semibold tabular-nums text-brand">{day.rounds}</span>
                   <svg viewBox="0 0 24 80" className="mx-auto h-20 w-full max-w-8" focusable="false">
                     <rect x="3" y="0" width="18" height="80" rx="3" className="fill-slate-100" />
-                    <rect x="3" y={80 - day.rounds / maximumRounds * 80} width="18" height={day.rounds / maximumRounds * 80} rx="3" className="fill-brand" />
+                    <rect key={day.rounds} x="3" y={80 - day.rounds / maximumRounds * 80} width="18" height={day.rounds / maximumRounds * 80} rx="3" className="origin-bottom fill-brand motion-safe:animate-chart-grow" />
                   </svg>
                   <span className="mt-1 block text-[9px] tabular-nums text-muted sm:text-[11px]">{dateLabel(day.date)}</span>
                 </div>
