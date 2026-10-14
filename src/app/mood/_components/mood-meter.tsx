@@ -202,11 +202,7 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
           onClick={() => selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}>↝</button>
       </div>
       {stacked ? <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(0,1fr)] gap-2 overflow-hidden rounded-xl" aria-label="Toutes les diapositives du baromètre">
-        {deck.slides.map((item, index) => <div key={`${selection.deck}:${index}:${retry}`} className={`relative flex min-h-0 flex-col overflow-hidden rounded-[14px] border-2 ${selection.slide === index ? 'border-accent' : 'border-transparent'}`}>
-          <button type="button" className="inline-flex min-h-11 shrink-0 items-center gap-1.5 bg-slate-50 px-2 text-[10px] font-semibold text-brand hover:bg-blue-50" aria-label={`Utiliser la diapositive ${index + 1} pour les humeurs`} aria-pressed={selection.slide === index} onClick={() => setSelection(current => ({ ...current, slide: index }))}>
-            <span className={`grid size-5 place-items-center rounded-full ${selection.slide === index ? 'bg-accent text-white' : 'bg-slate-100 text-muted'}`}>{index + 1}</span>
-            {selection.slide === index ? 'Repère choisi' : 'Choisir ce repère'}
-          </button>
+        {deck.slides.map((item, index) => <div key={`${selection.deck}:${index}:${retry}`} className="relative flex min-h-0 flex-col overflow-hidden rounded-[14px]">
           <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`} />
         </div>)}
       </div> : showSlide ? <MeterSlide key={`${selection.deck}:${selection.slide}:${retry}`} slide={slide}
@@ -232,7 +228,7 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
         {conversion === 'error' ? <>Présentation indisponible. Choisissez un autre baromètre ou <button type="button" className="min-h-11 px-2 text-brand underline" onClick={() => { setConversion('loading'); setRetry(value => value + 1); }}>Réessayer</button></> : 'Chargement des diapositives SVG depuis Google…'}
       </div>}
       <p id="meter-source-note" className={deck && !deck.remoteId ? 'sr-only' : 'shrink-0 text-[10px] text-muted'} role="status">{deck?.remoteId
-        ? `${stacked ? `${deck.slides.length} diapositives affichées ensemble · choisissez le repère associé aux humeurs. ` : ''}SVG statiques fournis par Google ; GIF non animés.` : deck
+        ? `${stacked ? `${deck.slides.length} diapositives affichées ensemble. ` : ''}SVG statiques fournis par Google ; GIF non animés.` : deck
         ? 'Les GIF jouent en boucle à l’ouverture de chaque diapositive. Stop fige les animations ; les flèches changent la diapositive.'
         : status === 'loading' ? 'Chargement du catalogue…'
         : status === 'error' ? 'Catalogue indisponible. Le baromètre original reste disponible dans la liste.'

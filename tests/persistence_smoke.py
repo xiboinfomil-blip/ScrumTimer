@@ -70,8 +70,7 @@ with sync_playwright() as p:
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
         assert page.get_by_role('button', name='Diapositive suivante', exact=True).count() == 0
     page.set_viewport_size({'width': 1366, 'height': 768})
-    page.get_by_role('button', name='Utiliser la diapositive 2 pour les humeurs', exact=True).click()
-    expect(page.get_by_role('button', name='Utiliser la diapositive 2 pour les humeurs', exact=True)).to_have_attribute('aria-pressed', 'true')
+    expect(page.locator('#meter-slide-stack button')).to_have_count(0)
     used = page.locator('#meter-catalogue-select option').filter(has_text='Used meter')
     assert 'Déjà utilisé' in used.inner_text()
     page.locator('#meter-catalogue-select').select_option(used.get_attribute('value'))
@@ -111,4 +110,4 @@ with sync_playwright() as p:
     assert not errors, errors
     context.close()
     browser.close()
-    print('PASS: simultaneous stacked SVG slides/reference selection at six sizes, browser storage forbidden, Neon-only hydration/retry/writes/round archive/reload/leaderboard, history failure without fallback')
+    print('PASS: simultaneous stacked SVG slides without selection controls at six sizes, browser storage forbidden, Neon-only hydration/retry/writes/round archive/reload/leaderboard, history failure without fallback')
