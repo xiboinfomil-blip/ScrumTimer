@@ -4,8 +4,10 @@ import { useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useTeam } from '@/providers/team-provider';
 import { Navbar } from '@/components/layout/navbar';
+import { useActionMotion } from '@/hooks/use-action-motion';
 
 export function AppShell({ children }: { children: ReactNode }) {
+  useActionMotion();
   const router = useRouter();
   const { ready, cloudStatus, retryCloud } = useTeam();
   useEffect(() => {

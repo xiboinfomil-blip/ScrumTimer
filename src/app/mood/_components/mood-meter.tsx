@@ -202,12 +202,12 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
           onClick={() => selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}>↝</button>
       </div>
       {stacked ? <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(0,1fr)] gap-2 overflow-hidden rounded-xl" aria-label="Toutes les diapositives du baromètre">
-        {deck.slides.map((item, index) => <div key={`${selection.deck}:${index}:${retry}`} className="relative flex min-h-0 flex-col overflow-hidden rounded-[14px]">
+        {deck.slides.map((item, index) => <div key={`${selection.deck}:${index}:${retry}`} className="relative flex min-h-0 flex-col overflow-hidden rounded-[14px] motion-safe:animate-page-reveal">
           <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`} />
         </div>)}
       </div> : showSlide ? <MeterSlide key={`${selection.deck}:${selection.slide}:${retry}`} slide={slide}
         title={`${title} — diapositive ${selection.slide + 1}`} paused={!playing} /> : (
-        <div className={meterStage}>
+        <div key={`${selection.deck}:${pending}`} className={`${meterStage} motion-safe:animate-page-reveal`}>
           {pending ? <MoodMeterLoading /> : selection.deck === -2 ? <DefaultMoodMeter /> : <p className="p-4 text-center text-xs text-muted">Choisissez un baromètre dans la liste. Les baromètres déjà utilisés restent disponibles.</p>}
         </div>
       )}

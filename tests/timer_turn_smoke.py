@@ -38,6 +38,25 @@ with sync_playwright() as p:
             if motion == 'reduce':
                 assert page.evaluate("document.getAnimations().filter(a => a.playState === 'running').length") == 0, path
         page.set_viewport_size({'width': 1366, 'height': 768})
+        page.goto(BASE + '/participants')
+        page.locator('#checkin-name').fill('Action test')
+        feedback = page.get_by_role('button', name='Enregistrer cette personne').evaluate("""el => {
+            el.click();
+            return el.getAnimations().some(a => a.effect.getTiming().duration === 380);
+        }""")
+        assert feedback == (motion == 'no-preference'), (motion, 'tap feedback')
+        row = page.locator('li').filter(has_text='Action test')
+        expect(row).to_have_count(1)
+        row.get_by_role('checkbox').check()
+        row.get_by_role('button', name='Retirer Action test').click()
+        expect(row).to_have_count(0)
+        page.get_by_role('button', name='Nouveau bilan', exact=True).click()
+        dialog = page.get_by_role('dialog')
+        expect(dialog).to_be_visible()
+        if motion == 'no-preference':
+            assert dialog.evaluate('el => el.getAnimations().some(a => a.effect.getTiming().duration === 420)')
+        dialog.get_by_role('button', name='Annuler').click()
+        expect(dialog).not_to_be_visible()
         page.goto(BASE + '/mood')
         page.get_by_role('button', name='Continuer vers le minuteur', exact=False).click()
         expect(page.locator('#speaker-turn-cue')).to_have_count(0)
@@ -72,6 +91,12 @@ with sync_playwright() as p:
         expect(page.locator('#speaker-name')).to_have_text(first)
         page.locator('#start-button').click()
         expect(cue).to_contain_text('À TOI DE PARLER !')
+        page.locator('#manage-timer-button').click()
+        expect(page.locator('#timer-management-dialog')).to_be_visible()
+        page.get_by_role('button', name='Fermer les réglages').click()
+        expect(page.locator('#timer-management-dialog')).not_to_be_visible()
+        expect(cue).to_contain_text('TON TOUR EST EN PAUSE')
+        page.locator('#start-button').click()
         page.locator('#next-button').click()
         expect(page.locator('#speaker-name')).not_to_have_text(first)
         expect(cue).to_contain_text('À TOI DE PARLER !')

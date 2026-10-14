@@ -156,7 +156,7 @@ export function StatisticsPage() {
           <h2 id="leaderboard-heading" className="text-sm font-semibold text-brand">Classement des participants · 10 jours</h2>
           <p className="mt-1 text-[11px] text-muted">Score moyen sur 1 000, pour ne pas favoriser ceux qui jouent davantage. Égalités au même rang ; passages non mesurés exclus. Les humeurs ne changent jamais le score.</p>
           {!leaderboard.length ? <p className="py-3 text-xs text-muted">Terminez un tour pour voir le classement.</p> : <>
-            <ol className="mt-2 divide-y divide-line" start={currentLeaderboardPage * 8 + 1} aria-label="Classement des participants">
+            <ol key={currentLeaderboardPage} className="mt-2 divide-y divide-line motion-safe:animate-page-reveal" start={currentLeaderboardPage * 8 + 1} aria-label="Classement des participants">
               {leaderboard.slice(currentLeaderboardPage * 8, currentLeaderboardPage * 8 + 8).map(person => <li key={person.id} className="flex min-h-14 items-center gap-2 py-2 text-xs">
                 <span className={`w-7 shrink-0 text-center font-bold tabular-nums ${person.rank === 1 ? 'text-amber-700' : 'text-muted'}`} aria-label={person.rank === null ? 'Sans rang' : `Rang ${person.rank}`}>{person.rank === 1 ? '🏆' : person.rank ?? '—'}</span>
                 <div className="min-w-0 flex-1">

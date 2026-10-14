@@ -28,6 +28,11 @@ export function PaginatedList<T extends { id: string }>({ items, renderItem, cla
   const pages = Math.max(1, Math.ceil(items.length / capacity));
   const current = Math.min(page, pages - 1);
   useEffect(() => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const animation = ref.current?.animate([{ opacity: .35 }, { opacity: 1 }], { duration: 300, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+    return () => animation?.cancel();
+  }, [current]);
+  useEffect(() => {
     if (!activeId) return;
     const index = items.findIndex(item => item.id === activeId);
     if (index >= 0) setPage(Math.floor(index / capacity));
