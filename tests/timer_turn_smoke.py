@@ -16,10 +16,19 @@ with sync_playwright() as p:
             ],
             'session': [], 'duration': 120, 'warning': 20, 'sound': False, 'usedMoodMeters': [],
         }
+        daily = {'day': '2026-10-14', 'meter': None}
+        def daily_api(route):
+            assert route.request.headers.get('x-team-id') == 'a' * 64
+            if route.request.method == 'POST' and daily['meter'] is None:
+                daily['meter'] = route.request.post_data_json
+            route.fulfill(json=daily)
+        context.route('**/api/teams', lambda route: route.fulfill(json={'teams': [{'id': 'a' * 64, 'name': 'Mon équipe', 'memberCount': len(team['roster'])}], 'activeTeamId': 'a' * 64}))
+        context.route('**/api/daily-meter', daily_api)
         context.route('**/api/team', lambda route: route.fulfill(json={
             'team': team, 'revision': 1,
         } if route.request.method == 'GET' else {'revision': 2}))
         context.route('**/api/history', lambda route: route.fulfill(json={'rounds': []}))
+        context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
         context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=[]))
         page = context.new_page()
         errors = []
@@ -50,6 +59,9 @@ with sync_playwright() as p:
         expect(row).to_have_count(1)
         row.get_by_role('checkbox').check()
         row.get_by_role('button', name='Retirer Action test').click()
+        deletion = page.get_by_role('dialog', name='Supprimer cette personne ?', exact=True)
+        expect(deletion).to_be_visible()
+        deletion.get_by_role('button', name='Supprimer', exact=True).click()
         expect(row).to_have_count(0)
         page.get_by_role('button', name='Nouveau bilan', exact=True).click()
         dialog = page.get_by_role('dialog')
@@ -59,6 +71,11 @@ with sync_playwright() as p:
         dialog.get_by_role('button', name='Annuler').click()
         expect(dialog).not_to_be_visible()
         page.goto(BASE + '/mood')
+        expect(page.locator('#meter-catalogue-select')).to_have_value('-2')
+        expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé pour la journée')
+        expect(page.locator('#meter-catalogue-select')).to_be_disabled()
+        expect(page.locator('#random-meter-button')).to_be_disabled()
+        expect(page.get_by_role('button', name='Continuer vers le minuteur', exact=False)).to_be_enabled()
         page.get_by_role('button', name='Continuer vers le minuteur', exact=False).click()
         expect(page.locator('#speaker-turn-cue')).to_have_count(0)
         page.locator('#start-button').click()

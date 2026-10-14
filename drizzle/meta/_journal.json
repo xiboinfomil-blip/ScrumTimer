@@ -8,6 +8,20 @@
       "when": 1791967691659,
       "tag": "0000_spotty_the_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791984114607,
+      "tag": "0001_abandoned_snowbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791984114608,
+      "tag": "0002_workspace_daily_meters",
+      "breakpoints": true
     }
   ]
 }

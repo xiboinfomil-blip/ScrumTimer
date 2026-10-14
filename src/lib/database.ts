@@ -6,6 +6,7 @@ import { cookies } from 'next/headers';
 import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { configureNeonNetwork } from './neon-network';
+import { resolveSelectedTeam, WorkspaceError } from './workspace-store';
 
 let connection: ReturnType<typeof createDatabase> | undefined;
 function createDatabase() {
@@ -27,6 +28,19 @@ export async function privateSpace() {
 }
 export function sameOrigin(request: Request) {
   return request.headers.get('origin') === new URL(request.url).origin;
+}
+export async function selectedTeam(request: Request) {
+  return resolveSelectedTeam(database(), await privateSpace(), request.headers.get('X-Team-Id'));
+}
+export function databaseFailure(error: unknown) {
+  if (error instanceof WorkspaceError) return NextResponse.json({ error: error.message }, { status: error.status, headers: { 'Cache-Control': 'no-store' } });
+  let cause: unknown = error;
+  for (let depth = 0; cause && depth < 5; depth++) {
+    const current = cause as { code?: string; cause?: unknown; sourceError?: unknown };
+    if (current.code === '23505') return NextResponse.json({ error: 'Une équipe porte déjà ce nom.' }, { status: 409 });
+    cause = current.cause ?? current.sourceError;
+  }
+  return unavailable();
 }
 export function unavailable() {
   return NextResponse.json({ error: 'Neon indisponible. Aucune sauvegarde locale.' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });

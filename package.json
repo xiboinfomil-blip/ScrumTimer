@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx scripts/migrate-database.ts",
+    "db:migrate": "drizzle-kit migrate",
     "db:check": "drizzle-kit check",
     "db:verify": "tsx scripts/check-database.ts"
   },
@@ -35,6 +35,7 @@
     }
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@next/env": "^16.4.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.0.0",

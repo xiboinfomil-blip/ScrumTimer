@@ -26,14 +26,22 @@ function dateLabel(value: string, full = false) {
 }
 
 export function StatisticsPage() {
-  const { ready, cloudStatus } = useTeam();
+  const { ready, activeTeamId, activeTeamName, cloudStatus } = useTeam();
   const [rounds, setRounds] = useState<HistoryRound[]>([]);
   const [source, setSource] = useState<HistorySource>('loading');
   const [notice, setNotice] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [leaderboardPage, setLeaderboardPage] = useState(0);
+  const [loadedTeamId, setLoadedTeamId] = useState<string | null>(null);
 
   useEffect(() => {
+    setRounds([]);
+    setLoadedTeamId(null);
+    setLeaderboardPage(0);
+    setSource('loading');
+    setNotice('');
+    if (!ready || !activeTeamId) return;
+    const teamId = activeTeamId;
     const controller = new AbortController();
     let active = true;
     let timedOut = false;
@@ -47,12 +55,14 @@ export function StatisticsPage() {
       try {
         const response = await fetch('/api/history', {
           method: 'GET', credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
+          headers: { 'X-Team-Id': teamId },
         });
         if (!response.ok) throw new Error(response.status === 503 ? 'unconfigured' : 'request');
         const payload: { rounds?: HistoryRound[] } = await response.json();
         if (!Array.isArray(payload.rounds)) throw new Error('response');
         if (!active || controller.signal.aborted) return;
         setRounds(normalizeHistory(payload.rounds));
+        setLoadedTeamId(teamId);
         setSource('neon');
       } catch (error) {
         if (!active) return;
@@ -74,13 +84,14 @@ export function StatisticsPage() {
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [refresh, cloudStatus]);
+  }, [refresh, cloudStatus, ready, activeTeamId]);
 
-  const days = summarizeDays(rounds);
-  const leaderboard = historyLeaderboard(rounds);
+  const visibleRounds = ready && loadedTeamId === activeTeamId ? rounds : [];
+  const days = summarizeDays(visibleRounds);
+  const leaderboard = historyLeaderboard(visibleRounds);
   const leaderboardPages = Math.max(1, Math.ceil(leaderboard.length / 8));
   const currentLeaderboardPage = Math.min(leaderboardPage, leaderboardPages - 1);
-  const people = rounds.flatMap((round) => round.people);
+  const people = visibleRounds.flatMap((round) => round.people);
   const seconds = people.reduce((sum, person) => sum + person.speakingSeconds, 0);
   const measured = people.filter(person => person.speakingSeconds >= 1 && person.budgetSeconds > 0);
   const withinTime = measured.filter((person) => !person.timeUp && person.speakingSeconds <= person.budgetSeconds).length;
@@ -89,7 +100,7 @@ export function StatisticsPage() {
   }));
   const missingMoods = people.filter((person) => person.mood === null).length;
   const maximumRounds = Math.max(1, ...days.map((day) => day.rounds));
-  const recent = [...rounds].sort((a, b) => b.completedAt.localeCompare(a.completedAt)).slice(0, 10);
+  const recent = [...visibleRounds].sort((a, b) => b.completedAt.localeCompare(a.completedAt)).slice(0, 10);
   const loading = source === 'loading';
   const teamStatus = !ready || cloudStatus === 'loading' ? 'Chargement de l’équipe…'
     : cloudStatus === 'saved' ? 'Équipe enregistrée dans Neon'
@@ -104,7 +115,7 @@ export function StatisticsPage() {
       <header className="flex shrink-0 flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h1 id="statistics-heading" className="text-xl font-bold text-brand">Statistiques</h1>
-          <p className="text-xs text-muted">Les 10 derniers jours UTC, en un coup d’œil.</p>
+          <p className="text-xs text-muted">{activeTeamName} · Les 10 derniers jours UTC, en un coup d’œil.</p>
         </div>
         <button type="button" disabled={loading} onClick={() => setRefresh((value) => value + 1)} className={`${secondaryButton} ${focus}`}>
           {loading ? 'Chargement…' : source === 'neon' ? 'Actualiser' : 'Réessayer'}
@@ -119,7 +130,7 @@ export function StatisticsPage() {
       <div aria-busy={loading} className="flex flex-col gap-2">
         <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
-            ['Points terminés', numberFormat.format(rounds.length)],
+            ['Points terminés', numberFormat.format(visibleRounds.length)],
             ['Tours de parole', numberFormat.format(people.length)],
             ['Parole moyenne', measured.length ? duration(measured.reduce((sum, p) => sum + p.speakingSeconds, 0) / measured.length) : '—'],
             ['Dans le temps imparti', measured.length ? `${Math.round(withinTime / measured.length * 100)} %` : '—'],

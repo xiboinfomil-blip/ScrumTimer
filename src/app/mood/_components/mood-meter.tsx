@@ -101,7 +101,7 @@ export function MeterSlide({ slide, title, paused, idPrefix = 'meter' }: {
 }
 
 export function MoodMeter({ className = '', mobileVisible = true }: { className?: string; mobileVisible?: boolean }) {
-  const { state, updateTeam } = useTeam();
+  const { state, updateTeam, activeTeamId, setDailyReady } = useTeam();
   const initialUsed = useRef(state.usedMoodMeters ?? []);
   const panelRef = useRef<HTMLElement>(null);
   // GIF playback is explicitly requested; Stop remains available at all times.
@@ -112,6 +112,7 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
   const [wide, setWide] = useState(false);
   const [conversion, setConversion] = useState<'idle' | 'loading' | 'error'>('idle');
   const [retry, setRetry] = useState(0);
+  const [daily, setDaily] = useState<{ day: string; meter: { meterId: string; title: string } } | null>(null);
 
   useEffect(() => {
     const query = matchMedia('(min-width: 801px)');
@@ -129,8 +130,23 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
       try {
         const decks = await loadMoodCatalog(controller.signal);
         if (!active || controller.signal.aborted) return;
+        const headers = { 'X-Team-Id': activeTeamId! };
+        const response = await fetch('/api/daily-meter', { headers, cache: 'no-store', signal: controller.signal });
+        if (!response.ok) throw new Error('daily meter');
+        let assigned = await response.json();
+        if (!assigned.meter) {
+          const candidate = chooseUnusedDeck(decks, initialUsed.current);
+          const meter = candidate >= 0 ? { meterId: moodMeterId(decks[candidate]), title: decks[candidate].title } : { meterId: 'original', title: 'Baromètre original' };
+          const saved = await fetch('/api/daily-meter', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(meter), signal: controller.signal });
+          if (!saved.ok) throw new Error('daily meter save');
+          assigned = await saved.json();
+        }
+        if (!active || controller.signal.aborted) return;
+        if (!assigned.meter) throw new Error('missing daily meter');
+        const selected = assigned.meter.meterId === 'original' ? -2 : decks.findIndex(item => moodMeterId(item) === assigned.meter.meterId);
+        if (selected === -1) throw new Error('daily meter unavailable');
+        setDaily(assigned);
         setCatalog(decks);
-        const selected = chooseUnusedDeck(decks, initialUsed.current);
         setSelection({ deck: selected, slide: 0 });
         if (decks[selected]?.remoteId) setConversion('loading');
         setStatus('ready');
@@ -142,7 +158,7 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
     }
     void load();
     return () => { active = false; clearTimeout(timeout); controller.abort(); };
-  }, []);
+  }, [activeTeamId]);
 
   const deck = catalog[selection.deck];
   const slide = deck?.slides[selection.slide];
@@ -165,12 +181,16 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deck?.remoteId, retry]);
   useEffect(() => {
+    const usable = Boolean(daily && (selection.deck === -2 || showSlide));
+    setDailyReady(usable);
     updateTeam(current => ({ ...current, currentMoodSlide: showSlide ? { title, image: slide.image, slideNumber: selection.slide + 1, meterId: moodMeterId(deck) } : null }));
-  }, [slide, showSlide, title, selection.slide, deck, updateTeam]);
+    return () => setDailyReady(false);
+  }, [slide, showSlide, title, selection.slide, selection.deck, deck, updateTeam, daily, setDailyReady]);
   const autoplayAnimations = () => {
     setPaused(false);
   };
   const selectDeck = (index: number) => {
+    if (daily) return;
     if (index === -2) { setSelection({ deck: -2, slide: 0 }); setConversion('idle'); return; }
     if (!Number.isInteger(index) || !catalog[index]) return;
     setConversion(catalog[index].remoteId ? 'loading' : 'idle');
@@ -192,15 +212,16 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
       <h2 id="meter-title" className="sr-only">Le baromètre d’humeur</h2>
       <div className="flex min-w-0 shrink-0 items-center gap-2">
         <label className="sr-only" htmlFor="meter-catalogue-select">Catalogue · {catalog.length} baromètres</label>
-        <select id="meter-catalogue-select" className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-slate-50/60 px-3 text-xs font-medium text-brand focus:bg-white disabled:opacity-50" disabled={status === 'loading'} value={String(selection.deck)} onChange={event => selectDeck(Number(event.target.value))}>
+        <select id="meter-catalogue-select" className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-slate-50/60 px-3 text-xs font-medium text-brand focus:bg-white disabled:opacity-75" disabled value={String(selection.deck)} onChange={event => selectDeck(Number(event.target.value))}>
           <option value="-1" disabled>{status === 'loading' ? 'Chargement…' : 'Choisissez un baromètre'}</option>
           <option value="-2">Baromètre original · choix manuel</option>
           {catalog.map((item, index) => <option key={index} value={index}>{displayTitle(item)}{state.usedMoodMeters?.includes(moodMeterId(item)) ? ' · Déjà utilisé' : ''}</option>)}
         </select>
         <button id="random-meter-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-lg text-brand hover:bg-blue-50" aria-label="Afficher un autre baromètre au hasard"
-          title="Afficher un baromètre non utilisé au hasard" disabled={!catalog.some((item, index) => index !== selection.deck && !state.usedMoodMeters?.includes(moodMeterId(item)))}
+          title="Un seul baromètre par équipe et par jour" disabled
           onClick={() => selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}>↝</button>
       </div>
+      <p id="daily-meter-note" role="status" className="shrink-0 text-[11px] font-medium text-brand">{daily ? `Baromètre du ${daily.day} · Commun à toute l’équipe · Verrouillé pour la journée (Maurice).` : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</p>
       {stacked ? <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(0,1fr)] gap-2 overflow-hidden rounded-xl" aria-label="Toutes les diapositives du baromètre">
         {deck.slides.map((item, index) => <div key={`${selection.deck}:${index}:${retry}`} className="relative flex min-h-0 flex-col overflow-hidden rounded-[14px] motion-safe:animate-page-reveal">
           <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`} />

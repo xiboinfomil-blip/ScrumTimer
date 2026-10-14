@@ -1,30 +1,24 @@
 import { NextResponse } from 'next/server';
-import { database, privateSpace, readJson, sameOrigin, unavailable } from '@/lib/database';
-import { historyCutoff, normalizeHistory } from '@/lib/history';
-import { and, desc, eq, gte, lt } from 'drizzle-orm';
-import { rounds as historyRounds, spaces } from '@/db/schema';
+import { database, selectedTeam, readJson, sameOrigin, databaseFailure } from '@/lib/database';
+import { validateHistoryInput } from '@/lib/team-validation';
+import { readHistory, writeHistory } from '@/lib/relational-store';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const db = database(); const id = await privateSpace();
-    await db.delete(historyRounds).where(lt(historyRounds.completedAt, historyCutoff()));
-    const rows = await db.select({ result: historyRounds.result }).from(historyRounds).where(and(eq(historyRounds.spaceId, id), gte(historyRounds.completedAt, historyCutoff()))).orderBy(desc(historyRounds.completedAt));
-    return NextResponse.json({ rounds: normalizeHistory(rows.map(row => row.result)) }, { headers: { 'Cache-Control': 'no-store' } });
-  } catch { return unavailable(); }
+    const db = database(); const id = await selectedTeam(request);
+    return NextResponse.json({ rounds: await readHistory(db, id) }, { headers: { 'Cache-Control': 'no-store' } });
+  } catch (error) { return databaseFailure(error); }
 }
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return new NextResponse(null, { status: 403 });
-  let rounds;
-  try { rounds = normalizeHistory([await readJson(request)]); if (!rounds.length) throw new Error(); }
-  catch { return new NextResponse(null, { status: 400 }); }
+  let round;
+  try { round = validateHistoryInput(await readJson(request)); }
+  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Bilan invalide.' }, { status: 400 }); }
   try {
-    const db = database(); const id = await privateSpace(); const round = rounds[0];
+    const db = database(); const id = await selectedTeam(request);
     // Team bootstrap must precede history writes; never create an empty team over a saved one.
-    const existing = await db.select({ id: spaces.id }).from(spaces).where(eq(spaces.id, id));
-    if (!existing.length) return new NextResponse(null, { status: 409 });
-    await db.insert(historyRounds).values({ spaceId: id, id: round.id, completedAt: new Date(round.completedAt), result: round }).onConflictDoNothing();
-    await db.delete(historyRounds).where(lt(historyRounds.completedAt, historyCutoff()));
+    if (!await writeHistory(db, id, round)) return new NextResponse(null, { status: 409 });
     return NextResponse.json({ saved: true });
-  } catch { return unavailable(); }
+  } catch (error) { return databaseFailure(error); }
 }

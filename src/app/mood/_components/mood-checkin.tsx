@@ -10,17 +10,17 @@ import { shuffle } from '@/lib/shuffle';
 import type { Mood } from '@/types/team';
 
 export function MoodCheckin({ className = '' }: { className?: string }) {
-  const { state, updateTeam } = useTeam();
+  const { state, updateTeam, dailyReady } = useTeam();
   const router = useRouter();
   const notify = useNotify();
   const present = state.roster.filter(person => person.present);
   const checked = present.filter(person => person.mood).length;
   function start() {
-    if (!canStartSession(state)) return;
+    if (!dailyReady || !canStartSession(state)) return;
     const ids = present.map(person => person.id);
     const same = state.session.length === ids.length && ids.every(id => state.session.includes(id));
     const session = shuffle(same ? state.session : ids, true);
-    updateTeam(current => ({ ...current, session }));
+    if (!updateTeam(current => ({ ...current, session }))) return;
     router.push('/timer');
   }
   return (
@@ -35,7 +35,7 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
           <div className="flex shrink-0 items-center gap-1" role="group" aria-label={`Humeur de ${person.name} : choisissez de 1 à 4`}>
             {([1, 2, 3, 4] as Mood[]).map(mood => (
               <button key={mood} className="grid size-11 shrink-0 place-items-center rounded-xl border border-line bg-white text-sm font-semibold text-brand shadow-[0_1px_2px_#19375204] transition-colors hover:border-accent hover:bg-orange-50 aria-pressed:border-brand aria-pressed:bg-brand aria-pressed:text-white aria-pressed:shadow-[0_3px_8px_#205f9d20] motion-reduce:transition-none"
-                aria-label={`Humeur ${mood} pour ${person.name}`} aria-pressed={person.mood === mood}
+                disabled={!dailyReady} aria-label={`Humeur ${mood} pour ${person.name}`} aria-pressed={person.mood === mood}
                 onClick={() => { const timestamp = new Date().toISOString(); updateTeam(current => ({ ...current, session: [], usedMoodMeters: [...new Set([...(current.usedMoodMeters ?? []), ...(current.currentMoodSlide?.meterId ? [current.currentMoodSlide.meterId] : [])])], roster: current.roster.map(p => p.id === person.id ? { ...p, mood, moodUpdatedAt: timestamp, moodSlide: current.currentMoodSlide ?? null } : p) })); notify(`${person.name} : humeur ${mood} enregistrée.`); }}>
                 {mood}
               </button>
@@ -45,7 +45,7 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
       )} />
       <div className="shrink-0 border-t border-line pt-2">
         <p className={`mb-2 text-[11px] ${checked === present.length ? 'text-success' : 'text-amber-800'}`}>{checked === present.length ? '✓ Tout est prêt pour le tour de parole.' : `${present.length - checked} humeur(s) à renseigner avant de continuer.`}</p>
-        <button className={`${primaryButton} min-h-11 w-full justify-between`} disabled={!canStartSession(state)} onClick={start}>Continuer vers le minuteur <span aria-hidden="true">→</span></button>
+        <button className={`${primaryButton} min-h-11 w-full justify-between`} disabled={!dailyReady || !canStartSession(state)} onClick={start}>Continuer vers le minuteur <span aria-hidden="true">→</span></button>
       </div>
     </section>
   );

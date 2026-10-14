@@ -1,8 +1,10 @@
 """Neon-only contract tests; no live database writes or browser business storage."""
 from copy import deepcopy
+import os
 from playwright.sync_api import sync_playwright, expect
 
-BASE = 'http://localhost:3000'
+BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
+TEAM_ID = 'a' * 64
 TEAM = {'roster': [{'id': 'alice', 'name': 'Alice <safe>', 'present': True, 'mood': 2, 'moodUpdatedAt': None}], 'session': [], 'duration': 2, 'warning': 0, 'sound': False, 'usedMoodMeters': ['deck-1234567890abcdef1234']}
 NO_STORAGE = """for (const name of ['localStorage', 'sessionStorage']) Object.defineProperty(window, name, {get() { throw new Error('Browser storage forbidden'); }});"""
 
@@ -13,8 +15,14 @@ with sync_playwright() as p:
     errors = []
     page = context.new_page()
     page.on('pageerror', lambda error: errors.append(str(error)))
-    db = {'team': deepcopy(TEAM), 'revision': 4, 'rounds': [], 'offline': True, 'history_offline': False}
+    db = {'team': deepcopy(TEAM), 'revision': 4, 'rounds': [], 'offline': True, 'history_offline': False, 'daily': None}
     writes = []
+
+    def daily_api(route):
+        assert route.request.headers.get('x-team-id') == TEAM_ID
+        if route.request.method == 'POST' and db['daily'] is None:
+            db['daily'] = deepcopy(route.request.post_data_json)
+        route.fulfill(json={'day': '2026-10-14', 'meter': db['daily']})
 
     def team_api(route):
         if db['offline']:
@@ -43,7 +51,10 @@ with sync_playwright() as p:
             route.fulfill(json={'saved': True})
 
     context.route('**/api/team', team_api)
+    context.route('**/api/teams', lambda route: route.fulfill(json={'teams': [{'id': TEAM_ID, 'name': 'Mon équipe', 'memberCount': len(db['team']['roster'])}], 'activeTeamId': TEAM_ID}))
+    context.route('**/api/daily-meter', daily_api)
     context.route('**/api/history', history_api)
+    context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
     context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=[{'title': 'Used meter', 'remoteId': 'deck-1234567890abcdef1234', 'slides': []}, {'title': 'New meter', 'remoteId': 'deck-abcdef1234567890abcd', 'slides': []}]))
     context.route('**/api/mood-meters/decks/*', lambda route: route.fulfill(json={'title': 'Meter', 'slides': ['mood-meters/slides/deck-abcdef1234567890abcd/page1.svg', 'mood-meters/slides/deck-abcdef1234567890abcd/page2.svg']}))
     context.route('**/mood-meters/slides/**/*.svg', lambda route: route.fulfill(content_type='image/svg+xml', body='<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="1600" height="900" fill="#eaf2fa"/><text x="600" y="450" font-size="70">Mood meter</text></svg>'))
@@ -57,6 +68,10 @@ with sync_playwright() as p:
     page.get_by_text('Alice <safe>', exact=True).wait_for()
     page.get_by_role('link', name='Humeurs', exact=True).click()
     page.wait_for_function("document.querySelector('#meter-catalogue-select')?.selectedOptions[0]?.textContent === 'New meter'")
+    expect(page.locator('#meter-catalogue-select')).to_be_disabled()
+    expect(page.locator('#random-meter-button')).to_be_disabled()
+    expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé pour la journée')
+    assert db['daily'] == {'meterId': 'deck-abcdef1234567890abcd', 'title': 'New meter'}
     expect(page.locator('#meter-slide-stack img')).to_have_count(2)
     for width, height in [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]:
         page.set_viewport_size({'width': width, 'height': height})
@@ -73,9 +88,13 @@ with sync_playwright() as p:
     expect(page.locator('#meter-slide-stack button')).to_have_count(0)
     used = page.locator('#meter-catalogue-select option').filter(has_text='Used meter')
     assert 'Déjà utilisé' in used.inner_text()
-    page.locator('#meter-catalogue-select').select_option(used.get_attribute('value'))
-    page.locator('#meter-catalogue-select').select_option('-2')
-    page.get_by_text('Baromètre original choisi manuellement.', exact=True).wait_for()
+    assigned = deepcopy(db['daily'])
+    page.reload()
+    page.wait_for_function("document.querySelector('#meter-catalogue-select')?.selectedOptions[0]?.textContent === 'New meter'")
+    expect(page.locator('#meter-catalogue-select')).to_be_disabled()
+    expect(page.locator('#random-meter-button')).to_be_disabled()
+    expect(page.locator('#meter-slide-stack img')).to_have_count(2)
+    assert db['daily'] == assigned
     page.get_by_role('button', name='Continuer vers le minuteur', exact=False).click()
     page.get_by_role('button', name='Démarrer', exact=True).click()
     page.evaluate('''() => { const original = Date.now; Date.now = () => original() + 1000; document.dispatchEvent(new Event('visibilitychange')); Date.now = original; }''')
@@ -110,4 +129,4 @@ with sync_playwright() as p:
     assert not errors, errors
     context.close()
     browser.close()
-    print('PASS: simultaneous stacked SVG slides without selection controls at six sizes, browser storage forbidden, Neon-only hydration/retry/writes/round archive/reload/leaderboard, history failure without fallback')
+    print('PASS: daily meter locked/restored, stacked SVG slides at six sizes, browser storage forbidden, Neon-only hydration/retry/writes/round archive/reload/leaderboard, history failure without fallback')

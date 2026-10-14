@@ -20,7 +20,11 @@ try {
     try {
         $response = Invoke-WebRequest @options
         $status = [int]$response.StatusCode
-        $body = [string]$response.Content
+        # Neon returns UTF-8 JSON; PowerShell 5.1 can decode an absent charset as
+        # Latin-1. Decode the raw response explicitly to preserve French names.
+        $response.RawContentStream.Position = 0
+        $reader = New-Object IO.StreamReader($response.RawContentStream, [Text.Encoding]::UTF8)
+        try { $body = $reader.ReadToEnd() } finally { $reader.Dispose() }
     } catch {
         $response = $_.Exception.Response
         if (!$response) { throw }
