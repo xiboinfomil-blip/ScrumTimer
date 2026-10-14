@@ -45,7 +45,8 @@ with sync_playwright() as p:
     context.route('**/api/team', team_api)
     context.route('**/api/history', history_api)
     context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=[{'title': 'Used meter', 'remoteId': 'deck-1234567890abcdef1234', 'slides': []}, {'title': 'New meter', 'remoteId': 'deck-abcdef1234567890abcd', 'slides': []}]))
-    context.route('**/api/mood-meters/decks/*', lambda route: route.fulfill(status=503, json={}))
+    context.route('**/api/mood-meters/decks/*', lambda route: route.fulfill(json={'title': 'Meter', 'slides': ['mood-meters/slides/deck-abcdef1234567890abcd/page1.svg', 'mood-meters/slides/deck-abcdef1234567890abcd/page2.svg']}))
+    context.route('**/mood-meters/slides/**/*.svg', lambda route: route.fulfill(content_type='image/svg+xml', body='<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="1600" height="900" fill="#eaf2fa"/><text x="600" y="450" font-size="70">Mood meter</text></svg>'))
 
     page.goto(BASE + '/participants')
     page.get_by_text('Connexion à Neon nécessaire pour ouvrir votre équipe.', exact=True).wait_for()
@@ -56,6 +57,21 @@ with sync_playwright() as p:
     page.get_by_text('Alice <safe>', exact=True).wait_for()
     page.get_by_role('link', name='Humeurs', exact=True).click()
     page.wait_for_function("document.querySelector('#meter-catalogue-select')?.selectedOptions[0]?.textContent === 'New meter'")
+    expect(page.locator('#meter-slide-stack img')).to_have_count(2)
+    for width, height in [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]:
+        page.set_viewport_size({'width': width, 'height': height})
+        page.wait_for_function("Array.from(document.querySelectorAll('#meter-slide-stack img')).every(img => img.complete && img.naturalWidth > 0)")
+        images = page.locator('#meter-slide-stack img')
+        first, second = images.nth(0).bounding_box(), images.nth(1).bounding_box()
+        assert first and second and second['y'] >= first['y'] + first['height'] - 1, (width, 'slides not stacked')
+        assert first['width'] > 0 and second['width'] > 0, (width, 'empty slide')
+        stack = page.locator('#meter-slide-stack').bounding_box()
+        assert stack and second['y'] + second['height'] <= stack['y'] + stack['height'] + 1, (width, 'second slide clipped')
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
+        assert page.get_by_role('button', name='Diapositive suivante', exact=True).count() == 0
+    page.set_viewport_size({'width': 1366, 'height': 768})
+    page.get_by_role('button', name='Utiliser la diapositive 2 pour les humeurs', exact=True).click()
+    expect(page.get_by_role('button', name='Utiliser la diapositive 2 pour les humeurs', exact=True)).to_have_attribute('aria-pressed', 'true')
     used = page.locator('#meter-catalogue-select option').filter(has_text='Used meter')
     assert 'Déjà utilisé' in used.inner_text()
     page.locator('#meter-catalogue-select').select_option(used.get_attribute('value'))
@@ -95,4 +111,4 @@ with sync_playwright() as p:
     assert not errors, errors
     context.close()
     browser.close()
-    print('PASS: browser storage forbidden, Neon-only hydration/retry/writes/round archive/reload/leaderboard, history failure without fallback, six viewport layouts')
+    print('PASS: simultaneous stacked SVG slides/reference selection at six sizes, browser storage forbidden, Neon-only hydration/retry/writes/round archive/reload/leaderboard, history failure without fallback')
