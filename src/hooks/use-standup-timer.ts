@@ -7,10 +7,11 @@ import { TimerAudio } from '@/lib/audio';
 import { secondsUntil, shuffleEligible } from '@/lib/timer';
 import { shuffle } from '@/lib/shuffle';
 import type { SessionSpeaker } from '@/lib/session-results';
+import type { Mood } from '@/types/team';
 import { completedRound } from '@/lib/history';
 import { createId } from '@/lib/team-storage';
 
-type Speaker = SessionSpeaker;
+type Speaker = SessionSpeaker & { postponed: boolean };
 interface TimerState {
   people: Speaker[];
   activeId: string | null;
@@ -33,10 +34,10 @@ export function useStandupTimer() {
   const audio = useRef<TimerAudio | null>(null);
   const [timer, setTimer] = useState<TimerState>(() => {
     const people = team.session.flatMap(id => {
-      const person = team.roster.find(p => p.id === id && p.present && p.mood);
-      return person ? [{ ...person, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0 }] : [];
+      const person = team.roster.find(p => p.id === id && p.present && (p.mood || team.postponed?.includes(id)));
+      return person ? [{ ...person, postponed: team.postponed?.includes(id) ?? false, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0 }] : [];
     });
-    return { people, activeId: people[0]?.id ?? null, previousId: null, remaining: team.duration, turnTotal: team.duration, running: false, turnStarted: false, focusMode: false, managing: false, ended: false, warned: false, deadline: 0 };
+    return { people, activeId: people.find(p => !p.postponed)?.id ?? null, previousId: null, remaining: team.duration, turnTotal: team.duration, running: false, turnStarted: false, focusMode: false, managing: false, ended: false, warned: false, deadline: 0 };
   });
   const latest = useRef(timer);
   const preferences = useRef(team);
@@ -86,8 +87,8 @@ export function useStandupTimer() {
     if (!current.activeId) return;
     const index = current.people.findIndex(p => p.id === current.activeId);
     const people = current.people.map(p => p.id === current.activeId ? { ...p, done: true } : p);
-    const person = [...people.slice(index + 1), ...people.slice(0, index)].find(p => !p.done);
-    if (!person) {
+    const person = [...people.slice(index + 1), ...people.slice(0, index)].find(p => !p.done && !p.postponed);
+    if (!person && people.every(p => p.done)) {
       roundId.current ??= createId();
       saveRound(completedRound(roundId.current, people));
     }
@@ -95,30 +96,30 @@ export function useStandupTimer() {
     prepared.people = prepared.people.map(candidate => candidate.id === person?.id ? { ...candidate, started: true, attempts: candidate.attempts + 1, budgetSeconds: candidate.started ? candidate.budgetSeconds : prepared.turnTotal } : candidate);
     if (person && preferences.current.sound) { audio.current ??= new TimerAudio(); audio.current.prepare(); }
     commit({ ...prepared, focusMode: Boolean(person), running: Boolean(person), turnStarted: Boolean(person), deadline: person ? Date.now() + prepared.remaining * 1000 : 0 });
-    notify(person ? `${person.name}, à vous la parole !` : 'Point quotidien terminé. Bonne journée à toute l’équipe !');
+    notify(person ? `${person.name}, à vous la parole !` : people.some(p => p.postponed) ? 'Les passages disponibles sont terminés. Les personnes reportées restent en attente.' : 'Point quotidien terminé. Bonne journée à toute l’équipe !');
   }, [cleared, commit, notify, tick, saveRound]);
   const select = useCallback((id: string) => {
     if (latest.current.focusMode) return;
-    if (id === latest.current.activeId || !latest.current.people.some(p => p.id === id)) return;
+    if (id === latest.current.activeId || !latest.current.people.some(p => p.id === id && !p.postponed)) return;
     const current = tick();
     commit(cleared({ ...current, activeId: id }));
   }, [cleared, commit, tick]);
   const newRound = useCallback(() => {
     const current = latest.current;
     roundId.current = null;
-    commit(cleared({ ...current, focusMode: false, managing: false, previousId: null, people: current.people.map(p => ({ ...p, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0 })), activeId: current.people[0]?.id ?? null }));
+    commit(cleared({ ...current, focusMode: false, managing: false, previousId: null, people: current.people.map(p => ({ ...p, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0 })), activeId: current.people.find(p => !p.postponed)?.id ?? null }));
     notify('Un nouveau tour commence. Faisons le point.');
   }, [cleared, commit, notify]);
   const shuffleWaiting = useCallback(() => {
     const current = latest.current;
     if (current.focusMode) return;
-    const candidates = shuffleEligible(current.people, current.activeId, current.turnStarted);
+    const candidates = shuffleEligible(current.people.filter(p => !p.postponed), current.activeId, current.turnStarted);
     if (candidates.length < 2) return;
     const ids = new Set(candidates.map(p => p.id));
     const shuffled = shuffle(candidates, true);
     let index = 0;
     const people = current.people.map(p => ids.has(p.id) ? shuffled[index++] : p);
-    commit({ ...current, people, activeId: current.turnStarted ? current.activeId : people.find(p => !p.done)?.id ?? null });
+    commit({ ...current, people, activeId: current.turnStarted ? current.activeId : people.find(p => !p.done && !p.postponed)?.id ?? null });
     updateTeam(value => ({ ...value, session: people.map(p => p.id) }));
     notify(current.turnStarted ? 'Les prochains passages ont été mélangés. La personne qui parle reste en place.' : 'Nouvel ordre de passage ! Le premier participant est prêt.');
   }, [commit, notify, updateTeam]);
@@ -147,6 +148,29 @@ export function useStandupTimer() {
     notify('Minuteur en pause. Vous pouvez modifier les réglages.');
   }, [tick, commit, notify]);
   const closeManage = useCallback(() => commit({ ...latest.current, managing: false }), [commit]);
+  const postpone = useCallback((id: string) => {
+    const current = tick();
+    const target = current.people.find(p => p.id === id);
+    if (!target || target.done || target.postponed) return;
+    const people = current.people.map(p => p.id === id ? { ...p, postponed: true } : p);
+    if (current.activeId === id) {
+      const index = people.findIndex(p => p.id === id);
+      const following = [...people.slice(index + 1), ...people.slice(0, index)].find(p => !p.done && !p.postponed);
+      commit(cleared({ ...current, people, activeId: following?.id ?? null, focusMode: false }));
+    } else commit({ ...current, people });
+    notify(`${target.name} : passage reporté, sans être marqué terminé.`);
+  }, [tick, cleared, commit, notify]);
+  const rejoin = useCallback((id: string, mood?: Mood) => {
+    const current = latest.current;
+    const target = current.people.find(p => p.id === id && p.postponed && !p.done);
+    if (!target || !(mood ?? target.mood) || (mood !== undefined && ![1, 2, 3, 4].includes(mood))) return;
+    const timestamp = new Date().toISOString();
+    if (!updateTeam(value => ({ ...value, postponed: value.postponed?.filter(candidate => candidate !== id), roster: value.roster.map(p => p.id === id && mood !== undefined ? { ...p, mood, moodUpdatedAt: timestamp, moodSlide: value.currentMoodSlide ?? null } : p) }))) return;
+    const person = { ...target, postponed: false, ...(mood !== undefined ? { mood, moodUpdatedAt: timestamp, moodSlide: preferences.current.currentMoodSlide ?? null } : {}) };
+    const people = [...current.people.filter(p => p.id !== id), person];
+    commit(current.activeId ? { ...current, people } : cleared({ ...current, people, activeId: id, focusMode: false }));
+    notify(`${person.name} rejoint la fin du tour. Son minuteur attend Démarrer ou Suivant.`);
+  }, [updateTeam, commit, cleared, notify]);
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (document.querySelector('dialog[open]') || (event.target instanceof Element && event.target.closest('input,select,textarea,button,a,[contenteditable]')) || event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
@@ -158,5 +182,5 @@ export function useStandupTimer() {
     return () => document.removeEventListener('keydown', onKey);
   }, [toggle, next, reset]);
 
-  return { ...timer, person: timer.people.find(p => p.id === timer.activeId), duration: team.duration, warning: team.warning, toggle, reset, next, select, shuffleWaiting, newRound, addTime, setDuration, setWarning, manage, closeManage };
+  return { ...timer, person: timer.people.find(p => p.id === timer.activeId), duration: team.duration, warning: team.warning, toggle, reset, next, select, shuffleWaiting, newRound, addTime, setDuration, setWarning, manage, closeManage, postpone, rejoin };
 }

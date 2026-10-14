@@ -29,7 +29,7 @@ function slide(value: unknown): MoodSlideContext | null {
 /** Strict transport validation; never repairs, clips or silently defaults durable input. */
 export function validateTeamInput(value: unknown): TeamState {
   const input = object(value);
-  keys(input, ['roster', 'session', 'duration', 'warning', 'sound', 'usedMoodMeters', 'currentMoodSlide']);
+  keys(input, ['roster', 'session', 'duration', 'warning', 'sound', 'usedMoodMeters', 'currentMoodSlide', 'postponed']);
   if (!Array.isArray(input.roster) || input.roster.length > 100 || !Array.isArray(input.session) || !Number.isInteger(input.duration) || (input.duration as number) < 1 || (input.duration as number) > 3659 || ![0, 10, 15, 30, 60].includes(input.warning as number) || typeof input.sound !== 'boolean') throw new Error('Équipe invalide.');
   const seen = new Set<string>();
   const roster = input.roster.map(value => {
@@ -39,7 +39,9 @@ export function validateTeamInput(value: unknown): TeamState {
     seen.add(p.id);
     return { id: p.id, name: p.name, present: p.present, mood: p.mood as TeamState['roster'][number]['mood'], moodUpdatedAt: p.moodUpdatedAt as string | null, moodSlide: slide(p.moodSlide) };
   });
-  if (input.session.length > 100 || new Set(input.session).size !== input.session.length || input.session.some(value => !id(value) || !roster.some(p => p.id === value && p.present && p.mood !== null))) throw new Error('Session invalide.');
+  const postponed = input.postponed ?? [];
+  if (!Array.isArray(postponed) || postponed.length > 100 || new Set(postponed).size !== postponed.length || postponed.some(value => !id(value) || !roster.some(p => p.id === value && p.present))) throw new Error('Reports invalides.');
+  if (input.session.length > 100 || new Set(input.session).size !== input.session.length || input.session.some(value => !id(value) || !roster.some(p => p.id === value && p.present && (p.mood !== null || postponed.includes(value))))) throw new Error('Session invalide.');
   const used = input.usedMoodMeters ?? [];
   if (!Array.isArray(used) || used.length > 2000 || used.some(value => !id(value, 200)) || new Set(used).size !== used.length) throw new Error('Mood meters invalides.');
   slide(input.currentMoodSlide); // Transient state is validated, but never persisted.

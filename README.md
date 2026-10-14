@@ -145,6 +145,12 @@ Après le chargement initial, les requêtes de sauvegarde non envoyées ou en é
 
 ## Validation
 
+### Personnes présentes mais pas encore arrivées
+
+Dans le bilan d’humeur, **Plus tard** reporte explicitement l’humeur et le passage d’une personne sans la marquer absente. Au moins une personne doit avoir voté et être prête pour commencer. Le minuteur ignore les personnes en attente lors de **Suivant** et du mélange ; elles ne sont jamais marquées comme ayant terminé. **↷ Reporter** permet également de reporter un passage, y compris celui en cours : le décompte s’arrête et les secondes déjà utilisées sont conservées.
+
+À leur arrivée, utiliser **En attente** dans le panneau Participants, ou **Modifier** pendant un passage, pour choisir leur humeur et les ajouter en fin de tour. Modifier met le décompte en pause ; rejoindre ne le relance pas et ne remet pas à zéro le passage courant. Le bilan final n’est archivé que lorsque toutes les personnes ont terminé. Les reports et la progression du minuteur restent temporaires et sont effacés au rechargement ; seules les humeurs sont sauvegardées dans Neon.
+
 Les contrôles de code et de build sont `npm run lint`, `npm run typecheck`, `npm run test` et `npm run build` ; la cohérence des migrations se vérifie avec `npm run db:check`. Leur réussite ne prouve pas une connexion à Neon ni l’application effective des migrations.
 
 Les ajouts Neon/historique disposent de [tests/history.test.ts](tests/history.test.ts) et de [tests/persistence_smoke.py](tests/persistence_smoke.py) (`python tests/persistence_smoke.py`, serveur local requis). Ce dernier a été mis à jour pour le contrat Neon simulé, dans des contextes navigateur isolés et sur six tailles d’écran : il utilise des réponses API mockées, pas une archive locale. **Il ne constitue aucune preuve de connexion à une base Neon réelle ou de persistance PostgreSQL.** Une vérification Neon réelle exige `DATABASE_URL` configurée, les migrations appliquées et `npm run db:verify` réussi, puis un ajout de participant, une fin de tour et un rechargement avec le cookie privé conservé, sans mocks. L’ordre de passage doit être recréé après ce rechargement.

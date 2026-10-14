@@ -1,13 +1,19 @@
 import Link from 'next/link';
+import { useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { PaginatedList } from '@/components/ui/paginated-list';
 import { card, countPill, textButton } from '@/components/ui/styles';
 import type { StandupTimer } from './timer-page';
+import { PostponedPeople } from './postponed-people';
 
 export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; className?: string }) {
+  const [shuffleCount, setShuffleCount] = useState(0);
+  const [shuffling, setShuffling] = useState(false);
+  const reduced = useReducedMotion();
   const { people, activeId, turnStarted } = timer;
   const done = people.filter(person => person.done).length;
   const left = people.length - done;
-  const candidates = people.filter(person => !person.done && (!turnStarted || person.id !== activeId));
+  const candidates = people.filter(person => !person.done && !person.postponed && (!turnStarted || person.id !== activeId));
   const shuffleTitle = candidates.length < 2
     ? 'Au moins deux personnes disponibles sont nécessaires pour mélanger'
     : turnStarted
@@ -20,7 +26,7 @@ export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; cla
         <div className="min-w-0">
           <h2 id="team-title" className="flex items-center gap-2 text-sm font-semibold">Équipe <span className={countPill} id="team-count">{people.length}</span></h2>
         </div>
-        <button type="button" className={`${textButton} min-h-11`} id="shuffle-button" title={shuffleTitle} disabled={candidates.length < 2} onClick={timer.shuffleWaiting}>↝ Mélanger</button>
+        <button type="button" className={`${textButton} min-h-11`} id="shuffle-button" title={shuffleTitle} aria-busy={shuffling} disabled={candidates.length < 2 || shuffling} onClick={() => { timer.shuffleWaiting(); setShuffleCount(value => value + 1); setShuffling(!reduced); }}><motion.span className="inline-block" key={shuffleCount} aria-hidden="true" initial={{ rotate: 0, scale: 1 }} animate={shuffleCount && !reduced ? { rotate: [0, -25, 380, 360], scale: [1, 1.2, 1] } : { rotate: 0, scale: 1 }} transition={{ duration: .7, ease: [.22, 1, .36, 1] }} onAnimationComplete={() => setShuffling(false)}>↝</motion.span> {shuffling ? 'Mélange…' : 'Mélanger'}</button>
       </div>
       <Link className="flex min-h-11 shrink-0 items-center text-[11px] text-muted hover:text-brand" href="/mood">← Humeurs</Link>
       <div className="flex shrink-0 justify-between gap-2 border-t border-line pt-2 text-[10px] text-muted">
@@ -29,7 +35,7 @@ export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; cla
       </div>
       <div id="person-list" className="contents">
         <PaginatedList
-          items={people}
+          items={people.filter(person => !person.postponed)}
           className="person-list"
           ordered
           activeId={activeId}
@@ -44,11 +50,13 @@ export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; cla
                     <span className={`text-[9px] leading-snug ${active && timer.ended ? 'text-danger' : person.done ? 'text-success' : active ? 'text-brand' : 'text-muted'}`}>{active ? timer.ended ? 'Temps écoulé · conclure' : timer.running ? 'Parle maintenant' : 'Prêt à parler' : person.done ? '✓ Passage terminé' : 'À venir'} · Humeur {person.mood}</span>
                   </span>
                 </button>
+                {!person.done && <button type="button" className="grid size-11 shrink-0 place-items-center rounded-lg text-brand hover:bg-blue-50" aria-label={`Reporter le passage de ${person.name}`} onClick={() => timer.postpone(person.id)}>↷</button>}
               </li>
             );
           }}
         />
       </div>
+      <PostponedPeople timer={timer} />
       <div className="py-4 text-center text-xs text-muted" id="empty-team" hidden={people.length > 0}>
         <span className="block text-2xl text-accent" aria-hidden="true">↗</span>
         <strong className="mt-2 block text-ink">On commence le point quotidien ?</strong>

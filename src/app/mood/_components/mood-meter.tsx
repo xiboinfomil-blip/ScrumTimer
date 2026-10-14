@@ -184,7 +184,8 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
     const usable = Boolean(daily && (selection.deck === -2 || showSlide));
     setDailyReady(usable);
     updateTeam(current => ({ ...current, currentMoodSlide: showSlide ? { title, image: slide.image, slideNumber: selection.slide + 1, meterId: moodMeterId(deck) } : null }));
-    return () => setDailyReady(false);
+    // Keep today's assigned slide available for late votes on the timer route.
+    // The provider resets readiness when changing teams.
   }, [slide, showSlide, title, selection.slide, selection.deck, deck, updateTeam, daily, setDailyReady]);
   const autoplayAnimations = () => {
     setPaused(false);

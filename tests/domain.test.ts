@@ -5,6 +5,21 @@ import { shuffle } from '../src/lib/shuffle.ts';
 import { secondsUntil, formatTime, shuffleEligible, timerUrgency } from '../src/lib/timer.ts';
 import { parseMoodMeterCatalog } from '../src/lib/mood-meter.ts';
 import { scoreSpeaker, sessionLeaderboard, sessionStatistics, type SessionSpeaker } from '../src/lib/session-results.ts';
+import { validateTeamInput } from '../src/lib/team-validation.ts';
+
+test('explicit postponement permits ready teammates without treating waiting members as absent or persisting progress', () => {
+  const team = normalizeTeam({ roster: [{ id: 'a', name: 'Alice', mood: 1 }, { id: 'b', name: 'Bob', mood: null }], session: ['a', 'b'], postponed: ['b'] });
+  assert.equal(canStartSession(team), true);
+  assert.equal(hasValidSession(team), true);
+  assert.equal(team.roster[1].present, true);
+  assert.equal(canStartSession({ ...team, postponed: [] }), false);
+  assert.equal(canStartSession({ ...team, postponed: ['a', 'b'] }), false);
+  assert.equal(hasValidSession({ ...team, session: ['a'] }), false);
+  assert.equal(validateTeamInput(team).postponed, undefined);
+  assert.deepEqual(validateTeamInput(team).session, []);
+  assert.throws(() => validateTeamInput({ ...team, postponed: ['unknown'] }));
+  assert.throws(() => validateTeamInput({ ...team, postponed: ['b', 'b'] }));
+});
 
 test('remote SVG catalogue keeps lazy decks and validates safe slide references', () => {
   const id = 'deck-1234567890abcdef1234';

@@ -18,4 +18,6 @@ export interface TeamState {
   sound: boolean;
   usedMoodMeters?: string[];
   currentMoodSlide?: MoodSlideContext | null;
+  /** Meeting-only postponements, never persisted to Neon. */
+  postponed?: string[];
 }

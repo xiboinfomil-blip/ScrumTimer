@@ -18,8 +18,8 @@ export function TimerPanel({ timer, className = '' }: { timer: StandupTimer; cla
   const critical = urgency === 'critical';
   const nearly = urgency === 'warning' || critical;
   const complete = people.length > 0 && !person && people.every(person => person.done);
-  const status = complete ? 'Tour terminé' : ended ? 'Temps écoulé' : running ? critical ? 'Concluez maintenant' : nearly ? 'Bientôt la fin' : 'À la parole' : turnStarted ? 'En pause' : 'Prêt à démarrer';
-  const speakerName = person ? person.name : complete ? 'Le tour de table est terminé !' : 'Votre prochain point quotidien';
+  const status = complete ? 'Tour terminé' : !person && people.some(p => p.postponed) ? 'Personnes en attente' : ended ? 'Temps écoulé' : running ? critical ? 'Concluez maintenant' : nearly ? 'Bientôt la fin' : 'À la parole' : turnStarted ? 'En pause' : 'Prêt à démarrer';
+  const speakerName = person ? person.name : complete ? 'Le tour de table est terminé !' : 'En attente des personnes reportées';
   const feedback = complete ? 'Tout le monde a eu la parole. Bonne journée !' : ended ? 'Concluez puis Suivant : le prochain minuteur démarrera.' : critical ? 'Dernières secondes : terminez votre phrase.' : nearly ? 'Le temps diminue : préparez votre conclusion.' : running ? 'Suivant lance immédiatement le prochain passage.' : 'Cliquez sur Démarrer lorsque vous prenez la parole.';
   const ratio = turnTotal > 0 ? Math.min(1, Math.max(0, remaining / turnTotal)) : 0;
   const ringColor = ended || critical ? 'text-danger' : nearly ? 'text-accent' : 'text-success';
@@ -56,6 +56,7 @@ export function TimerPanel({ timer, className = '' }: { timer: StandupTimer; cla
         </div>
       </div>
       <div className="col-span-full flex min-w-0 items-center justify-center gap-2 max-[650px]:gap-1.5">
+        {person && <button type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-brand hover:bg-blue-50" aria-label={`Reporter le passage de ${person.name}`} onClick={() => timer.postpone(person.id)}>↷</button>}
         {!timer.focusMode && <button type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-lg text-brand hover:bg-blue-50" id="reset-button" aria-label="Réinitialiser le minuteur de la personne qui parle" title="Réinitialiser le minuteur (R)" onClick={timer.reset} aria-keyshortcuts="R">↺</button>}
         <button type="button" id="start-button" className={`${running || ended ? secondaryButton : primaryButton} min-h-11 min-w-0 flex-1 max-[650px]:px-2 max-[650px]:text-[11px]`} disabled={!person} onClick={timer.toggle} aria-keyshortcuts="Space">
           <span aria-hidden="true">{running ? 'Ⅱ' : ended ? '↺' : '▶'}</span> {running ? 'Pause' : ended ? 'Relancer' : turnStarted ? 'Reprendre' : 'Démarrer'}

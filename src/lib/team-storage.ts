@@ -27,13 +27,14 @@ export function normalizeTeam(value: unknown): TeamState {
   if (typeof saved.sound === 'boolean') state.sound = saved.sound;
   state.usedMoodMeters = Array.isArray(saved.usedMoodMeters) ? [...new Set(saved.usedMoodMeters.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 200))].slice(-2000) : [];
   state.currentMoodSlide = normalizeMoodSlide(saved.currentMoodSlide);
-  if (Array.isArray(saved.session)) state.session = [...new Set(saved.session)].filter((id): id is string => typeof id === 'string' && state.roster.some(p => p.id === id && p.present && p.mood !== null));
+  state.postponed = Array.isArray(saved.postponed) ? [...new Set(saved.postponed)].filter((id): id is string => typeof id === 'string' && state.roster.some(p => p.id === id && p.present)) : [];
+  if (Array.isArray(saved.session)) state.session = [...new Set(saved.session)].filter((id): id is string => typeof id === 'string' && state.roster.some(p => p.id === id && p.present && (p.mood !== null || state.postponed?.includes(id))));
   return state;
 }
 
 export function canStartSession(state: TeamState): boolean {
   const present = state.roster.filter(person => person.present);
-  return present.length > 0 && present.every(person => person.mood !== null);
+  return present.some(person => person.mood !== null && !state.postponed?.includes(person.id)) && present.every(person => person.mood !== null || state.postponed?.includes(person.id));
 }
 
 export function hasValidSession(state: TeamState): boolean {

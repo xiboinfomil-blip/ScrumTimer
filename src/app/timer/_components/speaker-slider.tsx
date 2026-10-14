@@ -5,7 +5,7 @@ export function SpeakerSlider({ timer }: { timer: StandupTimer }) {
   const reduced = useReducedMotion();
   const index = timer.people.findIndex(person => person.id === timer.activeId);
   const previous = timer.people.find(person => person.id === timer.previousId);
-  const upcoming = [...timer.people.slice(index + 1), ...timer.people.slice(0, index)].find(person => !person.done);
+  const upcoming = [...timer.people.slice(index + 1), ...timer.people.slice(0, index)].find(person => !person.done && !person.postponed);
   return <div id="speaker-slider" className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,3fr)_minmax(0,1fr)] items-center gap-2 border-b border-line px-1 py-2 max-[650px]:gap-1" aria-label="Ordre de parole">
     <div className="min-w-0 border-r border-line pr-2 text-left"><span className="block text-[9px] font-medium tracking-wide text-muted">← PRÉCÉDENT</span><p className="mt-1 truncate text-xs text-success" title={previous?.name}>{previous?.name ?? 'Début du tour'}</p></div>
     <motion.div key={timer.activeId} id="speaker-turn-cue" initial={reduced ? false : { opacity: .6, scale: .94 }} animate={{ opacity: 1, scale: 1 }} transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 280, damping: 24 }} className={`min-w-0 rounded-xl border px-2 py-2 max-[650px]:px-1 max-[650px]:py-1 ${timer.ended ? 'border-red-200 bg-danger-soft text-danger' : timer.running ? 'border-brand bg-brand text-white' : 'border-orange-200 bg-orange-50 text-brand'}`} role="status" aria-live="polite" aria-atomic="true">
