@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Les quatre repères d’humeur</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;padding:18px;font-family:system-ui,sans-serif;color:#193752;background:#f7f9fd}main{display:grid;grid-template-columns:1fr 1fr;gap:12px}.mood{padding:20px 16px;border-radius:18px;background:var(--bg);border:1px solid var(--line);min-width:0}header{display:flex;align-items:center;justify-content:space-between;gap:10px}.number{font-size:13px;font-weight:700;background:#ffffffa0;width:30px;height:30px;display:grid;place-items:center;border-radius:10px}.face{font-size:36px;display:inline-block;animation:float 4s ease-in-out infinite;animation-delay:var(--delay)}h2{font-size:20px;letter-spacing:-.6px;margin:13px 0 8px}p{font-size:12px;line-height:1.8;margin:0;color:#476079}.note{font-size:11px;text-align:center;line-height:1.8;padding:15px 5px 0}.mood:nth-child(1){--bg:#eaf0fa;--line:#d4dfef;--delay:0s}.mood:nth-child(2){--bg:#e7f4ef;--line:#cbe6da;--delay:-1s}.mood:nth-child(3){--bg:#fff3df;--line:#f2dfbb;--delay:-2s}.mood:nth-child(4){--bg:#fcece7;--line:#efd4cb;--delay:-3s}@keyframes float{50%{transform:translateY(-4px)}}@media(max-width:330px){body{padding:10px}.mood{padding:15px 12px}h2{font-size:17px}.face{font-size:30px}p{font-size:11px}}@media(prefers-reduced-motion:reduce){.face{animation:none}}
+  </style>
+  <style>
+    html,body{height:100%;overflow:hidden}body{display:flex;flex-direction:column;padding:12px;gap:8px}main{flex:1;min-height:0;grid-template-rows:repeat(2,minmax(0,1fr));gap:8px}.mood{min-height:0;padding:clamp(8px,2vh,20px) 14px;display:flex;flex-direction:column;justify-content:center}h2{font-size:clamp(14px,3.5vw,24px);margin:8px 0 4px}.face{font-size:clamp(22px,7vh,38px)}p{font-size:clamp(9px,2vw,12px);line-height:1.5}.note{font-size:9px;padding:0;flex-shrink:0}@media(max-height:280px){.mood p,.note{display:none}.number{width:23px;height:23px;font-size:10px}.face{font-size:20px}h2{font-size:14px;margin:3px 0 0}body{padding:6px}.mood{padding:6px 10px}} 
+  </style>
+</head>
+<body>
+  <main aria-label="Quatre humeurs, sans classement">
+    <article class="mood"><header><span class="number">1</span><span class="face" aria-hidden="true">😣</span></header><h2>Mauvaise humeur</h2><p>Énergie élevée.</p></article>
+    <article class="mood"><header><span class="number">2</span><span class="face" aria-hidden="true">😞</span></header><h2>Mauvaise humeur</h2><p>Énergie basse.</p></article>
+    <article class="mood"><header><span class="number">3</span><span class="face" aria-hidden="true">😌</span></header><h2>Bonne humeur</h2><p>Énergie basse.</p></article>
+    <article class="mood"><header><span class="number">4</span><span class="face" aria-hidden="true">😊</span></header><h2>Bonne humeur</h2><p>Énergie élevée.</p></article>
+  </main>
+  <p class="note">Ces numéros sont des repères, pas des notes. Choisissez ce qui se rapproche de votre ressenti.</p>
+</body>
+</html>

@@ -1,0 +1,11 @@
+node_modules/
+.mood-cache/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+public/mood-meters/
+public/infomil-logo.svg
+public/mood-meter.html
+.env*
+!.env.example

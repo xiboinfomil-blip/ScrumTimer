@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Next.js production server",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"start",
+				"--",
+				"--port",
+				"3000"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

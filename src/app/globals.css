@@ -1,0 +1,42 @@
+@import "tailwindcss" source("../");
+
+@theme {
+	--color-brand: #205f9d;
+	--color-brand-dark: #164b80;
+	--color-accent: #ec8b23;
+	--color-ink: #193752;
+	--color-muted: #65798d;
+	--color-line: #e3ebf4;
+	--color-danger: #b94b43;
+	--color-success: #147d52;
+	--color-success-soft: #edf9f2;
+	--color-danger-soft: #fff1f0;
+	--font-sans: ui-sans-serif, system-ui, sans-serif;
+	--animate-speaker-float: speaker-float 5s ease-in-out infinite;
+	--animate-finish-pop: finish-pop .7s ease-out;
+	--animate-particle-fall: particle-fall 1.8s ease-out var(--delay, 0s) forwards;
+	--animate-enter: enter .3s ease-out both;
+	--animate-warning-glow: warning-glow 1.5s ease-in-out infinite;
+	--animate-critical-glow: critical-glow 1s ease-in-out infinite;
+	@keyframes enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+	@keyframes warning-glow { 50% { box-shadow: 0 0 0 5px #ec8b231c, 0 0 24px #ec8b2326; } }
+	@keyframes critical-glow { 50% { box-shadow: 0 0 0 5px #b94b4320, 0 0 28px #b94b4330; } }
+
+	@keyframes speaker-float { 50% { transform: translateY(-4px); } }
+	@keyframes finish-pop { 0% { transform: scale(.94); } 45% { transform: scale(1.03); } 100% { transform: scale(1); } }
+	@keyframes particle-fall {
+		0% { opacity: 0; transform: translateY(-35px) rotate(var(--rotation)); }
+		15% { opacity: .85; }
+		100% { opacity: 0; transform: translateY(260px) translateX(var(--drift)) rotate(240deg); }
+	}
+}
+
+@layer base {
+	[hidden] { display: none !important; }
+	button:not(:disabled), a, select { cursor: pointer; }
+	:is(button, a, input, select, summary):focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
+	@media (prefers-reduced-motion: no-preference) {
+		:is(button, a) { transition: background-color .18s, color .18s, border-color .18s, box-shadow .18s, transform .18s; }
+		button:not(:disabled):active { transform: translateY(1px); }
+	}
+}
