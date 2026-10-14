@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { card } from '@/components/ui/styles';
 import {
-  chooseRandomDeck, displayTitle, isAnimatedImage, overlayCropStyle,
+  chooseUnusedDeck, displayTitle, moodMeterId, isAnimatedImage, overlayCropStyle,
   overlayMatrix, type MoodMeterDeck, type MoodMeterSlide,
 } from '../../../lib/mood-meter';
 import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood-catalog-client';
@@ -101,7 +101,8 @@ export function MeterSlide({ slide, title, paused, idPrefix = 'meter' }: {
 }
 
 export function MoodMeter({ className = '', mobileVisible = true }: { className?: string; mobileVisible?: boolean }) {
-  const { updateTeam } = useTeam();
+  const { state, updateTeam } = useTeam();
+  const initialUsed = useRef(state.usedMoodMeters ?? []);
   const panelRef = useRef<HTMLElement>(null);
   // GIF playback is explicitly requested; Stop remains available at all times.
   const [paused, setPaused] = useState(false);
@@ -129,8 +130,9 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
         const decks = await loadMoodCatalog(controller.signal);
         if (!active || controller.signal.aborted) return;
         setCatalog(decks);
-        setSelection({ deck: chooseRandomDeck(decks.length), slide: 0 });
-        if (decks.some(deck => deck.remoteId)) setConversion('loading');
+        const selected = chooseUnusedDeck(decks, initialUsed.current);
+        setSelection({ deck: selected, slide: 0 });
+        if (decks[selected]?.remoteId) setConversion('loading');
         setStatus('ready');
       } catch {
         if (active && !controller.signal.aborted) setStatus('error');
@@ -162,12 +164,13 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deck?.remoteId, retry]);
   useEffect(() => {
-    updateTeam(current => ({ ...current, currentMoodSlide: showSlide ? { title, image: slide.image, slideNumber: selection.slide + 1 } : null }));
-  }, [slide, showSlide, title, selection.slide, updateTeam]);
+    updateTeam(current => ({ ...current, currentMoodSlide: showSlide ? { title, image: slide.image, slideNumber: selection.slide + 1, meterId: moodMeterId(deck) } : null }));
+  }, [slide, showSlide, title, selection.slide, deck, updateTeam]);
   const autoplayAnimations = () => {
     setPaused(false);
   };
   const selectDeck = (index: number) => {
+    if (index === -2) { setSelection({ deck: -2, slide: 0 }); setConversion('idle'); return; }
     if (!Number.isInteger(index) || !catalog[index]) return;
     setConversion(catalog[index].remoteId ? 'loading' : 'idle');
     if (index === selection.deck) setRetry(value => value + 1);
@@ -188,18 +191,19 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
       <h2 id="meter-title" className="sr-only">Le baromètre d’humeur</h2>
       <div className="flex min-w-0 shrink-0 items-center gap-2">
         <label className="sr-only" htmlFor="meter-catalogue-select">Catalogue · {catalog.length} baromètres</label>
-        <select id="meter-catalogue-select" className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-slate-50/60 px-3 text-xs font-medium text-brand focus:bg-white disabled:opacity-50" disabled={!catalog.length} value={deck ? String(selection.deck) : ''} onChange={event => selectDeck(Number(event.target.value))}>
-          {!catalog.length && <option value="">{status === 'loading' ? 'Chargement…' : 'Aucun baromètre disponible'}</option>}
-          {catalog.map((item, index) => <option key={index} value={index}>{displayTitle(item)}</option>)}
+        <select id="meter-catalogue-select" className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-slate-50/60 px-3 text-xs font-medium text-brand focus:bg-white disabled:opacity-50" disabled={status === 'loading'} value={String(selection.deck)} onChange={event => selectDeck(Number(event.target.value))}>
+          <option value="-1" disabled>{status === 'loading' ? 'Chargement…' : 'Choisissez un baromètre'}</option>
+          <option value="-2">Baromètre original · choix manuel</option>
+          {catalog.map((item, index) => <option key={index} value={index}>{displayTitle(item)}{state.usedMoodMeters?.includes(moodMeterId(item)) ? ' · Déjà utilisé' : ''}</option>)}
         </select>
         <button id="random-meter-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-lg text-brand hover:bg-blue-50" aria-label="Afficher un autre baromètre au hasard"
-          title="Afficher un autre baromètre au hasard" disabled={catalog.length < 2}
-          onClick={() => selectDeck(chooseRandomDeck(catalog.length, selection.deck))}>↝</button>
+          title="Afficher un baromètre non utilisé au hasard" disabled={!catalog.some((item, index) => index !== selection.deck && !state.usedMoodMeters?.includes(moodMeterId(item)))}
+          onClick={() => selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}>↝</button>
       </div>
       {showSlide ? <MeterSlide key={`${selection.deck}:${selection.slide}:${retry}`} slide={slide}
         title={`${title} — diapositive ${selection.slide + 1}`} paused={!playing} /> : (
         <div className={meterStage}>
-          {pending ? <MoodMeterLoading /> : <DefaultMoodMeter />}
+          {pending ? <MoodMeterLoading /> : selection.deck === -2 ? <DefaultMoodMeter /> : <p className="p-4 text-center text-xs text-muted">Choisissez un baromètre dans la liste. Les baromètres déjà utilisés restent disponibles.</p>}
         </div>
       )}
       <div className="flex h-11 shrink-0 items-center justify-between gap-1 text-xs text-muted">
@@ -216,14 +220,14 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
           {paused ? '▶ Reprendre' : 'Ⅱ Stop'}</button>
       </div>
       {deck?.remoteId && (!slide || conversion !== 'idle') && <div role="status" className="shrink-0 text-[11px] text-muted">
-        {conversion === 'error' ? <>Présentation indisponible : baromètre par défaut affiché. <button type="button" className="min-h-11 px-2 text-brand underline" onClick={() => { setConversion('loading'); setRetry(value => value + 1); }}>Réessayer</button></> : 'Chargement des diapositives SVG depuis Google…'}
+        {conversion === 'error' ? <>Présentation indisponible. Choisissez un autre baromètre ou <button type="button" className="min-h-11 px-2 text-brand underline" onClick={() => { setConversion('loading'); setRetry(value => value + 1); }}>Réessayer</button></> : 'Chargement des diapositives SVG depuis Google…'}
       </div>}
       <p id="meter-source-note" className={deck && !deck.remoteId ? 'sr-only' : 'shrink-0 text-[10px] text-muted'} role="status">{deck?.remoteId
         ? 'SVG fourni à la demande par Google. Image statique : les GIF ne sont pas animés.' : deck
         ? 'Les GIF jouent en boucle à l’ouverture de chaque diapositive. Stop fige les animations ; les flèches changent la diapositive.'
         : status === 'loading' ? 'Chargement du catalogue…'
-        : status === 'error' ? 'Catalogue indisponible. Le baromètre par défaut est affiché.'
-        : 'Aucune présentation disponible. Le baromètre par défaut est affiché.'}</p>
+        : status === 'error' ? 'Catalogue indisponible. Le baromètre original reste disponible dans la liste.'
+        : selection.deck === -2 ? 'Baromètre original choisi manuellement.' : 'Sélection automatique parmi les baromètres non utilisés uniquement.'}</p>
     </section>
   );
 }

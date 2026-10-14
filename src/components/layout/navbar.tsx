@@ -27,7 +27,7 @@ function NavIcon({ name, className = 'size-4' }: { name: 'people' | 'mood' | 'ti
 
 export function Navbar() {
   const pathname = usePathname();
-  const { state, ready, persistent, updateTeam } = useTeam();
+  const { state, ready, persistent, cloudStatus, retryCloud, updateTeam } = useTeam();
   const currentStep = steps.findIndex(step => step.path === pathname);
   const hasPeople = ready && state.roster.some(person => person.present);
   const canUseTimer = ready && hasValidSession(state);
@@ -61,10 +61,12 @@ export function Navbar() {
       </nav>
 
       <div className="ml-auto flex shrink-0 items-center gap-2.5">
-        <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted min-[1100px]:rounded-full min-[1100px]:border min-[1100px]:border-line min-[1100px]:bg-white/80 min-[1100px]:px-2.5 min-[1100px]:py-1.5 max-[650px]:text-[9px]" role="status" title={ready ? persistent ? 'Votre équipe est enregistrée uniquement sur cet appareil.' : 'Stockage indisponible : votre équipe reste en mémoire pendant cette visite.' : 'Chargement de votre équipe…'}>
+        <Link href="/statistics" aria-label="Statistiques" aria-current={pathname === '/statistics' ? 'page' : undefined} className={`inline-flex min-h-11 items-center rounded-lg px-2 text-xs font-semibold ${pathname === '/statistics' ? 'bg-blue-50 text-brand' : 'text-muted hover:text-brand'}`}><span aria-hidden="true">▥</span><span className="ml-1 max-[1100px]:sr-only">Statistiques</span></Link>
+        {(cloudStatus === 'error' || cloudStatus === 'local') && <button type="button" onClick={retryCloud} className="min-h-11 rounded-lg px-1 text-[10px] text-amber-800 underline" title="Réessayer la sauvegarde Neon">Local · réessayer</button>}
+        <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted min-[1100px]:rounded-full min-[1100px]:border min-[1100px]:border-line min-[1100px]:bg-white/80 min-[1100px]:px-2.5 min-[1100px]:py-1.5 max-[650px]:text-[9px]" role="status" title={cloudStatus === 'saved' ? 'Équipe sauvegardée dans Neon, privée à ce navigateur grâce à un cookie sécurisé.' : ready ? persistent ? 'Équipe sauvegardée sur cet appareil. Neon non synchronisé.' : 'Stockage indisponible : votre équipe reste en mémoire pendant cette visite.' : 'Chargement de votre équipe…'}>
           <span className={`size-1.5 shrink-0 rounded-full ${!ready ? 'bg-slate-300' : persistent ? 'bg-brand' : 'bg-accent'}`} aria-hidden="true" />
-          <span className="max-[1100px]:hidden max-[650px]:inline">{!ready ? 'Chargement…' : persistent ? 'Espace privé' : 'En mémoire'}</span>
-          <span className="sr-only">{ready ? persistent ? 'Enregistré sur cet appareil' : 'Stockage indisponible' : 'Chargement de votre équipe'}</span>
+          <span className="max-[1100px]:hidden max-[650px]:inline">{!ready ? 'Chargement…' : cloudStatus === 'saved' ? 'Neon ✓' : cloudStatus === 'saving' ? 'Sauvegarde…' : persistent ? 'Local' : 'En mémoire'}</span>
+          <span className="sr-only">{cloudStatus === 'saved' ? 'Enregistré dans Neon' : ready ? persistent ? 'Enregistré sur cet appareil' : 'Stockage indisponible' : 'Chargement de votre équipe'}</span>
         </span>
         {pathname === '/timer' && <button type="button" className="grid size-10 shrink-0 place-items-center rounded-xl border border-line bg-white text-brand transition-colors hover:border-brand/30 hover:bg-blue-50 disabled:opacity-50 motion-reduce:transition-none max-[650px]:h-7.5 max-[650px]:w-11" disabled={!ready} aria-label={state.sound ? 'Couper les alertes sonores' : 'Activer les alertes sonores'} aria-pressed={state.sound} title={state.sound ? 'Couper les alertes sonores' : 'Activer les alertes sonores'} onClick={() => updateTeam(current => ({ ...current, sound: !current.sound }))}><NavIcon name={state.sound ? 'sound' : 'muted'} className="size-4" /></button>}
       </div>

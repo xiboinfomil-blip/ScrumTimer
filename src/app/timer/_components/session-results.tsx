@@ -43,7 +43,7 @@ export function SessionResults({ timer }: { timer: StandupTimer }) {
           <div className="mt-3 space-y-3">{stats.moods.map(({ mood, count }) => <div key={mood} className="grid grid-cols-[60px_minmax(0,1fr)_45px] items-center gap-2 text-[11px]"><span>Humeur {mood}</span><div className="flex h-2 overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`Humeur ${mood} : ${count} personnes`}><div className="h-full rounded-full bg-brand/70" style={{ width: `${timer.people.length ? count / timer.people.length * 100 : 0}%` }} /></div><span className="text-right tabular-nums text-muted">{count} · {Math.round(count / timer.people.length * 100)}%</span></div>)}</div>
         </div>
         <MoodSlideSummary people={timer.people} />
-        <p className="mt-auto shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">Bilan de ce tour uniquement. Pauses exclues ; le décompte s’arrête à zéro, le temps de parole après le signal n’est pas mesuré. Résultats non enregistrés : quitter ou recharger les efface.</p>
+        <p className="mt-auto shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">Tour terminé ajouté aux statistiques des 10 derniers jours (Neon si disponible, sinon sur cet appareil). Pauses exclues ; le décompte s’arrête à zéro, le temps après le signal n’est pas mesuré.</p>
       </section>
     </div>
   </div>;

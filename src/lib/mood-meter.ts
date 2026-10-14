@@ -128,3 +128,12 @@ export function overlayCropStyle(crop?: MoodMeterCrop) {
     left: `${-100 * c.left / width}%`, top: `${-100 * c.top / height}%`,
   };
 }
+
+export function moodMeterId(deck: MoodMeterDeck): string {
+  return deck.remoteId ?? deck.title;
+}
+
+export function chooseUnusedDeck(decks: MoodMeterDeck[], used: string[], previous = -1): number {
+  const eligible = decks.map((deck, index) => ({ deck, index })).filter(({ deck, index }) => index !== previous && !used.includes(moodMeterId(deck)));
+  return eligible.length ? eligible[Math.floor(Math.random() * eligible.length)].index : -1;
+}

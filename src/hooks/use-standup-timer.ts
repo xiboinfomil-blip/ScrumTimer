@@ -7,6 +7,8 @@ import { TimerAudio } from '@/lib/audio';
 import { secondsUntil, shuffleEligible } from '@/lib/timer';
 import { shuffle } from '@/lib/shuffle';
 import type { SessionSpeaker } from '@/lib/session-results';
+import { completedRound } from '@/lib/history';
+import { createId } from '@/lib/team-storage';
 
 type Speaker = SessionSpeaker;
 interface TimerState {
@@ -25,7 +27,8 @@ interface TimerState {
 }
 
 export function useStandupTimer() {
-  const { state: team, updateTeam } = useTeam();
+  const { state: team, updateTeam, saveRound } = useTeam();
+  const roundId = useRef<string | null>(null);
   const notify = useNotify();
   const audio = useRef<TimerAudio | null>(null);
   const [timer, setTimer] = useState<TimerState>(() => {
@@ -84,12 +87,16 @@ export function useStandupTimer() {
     const index = current.people.findIndex(p => p.id === current.activeId);
     const people = current.people.map(p => p.id === current.activeId ? { ...p, done: true } : p);
     const person = [...people.slice(index + 1), ...people.slice(0, index)].find(p => !p.done);
+    if (!person) {
+      roundId.current ??= createId();
+      saveRound(completedRound(roundId.current, people));
+    }
     const prepared = cleared({ ...current, people, previousId: current.activeId, activeId: person?.id ?? null });
     prepared.people = prepared.people.map(candidate => candidate.id === person?.id ? { ...candidate, started: true, attempts: candidate.attempts + 1, budgetSeconds: candidate.started ? candidate.budgetSeconds : prepared.turnTotal } : candidate);
     if (person && preferences.current.sound) { audio.current ??= new TimerAudio(); audio.current.prepare(); }
     commit({ ...prepared, focusMode: Boolean(person), running: Boolean(person), turnStarted: Boolean(person), deadline: person ? Date.now() + prepared.remaining * 1000 : 0 });
     notify(person ? `${person.name}, à vous la parole !` : 'Point quotidien terminé. Bonne journée à toute l’équipe !');
-  }, [cleared, commit, notify, tick]);
+  }, [cleared, commit, notify, tick, saveRound]);
   const select = useCallback((id: string) => {
     if (latest.current.focusMode) return;
     if (id === latest.current.activeId || !latest.current.people.some(p => p.id === id)) return;
@@ -98,6 +105,7 @@ export function useStandupTimer() {
   }, [cleared, commit, tick]);
   const newRound = useCallback(() => {
     const current = latest.current;
+    roundId.current = null;
     commit(cleared({ ...current, focusMode: false, managing: false, previousId: null, people: current.people.map(p => ({ ...p, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0 })), activeId: current.people[0]?.id ?? null }));
     notify('Un nouveau tour commence. Faisons le point.');
   }, [cleared, commit, notify]);

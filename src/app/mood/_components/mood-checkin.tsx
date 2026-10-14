@@ -36,7 +36,7 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
             {([1, 2, 3, 4] as Mood[]).map(mood => (
               <button key={mood} className="grid size-11 shrink-0 place-items-center rounded-xl border border-line bg-white text-sm font-semibold text-brand shadow-[0_1px_2px_#19375204] transition-colors hover:border-accent hover:bg-orange-50 aria-pressed:border-brand aria-pressed:bg-brand aria-pressed:text-white aria-pressed:shadow-[0_3px_8px_#205f9d20] motion-reduce:transition-none"
                 aria-label={`Humeur ${mood} pour ${person.name}`} aria-pressed={person.mood === mood}
-                onClick={() => { const timestamp = new Date().toISOString(); updateTeam(current => ({ ...current, session: [], roster: current.roster.map(p => p.id === person.id ? { ...p, mood, moodUpdatedAt: timestamp, moodSlide: current.currentMoodSlide ?? null } : p) })); notify(`${person.name} : humeur ${mood} enregistrée.`); }}>
+                onClick={() => { const timestamp = new Date().toISOString(); updateTeam(current => ({ ...current, session: [], usedMoodMeters: [...new Set([...(current.usedMoodMeters ?? []), ...(current.currentMoodSlide?.meterId ? [current.currentMoodSlide.meterId] : [])])], roster: current.roster.map(p => p.id === person.id ? { ...p, mood, moodUpdatedAt: timestamp, moodSlide: current.currentMoodSlide ?? null } : p) })); notify(`${person.name} : humeur ${mood} enregistrée.`); }}>
                 {mood}
               </button>
             ))}

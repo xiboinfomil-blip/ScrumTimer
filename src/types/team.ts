@@ -1,5 +1,5 @@
 export type Mood = 1 | 2 | 3 | 4;
-export interface MoodSlideContext { title: string; image: string; slideNumber: number }
+export interface MoodSlideContext { title: string; image: string; slideNumber: number; meterId?: string }
 
 export interface Person {
   id: string;
@@ -16,5 +16,6 @@ export interface TeamState {
   duration: number;
   warning: number;
   sound: boolean;
+  usedMoodMeters?: string[];
   currentMoodSlide?: MoodSlideContext | null;
 }

@@ -4,7 +4,7 @@ export function normalizeMoodSlide(value: unknown): MoodSlideContext | null {
   if (!value || typeof value !== 'object') return null;
   const slide = value as Record<string, unknown>;
   if (typeof slide.title !== 'string' || typeof slide.image !== 'string' || !/^\/mood-meters\/slides\/[\w .\-/]+\.(png|jpe?g|gif|webp|svg)$/i.test(slide.image) || slide.image.split('/').slice(1).some(part => !part || part === '.' || part === '..') || typeof slide.slideNumber !== 'number' || !Number.isInteger(slide.slideNumber) || slide.slideNumber < 1 || slide.slideNumber > 10000) return null;
-  return { title: slide.title.slice(0, 200), image: slide.image, slideNumber: slide.slideNumber };
+  return { title: slide.title.slice(0, 200), image: slide.image, slideNumber: slide.slideNumber, ...(typeof slide.meterId === 'string' && slide.meterId.length <= 200 ? { meterId: slide.meterId } : {}) };
 }
 
 export const STORAGE_KEY = 'standup.team.v2';
@@ -26,6 +26,7 @@ export function normalizeTeam(value: unknown): TeamState {
   if (typeof saved.duration === 'number' && Number.isInteger(saved.duration) && saved.duration >= 1 && saved.duration <= 3659) state.duration = saved.duration;
   if (typeof saved.warning === 'number' && [0, 10, 15, 30, 60].includes(saved.warning)) state.warning = saved.warning;
   if (typeof saved.sound === 'boolean') state.sound = saved.sound;
+  state.usedMoodMeters = Array.isArray(saved.usedMoodMeters) ? [...new Set(saved.usedMoodMeters.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 200))].slice(-2000) : [];
   state.currentMoodSlide = normalizeMoodSlide(saved.currentMoodSlide);
   if (Array.isArray(saved.session)) state.session = [...new Set(saved.session)].filter((id): id is string => typeof id === 'string' && state.roster.some(p => p.id === id && p.present && p.mood !== null));
   return state;
