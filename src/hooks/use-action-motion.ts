@@ -1,37 +1,36 @@
 'use client';
 
 import { useEffect } from 'react';
+import { animate as motionAnimate } from 'framer-motion';
 
 // Native, delegated feedback covers mouse, touch and keyboard actions without
 // wrapping controls, changing focus, or tying animations to countdown renders.
 export function useActionMotion() {
   useEffect(() => {
     const preference = matchMedia('(prefers-reduced-motion: reduce)');
-    const animations = new Map<HTMLElement, Animation>();
+    const animations = new Map<HTMLElement, { stop: () => void }>();
     const frames = new Set<number>();
-    const spring = 'cubic-bezier(.22, 1, .36, 1)';
-    const animate = (element: HTMLElement, frames: Keyframe[], duration = 380) => {
+    const animate = (element: HTMLElement, keyframes: { opacity?: number[]; transform?: string[]; boxShadow?: string[] }, duration = 380) => {
       if (preference.matches || !element.isConnected || !element.getClientRects().length) return;
-      animations.get(element)?.cancel();
-      const animation = element.animate(frames, { duration, easing: spring });
+      animations.get(element)?.stop();
+      const animation = motionAnimate(element, keyframes, { duration: duration / 1000, ease: [.22, 1, .36, 1] });
       animations.set(element, animation);
       const clear = () => { if (animations.get(element) === animation) animations.delete(element); };
-      animation.onfinish = clear;
-      animation.oncancel = clear;
+      void animation.then(clear);
     };
-    const reveal = (element: HTMLElement) => animate(element, [{ opacity: .45 }, { opacity: 1 }], 320);
+    const reveal = (element: HTMLElement) => animate(element, { opacity: [.45, 1] }, 320);
     const click = (event: MouseEvent) => {
       if (!(event.target instanceof Element)) return;
       const control = event.target.closest<HTMLElement>('button, a, summary');
-      if (!control || control.matches(':disabled, [aria-disabled="true"]') || control.closest('[inert]')) return;
-      animate(control, [{ transform: 'scale(.96)' }, { transform: 'scale(1.015)', offset: .7 }, { transform: 'scale(1)' }]);
+      if (!control || control.matches(':disabled, [aria-disabled="true"], [data-motion-control]') || control.closest('[inert]')) return;
+      animate(control, { transform: ['scale(.96)', 'scale(1.015)', 'scale(1)'] });
     };
     const change = (event: Event) => {
       if (!(event.target instanceof HTMLElement)) return;
       const target = event.target;
       if (!target.matches('select, input[type="checkbox"], input[type="radio"], input[type="number"], input[type="range"]')) return;
       const surface = target.closest<HTMLElement>('li') ?? target;
-      animate(surface, [{ boxShadow: 'inset 0 0 0 2px #205f9d45' }, { boxShadow: 'inset 0 0 0 0px #205f9d00' }], 480);
+      animate(surface, { boxShadow: ['inset 0 0 0 2px #205f9d45', 'inset 0 0 0 0px #205f9d00'] }, 480);
     };
     const toggle = (event: Event) => {
       if (event.target instanceof HTMLDetailsElement && event.target.open) {
@@ -47,7 +46,7 @@ export function useActionMotion() {
           // Only structural list changes; never countdown text or live metrics.
           reveal(target);
         } else if (record.attributeName === 'open' && target instanceof HTMLDialogElement && target.open) {
-          animate(target, [{ opacity: 0, transform: 'translateY(18px) scale(.97)' }, { opacity: 1, transform: 'translateY(0) scale(1)' }], 420);
+          animate(target, { opacity: [0, 1], transform: ['translateY(18px) scale(.97)', 'translateY(0) scale(1)'] }, 420);
         } else if (record.attributeName === 'aria-pressed' && target.getAttribute('aria-pressed') === 'true' && target.closest('[data-motion-tabs]')) {
           // Run after React has made the selected mobile panel visible.
           const id = requestAnimationFrame(() => {
@@ -62,7 +61,7 @@ export function useActionMotion() {
     observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['open', 'aria-pressed'] });
     const stop = () => {
       if (preference.matches) {
-        animations.forEach(animation => animation.cancel());
+        animations.forEach(animation => animation.stop());
         animations.clear();
       }
     };
@@ -77,7 +76,7 @@ export function useActionMotion() {
       document.removeEventListener('toggle', toggle, true);
       preference.removeEventListener('change', stop);
       frames.forEach(cancelAnimationFrame);
-      animations.forEach(animation => animation.cancel());
+      animations.forEach(animation => animation.stop());
     };
   }, []);
 }

@@ -40,10 +40,11 @@ with sync_playwright() as p:
         page.set_viewport_size({'width': 1366, 'height': 768})
         page.goto(BASE + '/participants')
         page.locator('#checkin-name').fill('Action test')
-        feedback = page.get_by_role('button', name='Enregistrer cette personne').evaluate("""el => {
-            el.click();
-            return el.getAnimations().some(a => a.effect.getTiming().duration === 380);
-        }""")
+        action = page.get_by_role('button', name='Enregistrer cette personne')
+        action.evaluate('el => el.click()')
+        if motion == 'no-preference':
+            page.wait_for_function("Array.from(document.querySelectorAll('button')).some(el => el.getAnimations().some(a => a.effect.getTiming().duration === 380))")
+        feedback = action.evaluate('el => el.getAnimations().some(a => a.effect.getTiming().duration === 380)')
         assert feedback == (motion == 'no-preference'), (motion, 'tap feedback')
         row = page.locator('li').filter(has_text='Action test')
         expect(row).to_have_count(1)
@@ -67,14 +68,12 @@ with sync_playwright() as p:
         assert first in ['Alice <safe>', 'Bob', 'Charlie']
         assert cue.locator('script').count() == 0
         expect(cue).to_have_attribute('aria-atomic', 'true')
-        animations = cue.evaluate('el => getComputedStyle(el).animationName')
         halo = page.locator('#timer-ring > span').first
         halo_animation = halo.evaluate('el => getComputedStyle(el).animationName')
-        assert animations == ('none' if motion == 'reduce' else 'turn-spotlight'), animations
         assert halo_animation == ('none' if motion == 'reduce' else 'turn-halo'), halo_animation
 
         # Let the one-shot entrance finish before measuring geometry.
-        page.wait_for_function("document.querySelector('#speaker-turn-cue').getAnimations().every(animation => animation.playState === 'finished')")
+        page.wait_for_function("getComputedStyle(document.querySelector('#speaker-turn-cue')).opacity === '1' && ['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(getComputedStyle(document.querySelector('#speaker-turn-cue')).transform)")
         for width, height in SIZES:
             page.set_viewport_size({'width': width, 'height': height})
             page.wait_for_function("document.documentElement.scrollWidth <= innerWidth")

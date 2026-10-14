@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { animate } from 'framer-motion';
 
 // Measure actual rendered rows so the meeting stage stays within the viewport.
 export function PaginatedList<T extends { id: string }>({ items, renderItem, className = 'checkin-list', ordered = false, activeId }: { items: T[]; renderItem: (item: T, index: number) => ReactNode; className?: string; ordered?: boolean; activeId?: string | null }) {
@@ -29,8 +30,9 @@ export function PaginatedList<T extends { id: string }>({ items, renderItem, cla
   const current = Math.min(page, pages - 1);
   useEffect(() => {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const animation = ref.current?.animate([{ opacity: .35 }, { opacity: 1 }], { duration: 300, easing: 'cubic-bezier(.22, 1, .36, 1)' });
-    return () => animation?.cancel();
+    if (!ref.current) return;
+    const animation = animate(ref.current, { opacity: [.35, 1] }, { duration: .3, ease: [.22, 1, .36, 1] });
+    return () => animation.stop();
   }, [current]);
   useEffect(() => {
     if (!activeId) return;
