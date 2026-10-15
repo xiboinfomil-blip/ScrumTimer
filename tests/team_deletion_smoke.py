@@ -123,7 +123,27 @@ def fits(page):
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), page.url
 
 
+def teams_page(page):
+    expect(page.locator('#teams-heading:visible')).to_have_count(1)
+    assert urlparse(page.url).path == '/teams', page.url
+    expect(page.get_by_role('button', name='Supprimer l’équipe ', exact=False)).to_have_count(0)
+
+
+def manage(page, key):
+    teams_page(page)
+    page.get_by_role('button', name='Gérer l’équipe ' + NAMES[key], exact=True).click()
+    expect(page.locator('#manage-team-heading')).to_have_text(NAMES[key])
+    assert urlparse(page.url).path == '/manage-team', page.url
+    saved(page)
+    selected(page, key)
+    expect(page.get_by_role('button', name='Supprimer l’équipe ' + NAMES[key],
+                            exact=True)).to_be_visible()
+    expect(page.get_by_role('button', name='Supprimer l’équipe ', exact=False)).to_have_count(1)
+
+
 def open_delete(page, key):
+    assert urlparse(page.url).path == '/manage-team', page.url
+    selected(page, key)
     page.get_by_role('button', name='Supprimer l’équipe ' + NAMES[key], exact=True).click()
     dialog = page.get_by_role('dialog', name=DIALOG, exact=True)
     expect(dialog).to_be_visible()
@@ -146,6 +166,7 @@ def confirm_delete(page, key):
 
 def lifecycle(page, mock):
     initial = deepcopy(mock.db)
+    manage(page, B)
     dialog = open_delete(page, B)
     field = dialog.get_by_role('textbox', name=CONFIRM, exact=True)
     remove = dialog.get_by_role('button', name='Supprimer définitivement', exact=True)
@@ -159,35 +180,25 @@ def lifecycle(page, mock):
     expect(dialog).not_to_be_visible()
     assert mock.count('DELETE') == 0 and mock.db == initial
 
-    # DELETE returns the first alphabetical team, not the client's selection.
-    # Select C so an incorrect adoption of activeTeamId=A is observable.
-    page.get_by_role('button', name='Ouvrir l’équipe ' + NAMES[C], exact=True).click()
-    expect(page.get_by_text(NAMES[C] + ' membre', exact=True)).to_be_visible()
-    saved(page)
-    page.get_by_role('link', name='Accueil du point quotidien Infomil Mauritius', exact=True).click()
-    expect(page.locator('#teams-heading')).to_be_visible()
-    selected(page, C)
-    reads = mock.count('GET', '/api/team')
+    # Only the managed (active) team can be deleted. The next team must be
+    # hydrated, while every surviving team's backend data remains untouched.
     confirm_delete(page, B)
+    teams_page(page)
     expect(card(page, B)).to_have_count(0)
     saved(page)
-    selected(page, C)
-    expect(card(page, C).get_by_text('Actuelle', exact=True)).to_be_visible()
-    assert mock.count('GET', '/api/team') == reads, 'Inactive deletion must not rehydrate selection'
+    selected(page, A)
+    expect(card(page, A).get_by_text('Actuelle', exact=True)).to_be_visible()
     assert mock.db == {A: initial[A], C: initial[C]}
     assert mock.count('DELETE') == 1
-    page.get_by_role('button', name='Gérer l’équipe ' + NAMES[C], exact=True).click()
-    expect(page.locator('#manage-team-heading')).to_have_text(NAMES[C])
+    assert set(mock.requests[-2:]) == {('GET', '/api/team', A), ('GET', '/api/history', A)}
+    manage(page, C)
     expect(page.get_by_text(NAMES[C] + ' membre', exact=True)).to_be_visible()
-    saved(page)
-    selected(page, C)
-    assert mock.db[C] == initial[C], 'Selected roster, moods and preferences survive inactive deletion'
-    page.get_by_role('link', name='Toutes les équipes', exact=True).click()
-    expect(page.locator('#teams-heading')).to_be_visible()
+    assert mock.db[C] == initial[C], 'Other rosters, moods and preferences survive deletion'
 
     # Active deletion must leave the old selection, hydrate the next team and
     # stay on /teams with its new URL context (no stale guarded-route redirect).
     confirm_delete(page, C)
+    teams_page(page)
     expect(card(page, C)).to_have_count(0)
     saved(page)
     selected(page, A)
@@ -195,13 +206,11 @@ def lifecycle(page, mock):
     expect(card(page, A).get_by_text('Actuelle', exact=True)).to_be_visible()
     assert mock.db == {A: initial[A]}
     assert set(mock.requests[-2:]) == {('GET', '/api/team', A), ('GET', '/api/history', A)}
-    page.get_by_role('button', name='Gérer l’équipe ' + NAMES[A], exact=True).click()
-    expect(page.locator('#manage-team-heading')).to_have_text(NAMES[A])
+    manage(page, A)
     expect(page.get_by_text(NAMES[A] + ' membre', exact=True)).to_be_visible()
-    page.get_by_role('link', name='Toutes les équipes', exact=True).click()
-    expect(page.locator('#teams-heading')).to_be_visible()
 
     confirm_delete(page, A)
+    teams_page(page)
     expect(page.get_by_text('Aucune équipe disponible. Créez votre équipe.', exact=True)).to_be_visible()
     saved(page)
     assert mock.db == {} and mock.count('DELETE') == 3
@@ -210,6 +219,7 @@ def lifecycle(page, mock):
     reads = mock.count('GET', '/api/team')
     for _ in range(2):
         page.reload()
+        teams_page(page)
         expect(page.get_by_text('Aucune équipe disponible. Créez votre équipe.', exact=True)).to_be_visible()
         saved(page)
         assert not urlparse(page.url).query and mock.db == {}
@@ -222,6 +232,8 @@ def lifecycle(page, mock):
     expect(page.get_by_text('Votre équipe prend forme ici.', exact=True)).to_be_visible()
     saved(page)
     selected(page, D)
+    expect(page.get_by_role('button', name='Supprimer l’équipe ' + NAMES[D],
+                            exact=True)).to_be_visible()
     assert mock.count('POST') == 1 and list(mock.db) == [D]
     page.reload()
     expect(page.locator('#manage-team-heading')).to_have_text(NAMES[D])
@@ -231,6 +243,7 @@ def lifecycle(page, mock):
 
 def failure_case(page, mock, failure):
     before = deepcopy(mock.db)
+    manage(page, A)
     mock.failure = failure
     if failure == 'timeout':
         page.clock.install()
@@ -248,13 +261,16 @@ def failure_case(page, mock, failure):
     expect(page.locator('.site-header [role="status"]')).to_have_attribute(
         'title', 'Échec de l’enregistrement de l’équipe dans Neon. Réessayez.')
     selected(page, A)  # No optimistic fallback after an unconfirmed mutation.
+    assert urlparse(page.url).path == '/manage-team', page.url
+    # ready=false removes the private route, including its dialog and controls;
+    # missing management UI is the safety gate, not a disabled delete button.
+    expect(page.locator('#manage-team-heading')).to_have_count(0)
+    expect(page.get_by_role('button', name='Supprimer l’équipe ', exact=False)).to_have_count(0)
+    expect(page.get_by_text('Connexion à Neon nécessaire pour ouvrir votre équipe.',
+                            exact=True)).to_be_visible()
     assert mock.count('DELETE') == 1
     assert mock.db == (before if failure == 'server' else {B: before[B], C: before[C]})
     request_count = len(mock.requests)
-    for prefix in ('Ouvrir l’équipe ', 'Gérer l’équipe ', 'Supprimer l’équipe '):
-        for control in page.get_by_role('button', name=prefix, exact=False).all():
-            expect(control).to_be_disabled()
-    expect(page.get_by_role('button', name='Créer une équipe', exact=True)).to_be_disabled()
     for name in ('Humeurs —', 'Minuteur —'):
         expect(page.get_by_role('button', name=name, exact=False)).to_be_disabled()
     # The switcher can open on an error, but its mutation controls stay gated.
@@ -263,8 +279,17 @@ def failure_case(page, mock, failure):
     expect(panel).to_be_visible()
     for control in panel.get_by_role('button').all():
         expect(control).to_be_disabled()
-    page.keyboard.press('Escape')
+    expect(panel.get_by_role('link', name='Gérer l’équipe', exact=True)).to_be_disabled()
+    # /teams remains public during the error. Navigate without reloading the
+    # provider, then verify its stale cards cannot select/manage/create teams.
+    panel.get_by_role('link', name='Toutes les équipes', exact=True).click()
     expect(panel).not_to_be_visible()
+    teams_page(page)
+    for key in before:
+        for prefix in ('Ouvrir l’équipe ', 'Gérer l’équipe '):
+            expect(page.get_by_role('button', name=prefix + NAMES[key],
+                                    exact=True)).to_be_disabled()
+    expect(page.get_by_role('button', name='Créer une équipe', exact=True)).to_be_disabled()
     page.wait_for_timeout(100)
     assert len(mock.requests) == request_count, 'No automatic retry or stale writes before explicit Retry'
 
@@ -275,12 +300,16 @@ def failure_case(page, mock, failure):
     selected(page, A if failure == 'server' else B)
     assert mock.count('GET') > before_reload, 'Retry must reload the authoritative team list'
     assert mock.count('DELETE') == 1, 'Retry must not replay an uncertain DELETE'
+    teams_page(page)
     expect(page.get_by_role('button', name='Créer une équipe', exact=True)).to_be_enabled()
     expect(page.get_by_role('button', name='Ouvrir l’équipe ' + NAMES[B], exact=True)).to_be_enabled()
-    expect(page.get_by_role('button', name='Supprimer l’équipe ' + NAMES[B], exact=True)).to_be_enabled()
+    expect(page.get_by_role('button', name='Gérer l’équipe ' + NAMES[B], exact=True)).to_be_enabled()
     if failure == 'timeout':
         expect(card(page, A)).to_have_count(0)
     assert mock.db == (before if failure == 'server' else {B: before[B], C: before[C]})
+    manage(page, B)
+    expect(page.get_by_role('button', name='Supprimer l’équipe ' + NAMES[B], exact=True)).to_be_enabled()
+    assert mock.count('DELETE') == 1, 'Recovery and management must not replay DELETE'
     fits(page)
 
 
@@ -301,7 +330,7 @@ def main():
                     page.on('pageerror', lambda error: errors.append(str(error)))
                     try:
                         page.goto(f'{BASE}/teams?team={A}')
-                        expect(page.locator('#teams-heading')).to_be_visible()
+                        teams_page(page)
                         saved(page)
                         selected(page, A)
                         if scenario == 'lifecycle':
