@@ -33,6 +33,7 @@ with sync_playwright() as p:
         expect(moods.locator('img').first).to_have_attribute('alt', 'Baromètre exemple — diapositive 1')
         expect(moods.locator('[data-mood-choice="1"]')).to_contain_text('Personne 00')
         expect(moods.locator('[data-mood-choice="2"]')).to_contain_text('Personne 01')
+        assert moods.locator('[data-mood-choice]').evaluate_all('els => els.map(el => Number(el.dataset.moodChoice))') == [1, 4, 2, 3]
         page.wait_for_function("document.querySelector('[data-dashboard-column=moods] img')?.naturalWidth > 0")
         ranking = page.get_by_role('list', name='Classement du jour')
         expect(ranking.locator('li')).to_have_count(8)

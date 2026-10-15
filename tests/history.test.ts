@@ -12,7 +12,8 @@ test('daily moods group exact saved slide choices without guessing missing or ch
   const roster = normalizeTeam({ roster: [{ id: 'alice', name: 'Alice', mood: 2, moodUpdatedAt: '2026-10-14T09:00:00Z', moodSlide: slide }] }).roster;
   const groups = groupDailyMoods(round, roster);
   assert.equal(groups[0].context?.image, slide.image);
-  assert.equal(groups[0].choices[1].people[0].name, 'Alice');
+  assert.deepEqual(groups[0].choices.map(choice => choice.mood), [1, 4, 2, 3]);
+  assert.equal(groups[0].choices[2].people[0].name, 'Alice');
   assert.equal(groupDailyMoods(round, [])[0].context, null);
   assert.equal(groupDailyMoods(round, [{ ...roster[0], mood: 3 }])[0].context, null);
   assert.equal(groupDailyMoods(round, [{ ...roster[0], moodUpdatedAt: '2026-10-14T11:00:00Z' }])[0].context, null);

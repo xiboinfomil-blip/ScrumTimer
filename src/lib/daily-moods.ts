@@ -12,5 +12,5 @@ export function groupDailyMoods(round: HistoryRound, roster: Person[]) {
     group.people.push(person);
     groups.set(key, group);
   }
-  return [...groups.values()].map(group => ({ ...group, choices: ([1, 2, 3, 4] as const).map(mood => ({ mood, people: group.people.filter(person => person.mood === mood) })), missing: group.people.filter(person => person.mood === null) }));
+  return [...groups.values()].map(group => ({ ...group, choices: ([1, 4, 2, 3] as const).map(mood => ({ mood, people: group.people.filter(person => person.mood === mood) })), missing: group.people.filter(person => person.mood === null) }));
 }
