@@ -3,6 +3,7 @@
 import { Button, IconButton, Paper } from '@mui/material';
 import { card, primaryButton, secondaryButton } from '@/components/ui/styles';
 import { timerUrgency } from '@/lib/timer';
+import { speakerScoreProgress } from '@/lib/session-results';
 import type { StandupTimer } from './timer-page';
 import { TimerSettings } from './timer-settings';
 import { SpeakerSlider } from './speaker-slider';
@@ -12,7 +13,10 @@ const circumference = 2 * Math.PI * 136;
 export function TimerPanel({ timer, className = '' }: { timer: StandupTimer; className?: string }) {
   const { people, person, remaining, turnTotal, running, ended, warning, turnStarted } = timer;
 
-  const seconds = Math.max(0, Math.ceil(remaining));
+  const scoreProgress = person ? speakerScoreProgress(person) : { score: null, zone: 'waiting' as const };
+  const scoreColor = scoreProgress.zone === 'building' ? 'text-amber-700' : scoreProgress.zone === 'optimal' ? 'text-success' : scoreProgress.zone === 'overtime' ? 'text-danger' : 'text-brand';
+  const scoreLabel = scoreProgress.zone === 'building' ? '↗ Score en hausse · avant ¼' : scoreProgress.zone === 'optimal' ? '✓ Zone optimale · ¼ à 100 %' : scoreProgress.zone === 'overtime' ? scoreProgress.score === 0 ? '− Score minimum atteint' : '↘ Dépassement · points en baisse' : '¼ à 100 % = meilleur score';
+  const seconds = Math.ceil(Math.abs(remaining));
   const minutes = Math.floor(seconds / 60);
   const secs = seconds % 60;
   const urgency = timerUrgency(remaining, warning, ended, turnStarted);
@@ -23,7 +27,7 @@ export function TimerPanel({ timer, className = '' }: { timer: StandupTimer; cla
   const speakerName = person ? person.name : complete ? 'Le tour de table est terminé !' : 'En attente des personnes reportées';
   const feedback = complete ? 'Tout le monde a eu la parole. Bonne journée !' : ended ? 'Concluez puis Suivant : le prochain minuteur démarrera.' : critical ? 'Dernières secondes : terminez votre phrase.' : nearly ? 'Le temps diminue : préparez votre conclusion.' : running ? 'Suivant lance immédiatement le prochain passage.' : 'Cliquez sur Démarrer lorsque vous prenez la parole.';
   const ratio = turnTotal > 0 ? Math.min(1, Math.max(0, remaining / turnTotal)) : 0;
-  const ringColor = ended || critical ? 'text-danger' : nearly ? 'text-accent' : 'text-success';
+  const ringColor = ended ? 'text-danger' : scoreColor;
   const statusColor = ended || critical ? 'border-red-200 bg-danger-soft text-danger' : nearly ? 'border-orange-200 bg-orange-50 text-amber-800' : complete || running || !turnStarted ? 'border-green-200 bg-success-soft text-success' : 'border-orange-200 bg-orange-50 text-amber-800';
   const feedbackColor = complete ? 'text-success' : ended || critical ? 'font-semibold text-danger' : nearly ? 'text-amber-800' : 'text-muted';
   const panelColor = ended || critical ? 'border-red-200! bg-linear-to-b from-danger-soft to-white' : nearly ? 'border-orange-200! bg-linear-to-b from-orange-50 to-white' : complete ? 'border-green-200! bg-success-soft' : running ? 'border-brand! bg-blue-50/40' : '';
@@ -44,13 +48,17 @@ export function TimerPanel({ timer, className = '' }: { timer: StandupTimer; cla
         <div key={`${timer.activeId}-${timer.focusMode}`} className={`timer-ring relative isolate aspect-square ${timer.focusMode ? 'w-[min(100cqw,100cqh,320px)] max-[650px]:w-[min(100cqw,100cqh,260px)]' : 'w-[min(100cqw,100cqh,260px)] max-[650px]:w-[min(100cqw,100cqh,220px)]'} rounded-full [container-type:inline-size] transition-colors motion-reduce:transition-none ${ringColor} ${pulse}`} id="timer-ring">
           {timer.focusMode && <span className="pointer-events-none absolute inset-0 rounded-full border-2 border-accent opacity-0 motion-safe:animate-turn-halo" aria-hidden="true" />}
           <svg className="size-full -rotate-90 overflow-visible" viewBox="0 0 300 300" aria-hidden="true">
-            <circle className={`fill-none stroke-[6] ${ended || critical ? 'stroke-red-100' : nearly ? 'stroke-orange-100' : 'stroke-green-100'}`} cx="150" cy="150" r="136" />
+            <circle className="fill-none stroke-current stroke-[6] opacity-15" cx="150" cy="150" r="136" />
             <circle className="fill-none stroke-current stroke-[6] [stroke-linecap:round] transition-[stroke-dashoffset,stroke] duration-150 ease-linear motion-reduce:transition-none" id="ring-progress" cx="150" cy="150" r="136" style={{ strokeDasharray: circumference, strokeDashoffset: circumference * (1 - ratio) }} />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-[10%]">
-            <span className="text-[clamp(5px,3cqw,8px)] font-bold leading-relaxed tracking-wide text-muted" id="timer-label">{ended ? 'PASSEZ LA PAROLE' : critical ? 'CONCLUEZ MAINTENANT' : nearly ? 'PRÉPAREZ LA CONCLUSION' : running ? 'TEMPS RESTANT' : 'TEMPS PAR PERSONNE'}</span>
-            <div id="timer-display" className={`text-[clamp(24px,24cqw,74px)] leading-none font-semibold tracking-[-2px] tabular-nums ${ended || critical ? 'text-danger' : 'text-ink'}`} role="timer" aria-live="off" aria-label={`Temps restant : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
-              {String(minutes).padStart(2, '0')}<span className={ringColor}>:</span>{String(secs).padStart(2, '0')}
+            <span className="text-[clamp(5px,3cqw,8px)] font-bold leading-relaxed tracking-wide text-muted" id="timer-label">{ended ? 'DÉPASSEMENT · PASSEZ LA PAROLE' : critical ? 'CONCLUEZ MAINTENANT' : nearly ? 'PRÉPAREZ LA CONCLUSION' : running ? 'TEMPS RESTANT' : 'TEMPS PAR PERSONNE'}</span>
+            <div id="timer-display" className={`text-[clamp(24px,22cqw,70px)] leading-none font-semibold tracking-[-2px] tabular-nums ${ended || critical ? 'text-danger' : 'text-ink'}`} role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
+              {ended ? '+' : ''}{String(minutes).padStart(2, '0')}<span className={ringColor}>:</span>{String(secs).padStart(2, '0')}
+            </div>
+            <div id="live-score" data-score-zone={scoreProgress.zone} className={`flex max-w-full flex-col items-center leading-tight ${scoreColor}`} aria-label="Score de gestion du temps en direct" title="Avant 25 % : score progressif. De 25 à 100 % : 1 000 pts. Ensuite −100 pts par 10 % de dépassement. Relance après réinitialisation : −100 (max. 200). Pause sans pénalité. Ne mesure pas la qualité de la contribution.">
+              <strong id="live-score-value" className="text-[clamp(10px,7cqw,20px)] tabular-nums" aria-live="off">{scoreProgress.score ?? '—'}<span className="text-[clamp(7px,4cqw,11px)] font-normal"> / 1 000 pts</span></strong>
+              <span className="text-[clamp(6px,3.5cqw,10px)]" role="status">{scoreLabel}</span>
             </div>
           </div>
           <span className="absolute top-[3%] left-1/2 size-[3%] -translate-x-1/2 rounded-full bg-current" aria-hidden="true" />
@@ -59,8 +67,8 @@ export function TimerPanel({ timer, className = '' }: { timer: StandupTimer; cla
       <div className="col-span-full flex min-w-0 items-center justify-center gap-2 max-[650px]:gap-1.5">
         {person && <IconButton size="small" sx={{ width: 44, height: 44, borderRadius: 2 }} type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-brand hover:bg-blue-50" aria-label={`Reporter le passage de ${person.name}`} onClick={() => timer.postpone(person.id)}>↷</IconButton>}
         {!timer.focusMode && <IconButton size="small" sx={{ width: 44, height: 44, borderRadius: 2 }} type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-lg text-brand hover:bg-blue-50" id="reset-button" aria-label="Réinitialiser le minuteur de la personne qui parle" title="Réinitialiser le minuteur (R)" onClick={timer.reset} aria-keyshortcuts="R">↺</IconButton>}
-        <Button disableElevation size="small" variant={running || ended ? 'outlined' : 'contained'} sx={{ minHeight: 44, minWidth: 0, px: 1, textTransform: 'none', fontSize: 11 }} type="button" id="start-button" className={`${running || ended ? secondaryButton : primaryButton} min-h-11 min-w-0 flex-1 max-[650px]:px-2 max-[650px]:text-[11px]`} disabled={!person} onClick={timer.toggle} aria-keyshortcuts="Space">
-          <span aria-hidden="true">{running ? 'Ⅱ' : ended ? '↺' : '▶'}</span> {running ? 'Pause' : ended ? 'Relancer' : turnStarted ? 'Reprendre' : 'Démarrer'}
+        <Button disableElevation size="small" variant={running ? 'outlined' : 'contained'} sx={{ minHeight: 44, minWidth: 0, px: 1, textTransform: 'none', fontSize: 11 }} type="button" id="start-button" className={`${running ? secondaryButton : primaryButton} min-h-11 min-w-0 flex-1 max-[650px]:px-2 max-[650px]:text-[11px]`} disabled={!person} onClick={timer.toggle} aria-keyshortcuts="Space">
+          <span aria-hidden="true">{running ? 'Ⅱ' : '▶'}</span> {running ? 'Pause' : turnStarted ? 'Reprendre' : 'Démarrer'}
         </Button>
         <Button disableElevation size="small" variant={ended ? 'contained' : 'outlined'} sx={{ minHeight: 44, minWidth: 0, px: 1, textTransform: 'none', fontSize: 11 }} type="button" id="next-button" className={`${ended ? primaryButton : secondaryButton} min-h-11 max-[650px]:px-2 max-[650px]:text-[11px]`} disabled={!person} onClick={timer.next} aria-keyshortcuts="N">Suivant <span aria-hidden="true">→</span></Button>
       </div>

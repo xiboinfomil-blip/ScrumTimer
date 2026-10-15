@@ -5,6 +5,7 @@ import { Button, Paper } from '@mui/material';
 import { HISTORY_DAYS, type HistoryRound, historyLeaderboard, normalizeHistory, summarizeDays } from '@/lib/history';
 import { useTeam } from '@/providers/team-provider';
 import { card, routeStage, secondaryButton } from '@/components/ui/styles';
+import { ScoreBreakdown } from '@/components/ui/score-breakdown';
 
 type HistorySource = 'loading' | 'neon' | 'unavailable';
 
@@ -95,7 +96,7 @@ export function StatisticsPage() {
   const people = visibleRounds.flatMap((round) => round.people);
   const seconds = people.reduce((sum, person) => sum + person.speakingSeconds, 0);
   const measured = people.filter(person => person.speakingSeconds >= 1 && person.budgetSeconds > 0);
-  const withinTime = measured.filter((person) => !person.timeUp && person.speakingSeconds <= person.budgetSeconds).length;
+  const withinTime = measured.filter((person) => person.speakingSeconds <= person.budgetSeconds).length;
   const moods = ([1, 2, 3, 4] as const).map((mood) => ({
     mood, count: people.filter((person) => person.mood === mood).length,
   }));
@@ -223,7 +224,8 @@ export function StatisticsPage() {
                         {round.people.map((person, index) => (
                           <li key={`${person.id}-${index}`} className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-[11px]">
                             <span className="min-w-0 break-words font-medium text-brand">{person.name}</span>
-                            <span className="text-muted">{duration(person.speakingSeconds)} / {duration(person.budgetSeconds)} · {person.speakingSeconds < 1 || person.budgetSeconds <= 0 ? 'Non mesuré' : person.timeUp || person.speakingSeconds > person.budgetSeconds ? 'Temps imparti atteint ou dépassé' : 'Dans le temps'} · {person.mood === null ? 'Sans catégorie' : `Catégorie ${person.mood}`}</span>
+                            <span className="text-muted">{duration(person.speakingSeconds)} / {duration(person.budgetSeconds)} · {person.speakingSeconds < 1 || person.budgetSeconds <= 0 ? 'Non mesuré' : person.speakingSeconds > person.budgetSeconds ? 'Temps imparti dépassé' : 'Dans le temps'} · {person.mood === null ? 'Sans catégorie' : `Catégorie ${person.mood}`}</span>
+                            <div className="flex basis-full items-center justify-between"><span className="font-semibold text-brand">{person.score ?? '—'} pts</span><ScoreBreakdown person={person} /></div>
                           </li>
                         ))}
                       </ul>

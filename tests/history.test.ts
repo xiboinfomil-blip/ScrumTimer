@@ -49,6 +49,14 @@ test('round snapshot retains stable id, meter label and calculated score', () =>
   assert.equal(result.people[0].meterTitle, 'Used deck');
   assert.equal(normalizeHistory([result]).length, 1);
 });
+test('exactly the full time budget remains on time across historical summaries', () => {
+  const exact = { ...round, people: [{ ...round.people[0], speakingSeconds: 120, timeUp: true }] };
+  assert.equal(summarizeDays([exact], now)[4].withinTime, 1);
+  assert.equal(historyLeaderboard([exact], now)[0].withinTime, 1);
+  const overtime = { ...round, people: [{ ...round.people[0], speakingSeconds: 120.1, timeUp: true }] };
+  assert.equal(summarizeDays([overtime], now)[4].withinTime, 0);
+  assert.equal(historyLeaderboard([overtime], now)[0].withinTime, 0);
+});
 test('automatic meter selection never reuses a used deck but manual ids remain available', () => {
   const decks: MoodMeterDeck[] = [{ title: 'A', remoteId: 'a', slides: [] }, { title: 'B', remoteId: 'b', slides: [] }];
   assert.equal(chooseUnusedDeck(decks, ['a']), 1);

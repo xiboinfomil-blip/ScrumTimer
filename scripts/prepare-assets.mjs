@@ -41,6 +41,10 @@ await mkdir(publicRoot, { recursive: true });
 for (const file of ['infomil-logo.svg', 'mood-meter.html']) {
   await publish(path.join(root, file), path.join(publicRoot, file));
 }
+// First-party guide illustrations; never publish documentation or slide sources.
+for (const file of ['participants.svg', 'moods.svg', 'timer.svg', 'score.svg']) {
+  await publish(path.join(root, 'docs/guide', file), path.join(publicRoot, 'guide', file));
+}
 const remote = process.env.MOOD_LOCAL_ASSETS !== '1';
 const text = remote ? '[]' : await readFile(path.join(root, 'mood-meters/catalog.js'), 'utf8');
 const json = text.replace(/^\uFEFF/, '').replace(/^\s*\/\/[^\n]*\n/, '').replace(/^\s*window\.MOOD_METER_DECKS\s*=\s*/, '').replace(/;\s*$/, '');

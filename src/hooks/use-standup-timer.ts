@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
 import { TimerAudio } from '@/lib/audio';
-import { secondsUntil, shuffleEligible } from '@/lib/timer';
+import { timerFrame, shuffleEligible } from '@/lib/timer';
 import { shuffle } from '@/lib/shuffle';
 import type { SessionSpeaker } from '@/lib/session-results';
 import type { Mood } from '@/types/team';
@@ -49,16 +49,14 @@ export function useStandupTimer() {
   const tick = useCallback(() => {
     const current = latest.current;
     if (!current.running) return current;
-    const remaining = secondsUntil(current.deadline, Date.now());
-    const elapsed = Math.max(0, current.remaining - remaining);
-    const next = { ...current, remaining, people: current.people.map(person => person.id === current.activeId ? { ...person, speakingSeconds: Math.round((person.speakingSeconds + elapsed) * 1000) / 1000, timeUp: person.timeUp || remaining === 0 } : person) };
-    if (remaining === 0) {
-      next.running = false;
+    const { remaining, elapsed } = timerFrame(current.deadline, Date.now(), current.remaining);
+    const next = { ...current, remaining, people: current.people.map(person => person.id === current.activeId ? { ...person, speakingSeconds: Math.round((person.speakingSeconds + elapsed) * 1000) / 1000, timeUp: person.timeUp || remaining <= 0 } : person) };
+    if (remaining <= 0 && !current.ended) {
       next.ended = true;
       if (preferences.current.sound) audio.current?.chime(true);
       const person = current.people.find(p => p.id === current.activeId);
       notify(`${person?.name ?? 'L’équipe'}, votre temps de parole est écoulé. Merci de conclure et de laisser la parole à la personne suivante.`, 'error');
-    } else if (!current.warned && preferences.current.warning > 0 && remaining <= preferences.current.warning) {
+    } else if (remaining > 0 && !current.warned && preferences.current.warning > 0 && remaining <= preferences.current.warning) {
       next.warned = true;
       if (preferences.current.sound) audio.current?.chime();
       notify(`Il reste ${Math.ceil(remaining)} secondes. Pensez à conclure.`, 'warning');
@@ -79,9 +77,8 @@ export function useStandupTimer() {
     if (current.managing) return;
     if (preferences.current.sound) { audio.current ??= new TimerAudio(); audio.current.prepare(); }
     if (current.running) { current = tick(); commit({ ...current, running: false }); return; }
-    if (current.ended) current = cleared(current);
     commit({ ...current, people: current.people.map(p => p.id === current.activeId ? { ...p, done: false, started: true, attempts: p.attempts + (current.turnStarted ? 0 : 1), budgetSeconds: p.started ? p.budgetSeconds : current.turnTotal } : p), running: true, turnStarted: true, focusMode: true, deadline: Date.now() + current.remaining * 1000 });
-  }, [tick, cleared, commit]);
+  }, [tick, commit]);
   const next = useCallback(() => {
     const current = tick();
     if (!current.activeId) return;

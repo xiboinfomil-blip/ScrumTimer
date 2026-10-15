@@ -1,4 +1,9 @@
 export const secondsUntil = (deadline: number, now: number) => Math.max(0, (deadline - now) / 1000);
+// Signed remaining time keeps overtime measurable, including delayed/background ticks.
+export function timerFrame(deadline: number, now: number, previousRemaining: number) {
+  const remaining = Math.min(previousRemaining, (deadline - now) / 1000);
+  return { remaining, elapsed: Math.max(0, previousRemaining - remaining) };
+}
 export function timerUrgency(remaining: number, warning: number, ended: boolean, turnStarted: boolean) {
   if (ended) return 'expired';
   if (!turnStarted || warning <= 0 || remaining <= 0 || remaining > warning) return 'normal';

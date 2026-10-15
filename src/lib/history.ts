@@ -41,7 +41,7 @@ export function summarizeDays(value: HistoryRound[], now = new Date()) {
     const key = date.toISOString().slice(0, 10);
     const selected = rounds.filter(round => round.completedAt.slice(0, 10) === key);
     const people = selected.flatMap(round => round.people);
-    return { date: key, rounds: selected.length, participants: people.length, seconds: people.reduce((sum, p) => sum + p.speakingSeconds, 0), withinTime: people.filter(p => p.budgetSeconds > 0 && p.speakingSeconds >= 1 && !p.timeUp && p.speakingSeconds <= p.budgetSeconds).length, moods: [1,2,3,4].map(mood => people.filter(p => p.mood === mood).length) };
+    return { date: key, rounds: selected.length, participants: people.length, seconds: people.reduce((sum, p) => sum + p.speakingSeconds, 0), withinTime: people.filter(p => p.budgetSeconds > 0 && p.speakingSeconds >= 1 && p.speakingSeconds <= p.budgetSeconds).length, moods: [1,2,3,4].map(mood => people.filter(p => p.mood === mood).length) };
   });
 }
 
@@ -56,7 +56,7 @@ export function historyLeaderboard(value: HistoryRound[], now = new Date()) {
         row.scored += 1;
         row.totalScore += person.score;
         row.seconds += person.speakingSeconds;
-        if (!person.timeUp && person.speakingSeconds <= person.budgetSeconds) row.withinTime += 1;
+        if (person.speakingSeconds <= person.budgetSeconds) row.withinTime += 1;
       }
       participants.set(person.id, row);
     }

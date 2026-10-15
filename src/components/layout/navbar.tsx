@@ -41,6 +41,7 @@ export function Navbar() {
         </Stepper>
       </nav>
       <div className="ml-auto flex shrink-0 items-center gap-1">
+        <Button component={Link} href="/help" aria-label="Guide d’utilisation" aria-current={pathname === '/help' ? 'page' : undefined} variant={pathname === '/help' ? 'contained' : 'text'} sx={{ minWidth: 44, minHeight: 44, px: 1 }}><span aria-hidden="true" className="text-lg">?</span><span className="ml-1 max-[1200px]:sr-only">Guide</span></Button>
         <Button component={Link} href="/statistics" aria-label="Statistiques" aria-current={pathname === '/statistics' ? 'page' : undefined} variant={pathname === '/statistics' ? 'contained' : 'text'} sx={{ minWidth: 44, px: 1 }}><span aria-hidden="true" className="text-lg">▥</span><span className="ml-1 max-[1200px]:sr-only">Statistiques</span></Button>
         <Tooltip title={cloudDescription}><Chip component="span" role="status" title={cloudDescription} label={cloudLabel} size="small" color={cloudStatus === 'error' ? 'error' : 'success'} variant="outlined" sx={{ display: { xs: 'none', lg: 'inline-flex' }, border: 0, backgroundColor: cloudStatus === 'error' ? '#fff1f0' : '#edf9f2' }} /></Tooltip>
         <span className="sr-only">{cloudDescription}</span>

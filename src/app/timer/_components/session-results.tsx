@@ -10,6 +10,7 @@ import { formatTime } from '@/lib/timer';
 import { sessionLeaderboard, sessionStatistics } from '@/lib/session-results';
 import type { StandupTimer } from './timer-page';
 import { MoodSlideSummary } from './mood-slide-summary';
+import { ScoreBreakdown } from '@/components/ui/score-breakdown';
 
 export function SessionResults({ timer }: { timer: StandupTimer }) {
   const [view, setView] = useState<'ranking' | 'stats'>('ranking');
@@ -28,23 +29,23 @@ export function SessionResults({ timer }: { timer: StandupTimer }) {
           <p className="truncate text-lg font-bold text-ink" title={winners.map(person => person.name).join(', ')}>{winners.length === 1 ? winners[0].name : winners.length ? 'Victoire partagée !' : 'Le prochain tour vous attend'}</p>
           {winners.length > 0 && <p className="text-xs font-semibold text-brand">{winners[0].score} points</p>}
         </div>
-        <PaginatedList items={ranked} className="leaderboard-list" ordered renderItem={person => <li key={person.id} className={`flex h-14 shrink-0 items-center gap-3 rounded-lg border-b px-2 ${person.rank === 1 ? 'border-orange-100 bg-orange-50/50' : 'border-line'}`}>
+        <PaginatedList items={ranked} className="leaderboard-list" ordered renderItem={person => <li key={person.id} className={`flex h-20 shrink-0 items-center gap-2 rounded-lg border-b px-2 ${person.rank === 1 ? 'border-orange-100 bg-orange-50/50' : 'border-line'}`}>
           <span className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold ${person.rank === 1 ? 'bg-accent/15 text-amber-800' : 'bg-slate-100 text-muted'}`}>{person.rank ?? '—'}</span>
           <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium" title={person.name}>{person.name}</p><p className="text-[10px] text-muted">{person.score === null ? 'Passage non mesuré' : `${formatTime(person.speakingSeconds)} · ${person.attempts} passage(s) · ${person.timeUp ? 'Signal atteint' : 'Avant le signal'}`}</p></div>
-          <strong className={`shrink-0 text-sm tabular-nums ${person.score === null ? 'text-muted' : 'text-brand'}`}>{person.score ?? '—'}<span className="ml-1 text-[9px] font-normal">pts</span></strong>
+          <div className="flex shrink-0 flex-col items-end"><strong className={`text-sm tabular-nums ${person.score === null ? 'text-muted' : 'text-brand'}`}>{person.score ?? '—'}<span className="ml-1 text-[9px] font-normal">pts</span></strong><ScoreBreakdown person={person} /></div>
         </li>} />
-        <p className="shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">400 pts + 300 avant le signal + 300 pour 25–85 % du temps.<span className="max-[650px]:hidden"> Bonus progressif en dehors de cette zone. −100 par reprise (max. 200), dépassement jusqu’à −300. Pause ≠ reprise.</span> Humeur non notée.</p>
+        <p className="shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">Score progressif avant 25 % ; 1 000 pts entre 25 et 100 % ; −100 pts par 10 % de dépassement, minimum 0.<span className="max-[650px]:hidden"> −100 par relance après réinitialisation (max. 200). Pause sans pénalité.</span> Gestion du temps uniquement, ni qualité ni humeur.</p>
       </Paper>
       <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} id="session-statistics" aria-labelledby="statistics-title" className={`${card} flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto p-3 ${view !== 'stats' ? 'max-[800px]:hidden' : ''}`}>
         <h2 id="statistics-title" className="shrink-0 border-b border-line pb-2 text-sm font-semibold">Le bilan d’aujourd’hui</h2>
         <dl className="grid shrink-0 grid-cols-2 gap-2">
-          {[['Temps de parole', formatTime(stats.speakingSeconds)], ['Moyenne / personne', formatTime(stats.averageSeconds)], ['Avant le signal', `${stats.withinTime} / ${stats.measured}`], ['Temps utilisé à 100 %', String(stats.expired)]].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-[10px] text-muted">{label}</dt><dd className="mt-0.5 text-xl font-semibold tabular-nums text-brand">{value}</dd></div>)}
+          {[['Temps de parole', formatTime(stats.speakingSeconds)], ['Moyenne / personne', formatTime(stats.averageSeconds)], ['Dans le temps', `${stats.withinTime} / ${stats.measured}`], ['Dépassements', String(stats.expired)]].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-[10px] text-muted">{label}</dt><dd className="mt-0.5 text-xl font-semibold tabular-nums text-brand">{value}</dd></div>)}
         </dl>
         <div className="shrink-0 border-t border-line pt-2"><h3 className="text-xs font-semibold">Les humeurs de l’équipe</h3><p className="mt-1 text-[10px] text-muted">Repères du baromètre choisi, pas des notes.</p>
           <div className="mt-3 space-y-3">{stats.moods.map(({ mood, count }) => <div key={mood} className="grid grid-cols-[60px_minmax(0,1fr)_45px] items-center gap-2 text-[11px]"><span>Humeur {mood}</span><div className="flex h-2 overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`Humeur ${mood} : ${count} personnes`}><div className="h-full rounded-full bg-brand/70" style={{ width: `${timer.people.length ? count / timer.people.length * 100 : 0}%` }} /></div><span className="text-right tabular-nums text-muted">{count} · {Math.round(count / timer.people.length * 100)}%</span></div>)}</div>
         </div>
         <MoodSlideSummary people={timer.people} />
-        <p className="mt-auto shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">Tour terminé envoyé à Neon pour les statistiques des 5 derniers jours. Vérifiez la confirmation « Neon ✓ » avant de quitter ; en cas d’échec, réessayez. Aucune copie locale. Pauses exclues ; le temps après le signal n’est pas mesuré.</p>
+        <p className="mt-auto shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">Tour terminé envoyé à Neon pour les statistiques des 5 derniers jours. Vérifiez la confirmation « Neon ✓ » avant de quitter ; en cas d’échec, réessayez. Aucune copie locale. Pauses exclues ; le dépassement après le signal est mesuré.</p>
       </Paper>
     </div>
   </div>;

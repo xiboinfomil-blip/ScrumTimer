@@ -7,6 +7,7 @@ import { useTeam } from '@/providers/team-provider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PaginatedList } from '@/components/ui/paginated-list';
 import { formatTime } from '@/lib/timer';
+import { ScoreBreakdown } from '@/components/ui/score-breakdown';
 
 /** Available on every device, even after the transient timer/session is gone. */
 export function DailyRound() {
@@ -33,9 +34,9 @@ export function DailyRound() {
     </div>
     {view && <>
       <h2 className="shrink-0 border-b border-line pb-2 text-sm font-semibold">Bilan enregistré · Classement</h2>
-      <PaginatedList items={people} ordered renderItem={person => <li key={person.id} className="flex h-16 shrink-0 items-center gap-3 border-b border-line px-2">
+      <PaginatedList items={people} ordered renderItem={person => <li key={person.id} className="flex h-20 shrink-0 items-center gap-2 border-b border-line px-2">
         <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{person.name}</p><p className="text-xs text-muted">{formatTime(person.speakingSeconds)} · Humeur {person.mood ?? '—'}{person.meterTitle ? ` · ${person.meterTitle}` : ''}</p></div>
-        <strong className="shrink-0 text-sm text-brand">{person.score ?? '—'} pts</strong>
+        <div className="flex shrink-0 flex-col items-end"><strong className="text-sm text-brand">{person.score ?? '—'} pts</strong><ScoreBreakdown person={person} /></div>
       </li>} />
     </>}
     <ConfirmDialog open={confirm} title="Réinitialiser le point du jour ?" description="Le bilan et les humeurs d’aujourd’hui seront supprimés pour toute l’équipe, sur tous les appareils. Les équipes, participants et bilans des jours précédents sont conservés. Vous pourrez refaire le point avec le même baromètre du jour." confirmLabel="Réinitialiser aujourd’hui" danger onConfirm={() => void reset()} onClose={() => setConfirm(false)} />
