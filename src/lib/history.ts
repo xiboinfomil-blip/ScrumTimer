@@ -6,6 +6,27 @@ export interface HistoryPerson {
   budgetSeconds: number; timeUp: boolean; score: number | null; meterTitle: string | null;
 }
 export interface HistoryRound { id: string; completedAt: string; people: HistoryPerson[] }
+export function dailyRoundStatistics(round: HistoryRound) {
+  const measured = round.people.filter(person => person.speakingSeconds >= 1 && person.budgetSeconds > 0);
+  const scored = measured.filter(person => person.score !== null);
+  const withinTime = measured.filter(person => person.speakingSeconds <= person.budgetSeconds).length;
+  const optimal = measured.filter(person => person.speakingSeconds >= person.budgetSeconds / 4 && person.speakingSeconds <= person.budgetSeconds).length;
+  const seconds = round.people.reduce((sum, person) => sum + person.speakingSeconds, 0);
+  const overtimeSeconds = measured.reduce((sum, person) => sum + Math.max(0, person.speakingSeconds - person.budgetSeconds), 0);
+  const sorted = [...round.people].sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.name.localeCompare(b.name, 'fr') || a.id.localeCompare(b.id));
+  return {
+    seconds, overtimeSeconds, measured: measured.length, scored: scored.length, withinTime, optimal,
+    short: withinTime - optimal,
+    overtime: measured.length - withinTime,
+    unmeasured: round.people.length - measured.length,
+    averageSeconds: measured.length ? measured.reduce((sum, person) => sum + person.speakingSeconds, 0) / measured.length : null,
+    averageScore: scored.length ? Math.round(scored.reduce((sum, person) => sum + person.score!, 0) / scored.length) : null,
+    bestScore: scored.length ? Math.max(...scored.map(person => person.score!)) : null,
+    ranked: sorted.map(person => ({ ...person, rank: person.score === null ? null : sorted.findIndex(other => other.score === person.score) + 1 })),
+    moods: ([1, 2, 3, 4] as const).map(mood => ({ mood, count: round.people.filter(person => person.mood === mood).length })),
+    missingMoods: round.people.filter(person => person.mood === null).length,
+  };
+}
 export const HISTORY_DAYS = 5;
 export function historyCutoff(now = new Date()) {
   const cutoff = new Date(now);

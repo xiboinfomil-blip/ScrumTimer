@@ -1,11 +1,39 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { completedRound, historyCutoff, historyLeaderboard, normalizeHistory, summarizeDays, type HistoryRound } from '../src/lib/history.ts';
+import { completedRound, dailyRoundStatistics, historyCutoff, historyLeaderboard, normalizeHistory, summarizeDays, type HistoryRound } from '../src/lib/history.ts';
 import { chooseUnusedDeck, moodMeterId, type MoodMeterDeck } from '../src/lib/mood-meter.ts';
 import { normalizeTeam } from '../src/lib/team-storage.ts';
 
 const now = new Date('2026-10-14T12:00:00Z');
 const round: HistoryRound = { id: 'round-1', completedAt: '2026-10-14T10:00:00Z', people: [{ id: 'alice', name: 'Alice', mood: 2, speakingSeconds: 30, budgetSeconds: 120, timeUp: false, score: 1000, meterTitle: 'Alligators' }] };
+test('daily dashboard uses recorded scores, shared ranks and measured time categories', () => {
+  const people = [
+    { ...round.people[0], id: 'a', name: 'Alice', speakingSeconds: 30 },
+    { ...round.people[0], id: 'b', name: 'Bob', speakingSeconds: 120, timeUp: true },
+    { ...round.people[0], id: 'c', name: 'Charlie', speakingSeconds: 15, score: 500 },
+    { ...round.people[0], id: 'd', name: 'Dana', speakingSeconds: 144, score: 800 },
+    { ...round.people[0], id: 'e', name: 'Eve', speakingSeconds: 0, budgetSeconds: 0, score: null, mood: null },
+  ];
+  const stats = dailyRoundStatistics({ ...round, people });
+  assert.equal(stats.averageScore, 825);
+  assert.equal(stats.bestScore, 1000);
+  assert.equal(stats.seconds, 309);
+  assert.equal(stats.averageSeconds, 77.25);
+  assert.equal(stats.withinTime, 3);
+  assert.equal(stats.optimal, 2);
+  assert.equal(stats.short, 1);
+  assert.equal(stats.overtime, 1);
+  assert.equal(stats.overtimeSeconds, 24);
+  assert.equal(stats.unmeasured, 1);
+  assert.equal(stats.missingMoods, 1);
+  assert.deepEqual(stats.ranked.map(person => person.rank), [1, 1, 3, 4, null]);
+  const empty = dailyRoundStatistics({ ...round, people: [people[4]] });
+  assert.equal(empty.averageScore, null);
+  assert.equal(empty.averageSeconds, null);
+  assert.equal(empty.optimal, 0);
+  const legacy = dailyRoundStatistics({ ...round, people: [{ ...people[0], score: 867 }] });
+  assert.equal(legacy.averageScore, 867, 'never recalculate an archived score');
+});
 test('historical leaderboard averages measured scores, shares ties and keeps participant identities', () => {
   const second: HistoryRound = { id: 'round-2', completedAt: '2026-10-14T11:00:00Z', people: [
     { ...round.people[0], name: 'Alice renamed', score: 800 },
