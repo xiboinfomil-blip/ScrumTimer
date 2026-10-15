@@ -20,6 +20,13 @@ with sync_playwright() as p:
     for width, height in [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]:
         page.set_viewport_size({'width': width, 'height': height})
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
+        for label, section in [('Participants', 'participants'), ('Humeurs', 'moods'), ('Minuteur', 'timer'), ('Bilans', 'results')]:
+            page.get_by_role('navigation', name='Sommaire du guide').get_by_role('link', name=label, exact=True).click()
+            expect(page.locator(f'#{section}-heading')).to_be_in_viewport()
+        page.get_by_role('link', name='Retour au sommaire', exact=True).click()
+        expect(page.get_by_role('heading', level=1)).to_be_in_viewport()
+        if width in [320, 1366]:
+            page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-help-overview-{width}.png'))
         page.get_by_role('link', name='Points', exact=True).click()
         expect(page.get_by_role('heading', name='Comment les points sont-ils attribués ?')).to_be_in_viewport()
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
@@ -38,7 +45,7 @@ with sync_playwright() as p:
     for width, height in [(320, 568), (1366, 768)]:
         page.set_viewport_size({'width': width, 'height': height})
         page.goto(BASE + '/statistics')
-        page.locator('details > summary').click()
+        page.locator('#recent-heading').locator('..').locator('details > summary').click()
         page.get_by_role('button', name='Comprendre le score de Alice').click()
         dialog = page.get_by_role('dialog')
         expect(dialog).to_contain_text('Score enregistré : 867 pts')

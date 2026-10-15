@@ -27,10 +27,10 @@ export function TimerPage() {
     : `${timer.duration / 60} min`;
 
   return (
-    <div id="timer-page" className={`${routeStage} mx-auto w-full max-w-6xl overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
-      <WorkflowHeading step={3} title={timer.focusMode ? 'On vous écoute' : 'À chacun son tour'} description={<span id="overview-people">{timer.focusMode ? `${timer.people.filter(person => person.done).length} / ${timer.people.length} passages terminés · Suivant démarre le prochain.` : `${timer.people.length} personnes · ${perPerson} chacun · Réglez, puis démarrez.`}</span>} action={<span id="meeting-estimate" className="shrink-0 text-xs text-muted max-[650px]:hidden">≈ {Math.ceil(timer.people.length * timer.duration / 60)} min</span>} />
+    <div id="timer-page" className={`${routeStage} mx-auto w-full max-w-6xl overflow-hidden max-[650px]:[&>section:first-child_.MuiAvatar-root]:hidden max-[650px]:[&_h1]:text-lg`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
+      <WorkflowHeading step={3} title={timer.focusMode ? 'On vous écoute' : 'À chacun son tour'} description={<span id="overview-people" className="[@media(max-height:650px)]:hidden">{timer.focusMode ? `${timer.people.filter(person => person.done).length} / ${timer.people.length} passages terminés · Suivant démarre le prochain.` : `${timer.people.length} personnes · ${perPerson} chacun · Réglez, puis démarrez.`}</span>} action={<span id="meeting-estimate" className="shrink-0 text-xs text-muted max-[650px]:hidden">≈ {Math.ceil(timer.people.length * timer.duration / 60)} min</span>} />
       {!timer.focusMode && <ScreenTabs
-        className={segmentedTabs}
+        className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11`}
         label="Panneau du minuteur"
         value={view}
         onChange={setView}

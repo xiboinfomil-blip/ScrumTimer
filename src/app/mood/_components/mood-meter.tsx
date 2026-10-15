@@ -12,6 +12,7 @@ import { AnimatedImage } from './animated-image';
 import { useTeam } from '@/providers/team-provider';
 import { DefaultMoodMeter, MoodMeterLoading } from './default-mood-meter';
 import { useNotify } from '@/providers/notification-provider';
+import { MoodIcon } from './mood-icon';
 
 const slideError = 'Diapositive indisponible. Le baromètre par défaut est affiché.';
 const meterStage = 'meter-stage relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden rounded-[14px] border border-line bg-slate-50';
@@ -242,22 +243,22 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
   const playing = !paused && (wide || mobileVisible);
 
   return (
-    <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} ref={panelRef} className={`${card} flex min-h-0 min-w-0 flex-1 flex-col gap-2 rounded-2xl p-3 ${className}`} aria-labelledby="meter-title">
+    <Paper component="section" elevation={0} ref={panelRef} className={`${card} flex min-h-0 min-w-0 flex-1 flex-col gap-2 rounded-2xl border-slate-200/80 p-3 max-[650px]:p-2.5 ${className}`} aria-labelledby="meter-title">
       <h2 id="meter-title" className="sr-only">Le baromètre d’humeur</h2>
       <div className="flex min-w-0 shrink-0 items-center gap-2">
         <label className="sr-only" htmlFor="meter-catalogue-select">Catalogue · {catalog.length} baromètres</label>
-        <NativeSelect disableUnderline inputProps={{ id: 'meter-catalogue-select', 'aria-describedby': 'daily-meter-note' }} sx={{ height: 44, minWidth: 0, fontSize: 12, '& select': { boxSizing: 'border-box', height: 44, pl: 1.5, pr: 4 } }} className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-slate-50/60 text-xs font-medium text-brand focus:bg-white disabled:opacity-75" disabled={!canChange} value={String(selection.deck)} onChange={event => void selectDeck(Number(event.target.value))}>
+        <NativeSelect disableUnderline inputProps={{ id: 'meter-catalogue-select', 'aria-describedby': 'daily-meter-note' }} sx={{ height: 44, minWidth: 0, fontSize: 12, '& select': { boxSizing: 'border-box', height: 44, pl: 1.5, pr: 4 } }} className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50/70 text-xs font-semibold text-brand focus-within:border-brand/40 focus-within:ring-2 focus-within:ring-brand/10 disabled:opacity-75" disabled={!canChange} value={String(selection.deck)} onChange={event => void selectDeck(Number(event.target.value))}>
           <option value="-1" disabled>{status === 'loading' ? 'Chargement…' : 'Choisissez un baromètre'}</option>
           <option value="-2">Baromètre original · choix manuel</option>
           {groupMoodMeters(catalog).map(({ label, entries }) => <optgroup key={label} label={`${label} (${entries.length})`}>
             {entries.map(({ deck: item, index }) => <option key={moodMeterId(item)} value={index}>{displayTitle(item)}{state.usedMoodMeters?.includes(moodMeterId(item)) ? ' · Déjà utilisé' : ''}</option>)}
           </optgroup>)}
         </NativeSelect>
-        <IconButton size="small" sx={{ width: 44, height: 44, borderRadius: 2 }} id="random-meter-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-lg text-brand hover:bg-blue-50" aria-label="Afficher un autre baromètre au hasard"
+        <IconButton size="small" sx={{ width: 44, height: 44 }} id="random-meter-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-brand hover:border-brand/30 hover:bg-blue-50" aria-label="Afficher un autre baromètre au hasard"
           title="Choisir un autre baromètre avant le premier vote" disabled={!canChange}
-          onClick={() => void selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}>↝</IconButton>
+          onClick={() => void selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}><MoodIcon name="shuffle" className="size-5" /></IconButton>
       </div>
-      <p id="daily-meter-note" role="status" className="shrink-0 text-[11px] font-medium text-brand">{savingMeter ? 'Enregistrement du baromètre partagé…' : daily ? `Baromètre du ${daily.day} · Commun à toute l’équipe · ${hasVotes ? 'Verrouillé après le premier vote.' : 'Choisissez dans la liste avant le premier vote.'}` : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</p>
+      <p id="daily-meter-note" role="status" className={`flex shrink-0 items-start gap-2 rounded-lg px-2.5 py-2 text-[10px] leading-relaxed [@media(max-height:650px)]:py-1 [@media(max-height:650px)]:leading-snug ${status === 'error' ? 'bg-danger-soft text-danger' : savingMeter || !daily ? 'bg-amber-50 text-amber-800' : 'bg-blue-50/70 text-brand'}`}><MoodIcon name={hasVotes ? 'lock' : 'meter'} className="mt-0.5 size-3.5 shrink-0" /><span>{savingMeter ? 'Enregistrement du baromètre partagé…' : daily ? `Baromètre du ${daily.day} · Commun à toute l’équipe · ${hasVotes ? 'Verrouillé après le premier vote.' : 'Choisissez dans la liste avant le premier vote.'}` : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</span></p>
       {stacked ? <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(140px,1fr)] gap-2 overflow-y-auto rounded-xl" aria-label="Toutes les diapositives du baromètre">
         {deck.slides.map((item, index) => <div key={`${selection.deck}:${index}:${retry}`} className="relative flex min-h-0 flex-col overflow-hidden rounded-[14px] motion-safe:animate-page-reveal">
           <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`} />
@@ -270,10 +271,10 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
       )}
       {!stacked && deck && <div className="flex h-11 shrink-0 items-center justify-between gap-1 text-xs text-muted">
         <div className="flex min-w-0 items-center gap-1">
-        <IconButton size="small" sx={{ width: 44, height: 44, borderRadius: 2 }} id="meter-prev-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-brand hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Diapositive précédente" disabled={!deck || selection.slide === 0} onClick={() => moveSlide(-1)}>←</IconButton>
+        <IconButton size="small" sx={{ width: 44, height: 44 }} id="meter-prev-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-xl border border-line text-brand hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Diapositive précédente" disabled={!deck || selection.slide === 0} onClick={() => moveSlide(-1)}><MoodIcon name="back" /></IconButton>
         <span id="meter-slide-count" className="min-w-0 rounded-full bg-slate-100 px-2 py-1 text-center text-[11px] font-medium tabular-nums" aria-live="polite">{slide
           ? `${selection.slide + 1} / ${deck.slides.length}` : 'Aucune diapositive'}</span>
-        <IconButton size="small" sx={{ width: 44, height: 44, borderRadius: 2 }} id="meter-next-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-brand hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Diapositive suivante" disabled={!slide || selection.slide === deck.slides.length - 1} onClick={() => moveSlide(1)}>→</IconButton>
+        <IconButton size="small" sx={{ width: 44, height: 44 }} id="meter-next-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-xl border border-line text-brand hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Diapositive suivante" disabled={!slide || selection.slide === deck.slides.length - 1} onClick={() => moveSlide(1)}><MoodIcon name="arrow" /></IconButton>
         </div>
         <Button disableElevation size="small" variant="outlined" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 12, '&[hidden]': { display: 'none' } }} id="meter-animation-button" type="button" disabled={!slide}
           className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg border border-line px-3 text-xs font-semibold text-brand hover:bg-blue-50 disabled:opacity-50" hidden={Boolean(deck?.remoteId)}

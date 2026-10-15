@@ -284,12 +284,13 @@ def run_case(browser, width, height):
         advance(page, 30)
         view_results.click()
         expect(daily_round.get_by_role('heading', name='Bilan enregistré · Classement', exact=True)).to_be_visible()
-        expect(daily_round.get_by_text('Alice', exact=True)).to_be_visible()
-        expect(daily_round.get_by_text('00:08 · Humeur 2', exact=True)).to_be_visible()
+        ranking = daily_round.locator('[data-dashboard-column="scores"]')
+        expect(ranking.get_by_text('Alice', exact=True)).to_be_visible()
+        expect(ranking.get_by_text('00:08 / 02:00', exact=True)).to_be_visible()
         if width <= 800:
-            daily_round.get_by_role('navigation', name='Pages de la liste').get_by_role('button', name='Page suivante').click()
-        expect(daily_round.get_by_text('Bob', exact=True)).to_be_visible()
-        expect(daily_round.get_by_text('00:10 · Humeur 3', exact=True)).to_be_visible()
+            ranking.get_by_role('navigation', name='Pages de la liste').get_by_role('button', name='Page suivante').click()
+        expect(ranking.get_by_text('Bob', exact=True)).to_be_visible()
+        expect(ranking.get_by_text('00:10 / 02:00', exact=True)).to_be_visible()
         daily_round.get_by_role('button', name='Masquer le bilan', exact=True).click()
         saved(page)
         assert db.history_posts == [archived] and db.rounds == [archived]

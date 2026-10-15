@@ -6,6 +6,7 @@ import { PaginatedList } from '@/components/ui/paginated-list';
 import { card, countPill, textButton } from '@/components/ui/styles';
 import type { StandupTimer } from './timer-page';
 import { PostponedPeople } from './postponed-people';
+import { TimerIcon } from './timer-icon';
 
 export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; className?: string }) {
   const [shuffleCount, setShuffleCount] = useState(0);
@@ -22,14 +23,14 @@ export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; cla
       : 'Mélanger les personnes qui n’ont pas encore parlé, y compris le prochain intervenant';
 
   return (
-    <Paper component="aside" elevation={0} sx={{ borderRadius: 3 }} className={`team-panel ${card} flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl p-3 [&_.person-list]:gap-1 ${className}`} aria-labelledby="team-title">
+    <Paper component="aside" elevation={0} className={`team-panel ${card} flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border-slate-200/80 p-3 [&_.person-list]:gap-1.5 ${className}`} aria-labelledby="team-title">
       <div className="flex shrink-0 items-center justify-between gap-2">
         <div className="min-w-0">
           <h2 id="team-title" className="flex items-center gap-2 text-sm font-semibold">Équipe <span className={countPill} id="team-count">{people.length}</span></h2>
         </div>
-        <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" className={`${textButton} min-h-11`} id="shuffle-button" title={shuffleTitle} aria-busy={shuffling} disabled={candidates.length < 2 || shuffling} onClick={() => { timer.shuffleWaiting(); setShuffleCount(value => value + 1); setShuffling(!reduced); }}><motion.span className="inline-block" key={shuffleCount} aria-hidden="true" initial={{ rotate: 0, scale: 1 }} animate={shuffleCount && !reduced ? { rotate: [0, -25, 380, 360], scale: [1, 1.2, 1] } : { rotate: 0, scale: 1 }} transition={{ duration: .7, ease: [.22, 1, .36, 1] }} onAnimationComplete={() => setShuffling(false)}>↝</motion.span> {shuffling ? 'Mélange…' : 'Mélanger'}</Button>
+        <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" className={`${textButton} min-h-11 gap-1.5 rounded-xl px-2 hover:bg-blue-50`} id="shuffle-button" title={shuffleTitle} aria-busy={shuffling} disabled={candidates.length < 2 || shuffling} onClick={() => { timer.shuffleWaiting(); setShuffleCount(value => value + 1); setShuffling(!reduced); }}><motion.span className="inline-block" key={shuffleCount} aria-hidden="true" initial={{ rotate: 0, scale: 1 }} animate={shuffleCount && !reduced ? { rotate: [0, -25, 380, 360], scale: [1, 1.2, 1] } : { rotate: 0, scale: 1 }} transition={{ duration: .7, ease: [.22, 1, .36, 1] }} onAnimationComplete={() => setShuffling(false)}><TimerIcon name="shuffle" /></motion.span> {shuffling ? 'Mélange…' : 'Mélanger'}</Button>
       </div>
-      <Button component={Link} href="/mood" disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, justifyContent: 'flex-start', textTransform: 'none', fontSize: 11 }} className="flex min-h-11 shrink-0 items-center text-[11px] text-muted hover:text-brand">← Humeurs</Button>
+      <Button component={Link} href="/mood" disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, justifyContent: 'flex-start', textTransform: 'none', fontSize: 11 }} className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl text-[11px] text-muted hover:bg-slate-50 hover:text-brand"><TimerIcon name="back" />Humeurs</Button>
       <div className="flex shrink-0 justify-between gap-2 border-t border-line pt-2 text-[10px] text-muted">
         <span>Passages</span>
         <span id="done-count">{done} / {people.length} {done === 1 ? 'passage terminé' : 'passages terminés'}</span>
@@ -43,15 +44,15 @@ export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; cla
           renderItem={(person, index) => {
             const active = person.id === activeId;
             return (
-              <li key={person.id} className={`person-row flex h-12 min-w-0 shrink-0 items-center gap-2 rounded-lg border-b px-1 transition-colors motion-safe:animate-enter ${active ? timer.ended ? 'active border-red-200 bg-danger-soft' : 'active border-blue-200 bg-blue-50' : person.done ? 'border-green-100 bg-success-soft/50' : 'border-line/70 hover:bg-slate-50'} ${person.done ? 'done' : ''}`} data-person-id={person.id}>
-                <span className="shrink-0 text-[10px] text-muted" aria-hidden="true">{person.done ? '✓' : String(index + 1).padStart(2, '0')}</span>
+              <li key={person.id} className={`person-row flex h-12 min-w-0 shrink-0 items-center gap-2 rounded-xl border px-1 transition-colors motion-safe:animate-enter ${active ? timer.ended ? 'active border-red-200 bg-danger-soft' : 'active border-brand/25 bg-blue-50 ring-1 ring-inset ring-brand/10' : person.done ? 'border-green-100 bg-success-soft/50' : 'border-line bg-slate-50/40 hover:bg-slate-50'} ${person.done ? 'done' : ''}`} data-person-id={person.id}>
+                <span className={`grid size-5 shrink-0 place-items-center rounded-md text-[9px] font-semibold ${person.done ? 'bg-success-soft text-success' : active ? 'bg-brand text-white' : 'bg-slate-100 text-muted'}`} aria-hidden="true">{person.done ? '✓' : String(index + 1).padStart(2, '0')}</span>
                 <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, p: 0, justifyContent: 'flex-start', textTransform: 'none', color: 'inherit' }} type="button" className="flex min-h-11 min-w-0 flex-1 items-center gap-2 bg-transparent text-left" aria-label={`Donner la parole à ${person.name}${person.done ? ' (a déjà parlé)' : ''}`} aria-pressed={active} onClick={() => timer.select(person.id)}>
                   <span className="grid min-w-0 gap-1">
                     <span className="person-name truncate text-xs font-bold" title={person.name}>{person.name}</span>
                     <span className={`text-[9px] leading-snug ${active && timer.ended ? 'text-danger' : person.done ? 'text-success' : active ? 'text-brand' : 'text-muted'}`}>{active ? timer.ended ? 'Temps écoulé · conclure' : timer.running ? 'Parle maintenant' : 'Prêt à parler' : person.done ? '✓ Passage terminé' : 'À venir'} · Humeur {person.mood}</span>
                   </span>
                 </Button>
-                {!person.done && <IconButton size="small" sx={{ width: 44, height: 44, borderRadius: 2 }} type="button" className="grid size-11 shrink-0 place-items-center rounded-lg text-brand hover:bg-blue-50" aria-label={`Reporter le passage de ${person.name}`} onClick={() => timer.postpone(person.id)}>↷</IconButton>}
+                {!person.done && <IconButton size="small" sx={{ width: 44, height: 44 }} type="button" className="grid size-11 shrink-0 place-items-center rounded-xl text-muted hover:bg-amber-50 hover:text-amber-800" aria-label={`Reporter le passage de ${person.name}`} onClick={() => timer.postpone(person.id)}><TimerIcon name="later" /></IconButton>}
               </li>
             );
           }}

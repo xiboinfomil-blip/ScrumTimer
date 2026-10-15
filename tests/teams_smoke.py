@@ -227,7 +227,7 @@ with sync_playwright() as p:
 
         switcher(page, 'Mon équipe').click()
         panel = page.get_by_role('region', name='Choisir ou créer une équipe', exact=True)
-        panel.get_by_role('button', name='＋ Créer une équipe', exact=True).click()
+        panel.get_by_role('button', name='Créer une équipe', exact=True).click()
         panel.get_by_role('textbox', name='Nom de la nouvelle équipe', exact=True).fill('   ')
         panel.get_by_role('button', name='Créer l’équipe', exact=True).click()
         expect(panel.get_by_role('alert')).to_be_visible()

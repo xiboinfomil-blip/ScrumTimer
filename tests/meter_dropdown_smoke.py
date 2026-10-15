@@ -1,5 +1,7 @@
 """Dropdown changes persisted through mocked daily API; no live database writes."""
 import os
+import tempfile
+from pathlib import Path
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
@@ -9,7 +11,7 @@ BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 ID = 'a' * 64
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    for width, height in [(320, 568), (1366, 768)]:
+    for width, height in [(320, 568), (390, 844), (768, 1024), (820, 568), (1024, 576), (1366, 768)]:
         context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce')
         team = {'roster': [{'id': 'alice', 'name': 'Alice', 'present': True, 'mood': None, 'moodUpdatedAt': None}], 'session': [], 'duration': 120, 'warning': 30, 'sound': False, 'usedMoodMeters': [], 'currentMoodSlide': None}
         db = {'revision': 1, 'meter': {'meterId': 'original', 'title': 'Baromètre original'}, 'patches': 0}
@@ -57,10 +59,25 @@ with sync_playwright() as p:
         expect(select.locator('optgroup')).to_have_attribute('label', 'Animaux et créatures (1)')
         select.select_option('-2')
         expect(select).to_have_value('-2')
+        expect(page.locator('#default-mood-meter')).to_be_visible()
+        assert page.locator('#default-mood-meter article').evaluate_all("nodes => nodes.map(e => e.querySelector('span').textContent)") == ['1', '4', '2', '3']
+        page.evaluate('async () => { for (let i=0; i<3; i++) await new Promise(requestAnimationFrame); }')
+        meter_size = page.locator('#default-mood-meter').evaluate('e => ({height: e.clientHeight, scroll: e.scrollHeight})')
+        assert meter_size['scroll'] <= meter_size['height'] + 2, (width, height, meter_size)
+        if width in [320, 1366]:
+            page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-mood-design-meter-{width}.png'))
         if width <= 800:
             page.get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
+        expect(page.get_by_role('group', name='Humeur de Alice : choisissez de 1 à 4').get_by_role('button')).to_have_text(['1', '4', '2', '3'])
+        for button in page.get_by_role('group', name='Humeur de Alice : choisissez de 1 à 4').get_by_role('button').all():
+            box = button.bounding_box()
+            assert box['width'] >= 44 and box['height'] >= 44
+            assert box['x'] >= 0 and box['x'] + box['width'] <= width + 1
         page.get_by_role('button', name='Humeur 2 pour Alice', exact=True).click()
         page.wait_for_function("document.querySelector('.site-header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
+        expect(page.get_by_role('button', name='Humeur 2 pour Alice', exact=True)).to_have_attribute('aria-pressed', 'true')
+        if width in [320, 1366]:
+            page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-mood-design-vote-{width}.png'))
         page.reload()
         expect(select).to_be_disabled()
         expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé après le premier vote')
