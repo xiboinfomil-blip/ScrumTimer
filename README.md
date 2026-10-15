@@ -48,6 +48,10 @@ Préserver les contrôles accessibles, le focus visible, les notifications en fr
 
 ## Architecture
 
+### Interface Material UI
+
+Les contrôles, surfaces, notifications et dialogues utilisent Material UI avec un thème commun bleu/orange dans [src/providers/design-provider.tsx](src/providers/design-provider.tsx). L’intégration App Router collecte les styles côté serveur ; les couches CSS donnent la priorité aux utilitaires Tailwind pour la géométrie responsive. Tailwind reste dédié à la composition compacte des pages. La navigation est une chronologie connectée à trois étapes, avec liens réels, étapes verrouillées, repères actifs et étapes terminées. Les changements de route et d’étape, dialogues et réorganisations sont animés ; la préférence de réduction des mouvements est respectée. Les animations de navigation ne remontent pas les gardes de parcours et ne conservent jamais une ancienne page interactive. Les contrôles principaux conservent des cibles tactiles d’au moins 44 px, y compris sur téléphone.
+
 | Emplacement | Responsabilité |
 | --- | --- |
 | [src/app](src/app) | Routes, layout racine, métadonnées et états d’erreur ; les dossiers `_components` sont privés à leur route. |
@@ -99,6 +103,8 @@ Le minuteur en cours, sa progression, l’ordre de passage de la session et la d
 **Aucun import automatique des anciennes données navigateur n’est effectué**, même sur la même origine. Les anciennes clés ne sont ni lues ni effacées automatiquement. Les données de l’ancien site, y compris sous `file://`, ne sont donc pas reprises dans Neon ; une éventuelle migration explicite est une opération distincte, non incluse dans le démarrage.
 
 ### Équipes et baromètre quotidien
+
+**Chargement automatique du catalogue :** si Neon ne contient aucun baromètre distant, ou si la période de sept jours est expirée, le serveur relit la page publique SCRED, extrait toutes les présentations et leurs catégories, puis les enregistre atomiquement avant de répondre au menu déroulant. Les chargements suivants lisent Neon sans refaire cet appel source. Les nouvelles présentations sont sélectionnables sans reconstruction ; les identifiants déjà publiés sont conservés. Les liens historiques absents de la page restent disponibles sous « Autres ». Si la source échoue ou renvoie une page incomplète, aucune liste partielle n’est enregistrée et l’ancien cache n’est pas effacé. La migration 0003 doit déjà être appliquée : une table manquante n’est pas une table vide et n’est jamais créée lors d’une requête utilisateur.
 
 Le catalogue distant (identifiants Google, titres et catégories) et les listes de diapositives résolues sont partagés dans Neon via trois tables de cache dédiées : `remote_mood_cache_state`, `remote_mood_catalog` et `remote_mood_pages`. Appliquer la migration 0003 avec `npm run db:migrate` avant de déployer cette version. Au premier accès, le catalogue publié initialise le cache ; chaque présentation est ensuite chargée à la demande, une seule fois par période. **Sept jours après l’initialisation, la première requête suivante supprime tout le catalogue et toutes ses listes de diapositives du cache, puis réinitialise le catalogue atomiquement.** Il s’agit d’une expiration à la demande, sans tâche planifiée : aucune suppression ne s’exécute pendant que le site est inutilisé. Les autres visiteurs et instances réutilisent les URL enregistrées en base. Les équipes, participants, votes, choix quotidiens et historiques ne sont jamais supprimés par cette purge. Les SVG eux-mêmes restent récupérés à la demande avec un cache mémoire borné de cinq minutes, sans stockage des images ou des PowerPoints en base. Une panne de Google ne laisse pas de liste partielle en base ; une panne de Neon est signalée, sans cache navigateur de remplacement.
 

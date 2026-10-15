@@ -80,6 +80,7 @@ with sync_playwright() as p:
         page.get_by_role('button', name='Réinitialiser aujourd’hui', exact=True).click()
         dialog = page.get_by_role('dialog')
         dialog.get_by_role('button', name='Annuler', exact=True).click()
+        expect(dialog).not_to_be_visible()
         assert db['deletes'] == 0
         page.get_by_role('button', name='Réinitialiser aujourd’hui', exact=True).click()
         dialog.get_by_role('button', name='Réinitialiser aujourd’hui', exact=True).click()

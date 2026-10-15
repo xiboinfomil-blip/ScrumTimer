@@ -3,11 +3,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
+import { Alert, Button, Chip, InputBase, Paper } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
-import { field, primaryButton } from '@/components/ui/styles';
 
 const searchable = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr-FR');
 const focus = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand';
+const MotionPaper = motion.create(Paper);
+const inputSx = { minHeight: 44, width: '100%', border: 1, borderColor: 'divider', borderRadius: 2, px: 1.5, fontSize: 12, '&.Mui-focused': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 } };
 
 export function TeamSwitcher() {
   const { teams, activeTeamId, activeTeamName, teamBusy, ready, switchTeam, createTeam } = useTeam();
@@ -94,38 +96,38 @@ export function TeamSwitcher() {
   };
 
   return <div ref={root} className="relative min-w-0 max-w-52 flex-1 min-[651px]:max-w-44 min-[1500px]:max-w-52">
-    <button ref={trigger} type="button" className={`flex h-11 w-full min-w-0 items-center gap-1.5 rounded-lg border border-line bg-white px-2 text-xs text-brand hover:bg-blue-50 disabled:opacity-55 ${focus}`} aria-expanded={open} aria-controls={panelId} aria-label={`Choisir une équipe : ${activeTeamName || 'chargement'}`} disabled={teamBusy || !teams.length} onClick={() => { setOpen(value => !value); setQuery(''); setError(''); }} title={activeTeamName}>
+    <Button ref={trigger} type="button" variant="outlined" className={focus} sx={{ minHeight: 44, width: '100%', minWidth: 0, gap: .75, px: 1, fontSize: 12, textTransform: 'none' }} aria-expanded={open} aria-controls={panelId} aria-label={`Choisir une équipe : ${activeTeamName || 'chargement'}`} disabled={teamBusy || !teams.length} onClick={() => { setOpen(value => !value); setQuery(''); setError(''); }} title={activeTeamName}>
       <span className="min-w-0 flex-1 truncate text-left font-semibold">{activeTeamName || 'Équipes…'}</span>
-      {activeTeam && <span className="shrink-0 rounded bg-blue-50 px-1 text-[10px] tabular-nums" aria-label={`${activeTeam.memberCount} membres`}>{activeTeam.memberCount}</span>}
+      {activeTeam && <Chip size="small" color="primary" variant="outlined" label={activeTeam.memberCount} sx={{ height: 20, fontSize: 10, '& .MuiChip-label': { px: .5 } }} aria-label={`${activeTeam.memberCount} membres`} />}
       <span className="shrink-0 text-muted" aria-hidden="true">⌄</span>
-    </button>
-    {open && <motion.div id={panelId} role="region" aria-label="Choisir ou créer une équipe" initial={reducedMotion ? false : { opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reducedMotion ? 0 : 0.16 }} className="absolute top-[calc(100%+8px)] left-0 z-50 w-80 max-w-[calc(100vw-24px)] rounded-xl border border-line bg-white p-2 shadow-xl max-[650px]:fixed max-[650px]:inset-x-3 max-[650px]:top-13 max-[650px]:w-auto">
+    </Button>
+    {open && <MotionPaper elevation={8} id={panelId} role="region" aria-label="Choisir ou créer une équipe" initial={reducedMotion ? false : { opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reducedMotion ? 0 : 0.16 }} className="absolute top-[calc(100%+8px)] left-0 z-50 w-80 max-w-[calc(100vw-24px)] p-2 max-[650px]:fixed max-[650px]:inset-x-3 max-[650px]:top-13 max-[650px]:w-auto" sx={{ borderRadius: 3, border: 1, borderColor: 'divider' }}>
       <label htmlFor={`${panelId}-search`} className="sr-only">Rechercher une équipe</label>
-      <input ref={search} id={`${panelId}-search`} type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Rechercher une équipe…" className={`${field} ${focus} h-11 w-full`} />
+      <InputBase inputRef={search} id={`${panelId}-search`} type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Rechercher une équipe…" sx={inputSx} />
       <ul className="mt-1 max-h-60 overflow-y-auto overscroll-contain" aria-label="Équipes">
         {results.map(team => <li key={team.id}>
-          <button type="button" disabled={disabled} aria-pressed={team.id === activeTeamId} className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-xs hover:bg-blue-50 disabled:opacity-50 ${focus} ${team.id === activeTeamId ? 'bg-blue-50 text-brand' : 'text-ink'}`} onClick={() => void select(team.id)}>
+          <Button type="button" disabled={disabled} aria-pressed={team.id === activeTeamId} className={focus} sx={{ minHeight: 44, width: '100%', gap: 1, px: 1, fontSize: 12, textAlign: 'left', textTransform: 'none', bgcolor: team.id === activeTeamId ? 'action.selected' : undefined }} onClick={() => void select(team.id)}>
             <span className="min-w-0 flex-1 truncate font-medium" title={team.name}>{team.name}</span>
             <span className="shrink-0 text-[10px] text-muted">{team.memberCount} {team.memberCount === 1 ? 'membre' : 'membres'}</span>
             <span className="w-4 shrink-0 text-brand" aria-hidden="true">{team.id === activeTeamId ? '✓' : ''}</span>
-          </button>
+          </Button>
         </li>)}
       </ul>
       {!results.length && <p className="px-2 py-3 text-xs text-muted">Aucune équipe trouvée.</p>}
       <div className="mt-1 border-t border-line pt-1">
-        {!creating ? <button type="button" disabled={disabled} className={`min-h-11 w-full rounded-lg px-2 text-left text-xs font-semibold text-brand hover:bg-blue-50 disabled:opacity-50 ${focus}`} onClick={() => { setCreating(true); setError(''); }}>＋ Créer une équipe</button>
+        {!creating ? <Button type="button" disabled={disabled} className={focus} sx={{ minHeight: 44, width: '100%', justifyContent: 'flex-start', px: 1, fontSize: 12, textTransform: 'none' }} onClick={() => { setCreating(true); setError(''); }}>＋ Créer une équipe</Button>
           : <form className="flex flex-col gap-2 p-1" onSubmit={event => { event.preventDefault(); void create(); }}>
             <label htmlFor={`${panelId}-name`} className="text-xs font-semibold text-brand">Nom de la nouvelle équipe</label>
-            <input id={`${panelId}-name`} type="text" required minLength={1} maxLength={60} value={name} onChange={event => setName(event.target.value)} disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={error ? `${panelId}-error` : undefined} className={`${field} ${focus} h-11 w-full`} />
+            <InputBase id={`${panelId}-name`} type="text" required value={name} onChange={event => setName(event.target.value)} disabled={disabled} error={Boolean(error)} aria-describedby={error ? `${panelId}-error` : undefined} slotProps={{ input: { minLength: 1, maxLength: 60, 'aria-invalid': Boolean(error) } }} sx={inputSx} />
             <div className="flex gap-2">
-              <button type="submit" disabled={disabled} className={`${primaryButton} ${focus} flex-1`}>{pending ? 'Création…' : 'Créer l’équipe'}</button>
-              <button type="button" disabled={pending} className={`min-h-11 rounded-lg px-2 text-xs text-muted ${focus}`} onClick={() => { setCreating(false); setError(''); }}>Annuler</button>
+              <Button type="submit" variant="contained" disabled={disabled} className={`${focus} flex-1`} sx={{ minHeight: 44, fontSize: 12, textTransform: 'none' }}>{pending ? 'Création…' : 'Créer l’équipe'}</Button>
+              <Button type="button" disabled={pending} className={focus} sx={{ minHeight: 44, fontSize: 12, textTransform: 'none' }} onClick={() => { setCreating(false); setError(''); }}>Annuler</Button>
             </div>
             <p className="text-[10px] text-muted">Équipe vide : ajoutez ensuite les membres dans Participants.</p>
           </form>}
       </div>
-      {error && <p id={`${panelId}-error`} role="alert" className="mt-1 rounded-lg bg-orange-50 p-2 text-xs text-amber-900">{error}</p>}
+      {error && <Alert id={`${panelId}-error`} severity="error" role="alert" className="mt-1" sx={{ fontSize: 12 }}>{error}</Alert>}
       {pending && <p role="status" className="px-2 py-1 text-xs text-muted">Chargement de l’équipe…</p>}
-    </motion.div>}
+    </MotionPaper>}
   </div>;
 }

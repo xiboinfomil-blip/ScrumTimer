@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
+import { Button, InputBase, NativeSelect } from '@mui/material';
 import { useNotify } from '@/providers/notification-provider';
 import { field } from '@/components/ui/styles';
 import type { StandupTimer } from './timer-page';
@@ -37,24 +38,24 @@ export function TimerSettings({ timer }: { timer: StandupTimer }) {
       <div className="col-span-full flex min-w-0 items-center justify-between gap-2">
         <label className="min-w-0 text-left" htmlFor="duration-minutes">Durée</label>
         <div className="flex shrink-0 items-center gap-1">
-          <input className={`${field} h-11 w-11 px-1! py-1! text-center text-xs`} type="number" id="duration-minutes" min={0} max={60} step={1} required value={minutes} onChange={event => setMinutes(event.target.value)} aria-label="Minutes" />
+          <InputBase className={`${field} h-11 w-11 px-1! py-1! text-center text-xs`} sx={{ '& input': { textAlign: 'center', p: 0 } }} type="number" id="duration-minutes" inputProps={{ min: 0, max: 60, step: 1, 'aria-label': 'Minutes' }} required value={minutes} onChange={event => setMinutes(event.target.value)} />
           <span aria-hidden="true">m</span>
-          <input className={`${field} h-11 w-11 px-1! py-1! text-center text-xs`} type="number" id="duration-seconds" min={0} max={59} step={1} required value={seconds} onChange={event => setSeconds(event.target.value)} aria-label="Secondes" />
+          <InputBase className={`${field} h-11 w-11 px-1! py-1! text-center text-xs`} sx={{ '& input': { textAlign: 'center', p: 0 } }} type="number" id="duration-seconds" inputProps={{ min: 0, max: 59, step: 1, 'aria-label': 'Secondes' }} required value={seconds} onChange={event => setSeconds(event.target.value)} />
           <span aria-hidden="true">s</span>
-          <button type="submit" id="apply-duration" className="min-h-11 rounded-lg px-1 text-[11px] font-semibold text-brand hover:bg-blue-50">Valider</button>
+          <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, px: .5, textTransform: 'none', fontSize: 11 }} type="submit" id="apply-duration" className="min-h-11 rounded-lg px-1 text-[11px] font-semibold text-brand hover:bg-blue-50">Valider</Button>
         </div>
       </div>
       <div className="flex min-w-0 items-center gap-2">
         <label className="shrink-0" htmlFor="warning-seconds">Alerte</label>
-        <select className={`${field} h-11 flex-1 px-1! py-1! text-[11px]`} id="warning-seconds" value={timer.warning} onChange={event => timer.setWarning(Number(event.target.value))}>
+        <NativeSelect disableUnderline inputProps={{ id: 'warning-seconds' }} sx={{ height: 44, minWidth: 0, fontSize: 11, '& select': { boxSizing: 'border-box', height: 44, pl: .5, pr: 3 } }} className={`${field} h-11 flex-1 px-1! py-1! text-[11px]`} value={timer.warning} onChange={event => timer.setWarning(Number(event.target.value))}>
           <option value={10}>10 s avant</option>
           <option value={15}>15 s avant</option>
           <option value={30}>30 s avant</option>
           <option value={60}>60 s avant</option>
           <option value={0}>Sans préalerte</option>
-        </select>
+        </NativeSelect>
       </div>
-      <button type="button" id="add-time-button" className="min-h-11 rounded-lg border border-line px-2 text-[11px] font-semibold text-brand hover:bg-blue-50" title="Ajouter 30 secondes à ce passage" onClick={timer.addTime}>+30 s</button>
+      <Button disableElevation size="small" variant="outlined" sx={{ minHeight: 44, minWidth: 0, px: 1, textTransform: 'none', fontSize: 11 }} type="button" id="add-time-button" className="min-h-11 rounded-lg border border-line px-2 text-[11px] font-semibold text-brand hover:bg-blue-50" title="Ajouter 30 secondes à ce passage" onClick={timer.addTime}>+30 s</Button>
     </form>
   );
 }

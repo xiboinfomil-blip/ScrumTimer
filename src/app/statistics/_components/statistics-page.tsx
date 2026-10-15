@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Button, Paper } from '@mui/material';
 import { HISTORY_DAYS, type HistoryRound, historyLeaderboard, normalizeHistory, summarizeDays } from '@/lib/history';
 import { useTeam } from '@/providers/team-provider';
 import { card, routeStage, secondaryButton } from '@/components/ui/styles';
@@ -117,9 +118,9 @@ export function StatisticsPage() {
           <h1 id="statistics-heading" className="text-xl font-bold text-brand">Statistiques</h1>
           <p className="text-xs text-muted">{activeTeamName} · Les {HISTORY_DAYS} derniers jours UTC, aujourd’hui inclus.</p>
         </div>
-        <button type="button" disabled={loading} onClick={() => setRefresh((value) => value + 1)} className={`${secondaryButton} ${focus}`}>
+        <Button disableElevation size="small" variant="outlined" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 12 }} type="button" disabled={loading} onClick={() => setRefresh((value) => value + 1)} className={`${secondaryButton} ${focus}`}>
           {loading ? 'Chargement…' : source === 'neon' ? 'Actualiser' : 'Réessayer'}
-        </button>
+        </Button>
       </header>
 
       <div role="status" aria-live="polite" className="shrink-0 text-[11px] text-muted">
@@ -135,15 +136,15 @@ export function StatisticsPage() {
             ['Parole moyenne', measured.length ? duration(measured.reduce((sum, p) => sum + p.speakingSeconds, 0) / measured.length) : '—'],
             ['Dans le temps imparti', measured.length ? `${Math.round(withinTime / measured.length * 100)} %` : '—'],
           ].map(([label, value]) => (
-            <div key={label} className={`${card} p-3`}>
+            <Paper component="div" elevation={0} sx={{ borderRadius: 3 }} key={label} className={`${card} p-3`}>
               <dt className="text-[11px] text-muted">{label}</dt>
               <dd key={value} className="mt-1 text-lg font-bold tabular-nums text-brand motion-safe:animate-page-reveal">{value}</dd>
-            </div>
+            </Paper>
           ))}
         </dl>
         <p className="text-[10px] text-muted">{HISTORY_DAYS} jours UTC · {duration(seconds)} de parole. Les bilans plus anciens sont supprimés de la base au chargement ou à l’enregistrement d’un bilan de cette équipe. Moyenne et respect du temps : passages mesurés (≥ 1 s) uniquement. Les numéros d’humeur ne sont pas comparables entre baromètres.</p>
 
-        <section aria-labelledby="daily-heading" className={`${card} p-3`}>
+        <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} aria-labelledby="daily-heading" className={`${card} p-3`}>
           <h2 id="daily-heading" className="text-sm font-semibold text-brand">Activité · {HISTORY_DAYS} derniers jours</h2>
           <p className="mb-2 text-[11px] text-muted">Nombre de points terminés par jour.</p>
           <ol className="grid grid-cols-5 gap-1 sm:gap-3">
@@ -161,9 +162,9 @@ export function StatisticsPage() {
               </li>
             ))}
           </ol>
-        </section>
+        </Paper>
 
-        <section aria-labelledby="leaderboard-heading" className={`${card} p-3`}>
+        <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} aria-labelledby="leaderboard-heading" className={`${card} p-3`}>
           <h2 id="leaderboard-heading" className="text-sm font-semibold text-brand">Classement des participants · {HISTORY_DAYS} jours</h2>
           <p className="mt-1 text-[11px] text-muted">Score moyen sur 1 000, pour ne pas favoriser ceux qui jouent davantage. Égalités au même rang ; passages non mesurés exclus. Les humeurs ne changent jamais le score.</p>
           {!leaderboard.length ? <p className="py-3 text-xs text-muted">Terminez un tour pour voir le classement.</p> : <>
@@ -178,14 +179,14 @@ export function StatisticsPage() {
               </li>)}
             </ol>
             {leaderboardPages > 1 && <div className="mt-1 flex items-center justify-between gap-2 border-t border-line pt-1 text-[11px] text-muted">
-              <button type="button" className="min-h-11 rounded-lg px-2 text-brand disabled:opacity-40" aria-label="Page précédente du classement" disabled={currentLeaderboardPage === 0} onClick={() => setLeaderboardPage(currentLeaderboardPage - 1)}>← Précédent</button>
+              <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" className="min-h-11 rounded-lg px-2 text-brand disabled:opacity-40" aria-label="Page précédente du classement" disabled={currentLeaderboardPage === 0} onClick={() => setLeaderboardPage(currentLeaderboardPage - 1)}>← Précédent</Button>
               <span aria-live="polite">{currentLeaderboardPage + 1} / {leaderboardPages}</span>
-              <button type="button" className="min-h-11 rounded-lg px-2 text-brand disabled:opacity-40" aria-label="Page suivante du classement" disabled={currentLeaderboardPage === leaderboardPages - 1} onClick={() => setLeaderboardPage(currentLeaderboardPage + 1)}>Suivant →</button>
+              <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" className="min-h-11 rounded-lg px-2 text-brand disabled:opacity-40" aria-label="Page suivante du classement" disabled={currentLeaderboardPage === leaderboardPages - 1} onClick={() => setLeaderboardPage(currentLeaderboardPage + 1)}>Suivant →</Button>
             </div>}
           </>}
-        </section>
+        </Paper>
 
-        <section aria-labelledby="moods-heading" className={`${card} p-3`}>
+        <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} aria-labelledby="moods-heading" className={`${card} p-3`}>
           <h2 id="moods-heading" className="text-sm font-semibold text-brand">Catégories d’humeur</h2>
           <p className="mt-1 text-[11px] text-muted">Choix 1 à 4 selon le mood meter utilisé : des catégories, pas des notes de bonheur.</p>
           <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -197,9 +198,9 @@ export function StatisticsPage() {
             ))}
           </dl>
           {missingMoods > 0 && <p className="mt-2 text-[11px] text-muted">Sans catégorie renseignée : {numberFormat.format(missingMoods)}.</p>}
-        </section>
+        </Paper>
 
-        <section aria-labelledby="recent-heading" className={`${card} p-3`}>
+        <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} aria-labelledby="recent-heading" className={`${card} p-3`}>
           <h2 id="recent-heading" className="text-sm font-semibold text-brand">Points récents</h2>
           <p className="mt-1 text-[11px] text-muted">Les 10 derniers points · durée de parole cumulée, hors pauses.</p>
           {!recent.length ? (
@@ -232,7 +233,7 @@ export function StatisticsPage() {
               })}
             </ul>
           )}
-        </section>
+        </Paper>
       </div>
     </section>
   );

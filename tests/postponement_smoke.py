@@ -137,6 +137,7 @@ def no_archive(page, db):
     expect(page.locator('#timer-page')).not_to_have_attribute('data-mode', 'results')
     expect(page.get_by_role('heading', name='Bilan du tour', exact=True)).to_have_count(0)
     expect(page.locator('.session-complete')).to_have_count(0)
+    expect(page.get_by_role('region', name='Point quotidien du jour', exact=True)).to_have_count(0)
 
 
 def run_case(browser, width, height):
@@ -156,9 +157,9 @@ def run_case(browser, width, height):
         assert all(person['present'] and person['mood'] is None for person in db.team['roster'])
         page.get_by_role('link', name='Humeurs', exact=True).click()
         expect(page.locator('#meter-catalogue-select')).to_have_value('-2')
-        expect(page.locator('#meter-catalogue-select')).to_be_disabled()
-        expect(page.locator('#random-meter-button')).to_be_disabled()
-        expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé pour la journée')
+        expect(page.locator('#meter-catalogue-select')).to_be_enabled()
+        expect(page.locator('#random-meter-button')).to_be_enabled()
+        expect(page.locator('#daily-meter-note')).to_contain_text('Choisissez dans la liste avant le premier vote')
         assert db.daily == ORIGINAL and db.daily_posts == [ORIGINAL]
         if width <= 800:
             page.get_by_role('group', name='Panneau du bilan', exact=True).get_by_role(
@@ -169,6 +170,9 @@ def run_case(browser, width, height):
         alice_vote.click()
         saved(page)
         expect(alice_vote).to_have_attribute('aria-pressed', 'true')
+        expect(page.locator('#meter-catalogue-select')).to_be_disabled()
+        expect(page.locator('#random-meter-button')).to_be_disabled()
+        expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé après le premier vote')
         expect(continue_button).to_be_disabled()
         if width <= 800:
             page.get_by_role('navigation', name='Pages de la liste').get_by_role('button', name='Page suivante').click()
@@ -260,8 +264,9 @@ def run_case(browser, width, height):
         page.get_by_role('button', name='Démarrer', exact=True).click()
         advance(page, 6)
         page.locator('#next-button').click()
-        expect(page.locator('#timer-page')).to_have_attribute('data-mode', 'results')
-        expect(page.get_by_role('heading', name='Bilan du tour.', exact=True)).to_be_visible()
+        daily_round = page.get_by_role('region', name='Point quotidien du jour', exact=True)
+        expect(daily_round).to_be_visible()
+        expect(daily_round.get_by_text('Point quotidien terminé aujourd’hui', exact=True)).to_be_visible()
         saved(page)
         assert len(db.history_posts) == len(db.rounds) == 1
         archived = deepcopy(db.rounds[0])
@@ -271,14 +276,21 @@ def run_case(browser, width, height):
         assert people['bob']['speakingSeconds'] == 10, people
         assert people['alice']['mood'] == 2 and people['bob']['mood'] == 3
         assert all(person['budgetSeconds'] == 120 and not person['timeUp'] for person in people.values())
-        geometry(page, width, height, [page.get_by_role('button', name='Nouveau tour', exact=True)])
+        view_results = daily_round.get_by_role('button', name='Voir le bilan du jour', exact=True)
+        geometry(page, width, height, [view_results])
         # Handoff shortcut with no active speaker and results rerenders must not archive again.
         page.locator('#main-content').focus()
         page.keyboard.press('n')
         advance(page, 30)
+        view_results.click()
+        expect(daily_round.get_by_role('heading', name='Bilan enregistré · Classement', exact=True)).to_be_visible()
+        expect(daily_round.get_by_text('Alice', exact=True)).to_be_visible()
+        expect(daily_round.get_by_text('00:08 · Humeur 2', exact=True)).to_be_visible()
         if width <= 800:
-            page.get_by_role('group', name='Bilan du point quotidien', exact=True).get_by_role(
-                'button', name='Statistiques', exact=True).click()
+            daily_round.get_by_role('navigation', name='Pages de la liste').get_by_role('button', name='Page suivante').click()
+        expect(daily_round.get_by_text('Bob', exact=True)).to_be_visible()
+        expect(daily_round.get_by_text('00:10 · Humeur 3', exact=True)).to_be_visible()
+        daily_round.get_by_role('button', name='Masquer le bilan', exact=True).click()
         saved(page)
         assert db.history_posts == [archived] and db.rounds == [archived]
         assert db.writes and not db.unexpected, db.unexpected

@@ -20,8 +20,14 @@
     "db:verify": "tsx scripts/check-database.ts"
   },
   "dependencies": {
+    "@emotion/cache": "^11.14.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^9.4.0",
+    "@mui/material-nextjs": "^9.5.0",
     "@neondatabase/serverless": "^1.1.0",
     "drizzle-orm": "^0.45.1",
+    "entities": "^8.1.0",
     "framer-motion": "12.10.6",
     "next": "^16.3.5",
     "react": "^19.3.0",

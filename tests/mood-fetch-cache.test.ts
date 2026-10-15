@@ -41,6 +41,13 @@ test('PostgreSQL cache: shared hits, seven-day purge, failures, concurrent fills
     const expiry = new Date(start.getTime() + MOOD_CACHE_WEEK_MS);
     let requests = 0;
     const fetcher = async (googleId: string) => { requests++; assert.equal(googleId, source[0].googleId); return ['first', 'second']; };
+    let catalogueFetches = 0;
+    const upstream = async () => { catalogueFetches++; return source; };
+    assert.equal((await readMoodFetchCache(client, upstream, start)).length, 2);
+    assert.equal((await readMoodFetchCache(client, upstream, before)).length, 2);
+    assert.equal(catalogueFetches, 1, 'empty database fetches once and subsequent loads use saved categories');
+    await assert.rejects(readMoodFetchCache(client, async () => { throw new Error('Source unavailable'); }, expiry));
+    assert.equal((await engine.query('SELECT count(*)::int AS n FROM remote_mood_catalog')).rows[0].n, 2, 'failed refresh preserves saved catalogue');
     const first = await loadCachedMoodPages(client, source, source[0].id, fetcher, start);
     assert.deepEqual(first?.pages, ['first', 'second']);
     assert.equal(first?.category, source[0].category);

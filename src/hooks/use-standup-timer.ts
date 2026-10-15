@@ -173,7 +173,7 @@ export function useStandupTimer() {
   }, [updateTeam, commit, cleared, notify]);
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (document.querySelector('dialog[open]') || (event.target instanceof Element && event.target.closest('input,select,textarea,button,a,[contenteditable]')) || event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
+      if (document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') || (event.target instanceof Element && event.target.closest('input,select,textarea,button,a,[contenteditable]')) || event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
       if (event.code === 'Space') { event.preventDefault(); toggle(); }
       else if (event.key.toLowerCase() === 'n') next();
       else if (event.key.toLowerCase() === 'r') reset();

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Button } from '@mui/material';
 import { useState } from 'react';
 import { ScreenTabs } from '@/components/ui/screen-tabs';
 import { WorkflowHeading } from '@/components/ui/workflow-heading';
@@ -15,7 +16,7 @@ export function MoodPage() {
   if (!allowed) return null;
   return (
     <div id="mood-page" className={`${routeStage} mx-auto w-full max-w-6xl text-ink`}>
-      <WorkflowHeading step={2} title="Comment va l’équipe ?" description="Regardez le baromètre, puis choisissez 1 à 4 pour chacun." action={<Link className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-xs text-muted hover:bg-white hover:text-brand" href="/participants">← Participants</Link>} />
+      <WorkflowHeading step={2} title="Comment va l’équipe ?" description="Regardez le baromètre, puis choisissez 1 à 4 pour chacun." action={<Button component={Link} href="/participants" disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 12 }} className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-xs text-muted hover:bg-white hover:text-brand">← Participants</Button>} />
       <ScreenTabs
         className={segmentedTabs}
         label="Panneau du bilan" value={view} onChange={setView}

@@ -30,13 +30,20 @@ export function strictObject(value: unknown, fields: string[]): Record<string, u
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== fields.length || Object.keys(value).some(key => !fields.includes(key))) throw new WorkspaceError(400, 'Requête invalide.');
   return value as Record<string, unknown>;
 }
-export function validateDailyMeter(value: unknown): DailyMeter {
+export function validateDailyMeter(value: unknown, source: { id: string; title: string }[] = catalog): DailyMeter {
   const input = strictObject(value, ['meterId', 'title']);
   if (typeof input.meterId !== 'string' || input.meterId.length > 200 || typeof input.title !== 'string' || input.title.length > 200) throw new WorkspaceError(400, 'Baromètre invalide.');
-  const title = input.meterId === 'original' ? 'Baromètre original' : catalog.find(meter => meter.id === input.meterId)?.title;
+  const title = input.meterId === 'original' ? 'Baromètre original' : source.find(meter => meter.id === input.meterId)?.title;
   // Only the published remote catalogue and the built-in meter are authorized.
   if (!title || title !== input.title) throw new WorkspaceError(400, 'Baromètre inconnu ou titre invalide.');
   return { meterId: input.meterId, title };
+}
+async function databaseDailyMeter(db: Database, value: unknown) {
+  const input = strictObject(value, ['meterId', 'title']);
+  if (input.meterId === 'original') return validateDailyMeter(value);
+  if (typeof input.meterId !== 'string' || !/^deck-[a-f0-9]{20}$/.test(input.meterId)) throw new WorkspaceError(400, 'Baromètre invalide.');
+  const rows = await db.execute(sql`SELECT id,title FROM remote_mood_catalog WHERE id=${input.meterId}`);
+  return validateDailyMeter(value, rows.rows as { id: string; title: string }[]);
 }
 async function batch(db: Database, statements: SQL[]) {
   const queries = statements.map(statement => db.execute(statement));
@@ -92,7 +99,7 @@ export async function readDailyMeter(db: Database, teamId: string, now = new Dat
   return dailyResult(day, (await db.execute(dailyStatement(teamId, day))).rows);
 }
 export async function saveDailyMeter(db: Database, teamId: string, value: unknown, now = new Date()) {
-  const meter = validateDailyMeter(value); const day = mauritiusDay(now);
+  const meter = await databaseDailyMeter(db, value); const day = mauritiusDay(now);
   const results = await batch(db, [
     // Same team lock as profile/history writes. INSERT never overwrites a winner.
     sql`SELECT id FROM teams WHERE id=${teamId} FOR UPDATE`,
@@ -104,7 +111,7 @@ export async function saveDailyMeter(db: Database, teamId: string, value: unknow
 }
 /** Optional daily consistency check; legacy transport validation stays unchanged. */
 export async function changeDailyMeter(db: Database, teamId: string, value: unknown, now = new Date()) {
-  const meter = validateDailyMeter(value); const day = mauritiusDay(now);
+  const meter = await databaseDailyMeter(db, value); const day = mauritiusDay(now);
   const results = await batch(db, [
     sql`SELECT id FROM teams WHERE id=${teamId} FOR UPDATE`,
     sql`INSERT INTO mood_meter_identifiers(team_id,id) VALUES(${teamId},${meter.meterId}) ON CONFLICT DO NOTHING`,

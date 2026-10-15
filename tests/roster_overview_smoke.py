@@ -172,7 +172,7 @@ def main():
                 present = page.locator('#attendance-present')
                 dialog = overview(page, present)
                 # Wait for the dialog's entrance to settle before measuring.
-                page.wait_for_function("document.querySelector('dialog[open]').getAnimations().every(a => a.playState !== 'running')")
+                page.wait_for_function("document.querySelector('[role=dialog]').getAnimations({subtree: true}).every(a => a.playState !== 'running')")
                 check_geometry(dialog, width, height)
                 chooser = dialog.get_by_role('combobox', name='Aller à une personne', exact=True)
                 expect(chooser.locator('option')).to_have_count(100)
@@ -186,7 +186,7 @@ def main():
                 expect(page).to_have_url(re.compile(r'/mood$'))
                 expect(page.locator('#meter-catalogue-select')).to_have_value('-2')
                 expect(page.locator('#meter-catalogue-select')).to_be_disabled()
-                expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé pour la journée')
+                expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé après le premier vote')
                 if width <= 800:
                     page.get_by_role('group', name='Panneau du bilan').get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
                 ready = page.get_by_role('button', name='Continuer vers le minuteur', exact=False)

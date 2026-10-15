@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Button, Paper } from '@mui/material';
 import { WorkflowHeading } from '@/components/ui/workflow-heading';
 import { ScreenTabs } from '@/components/ui/screen-tabs';
 import { PaginatedList } from '@/components/ui/paginated-list';
@@ -17,10 +18,10 @@ export function SessionResults({ timer }: { timer: StandupTimer }) {
   const winners = ranked.filter(person => person.rank === 1);
   const date = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).format(new Date());
   return <div id="timer-page" data-mode="results" className={`${routeStage} mx-auto w-full max-w-6xl overflow-hidden`}>
-    <WorkflowHeading step={3} title="Bilan du tour" description={`${date} · ${timer.people.length} participants`} action={<button id="new-round-button" type="button" className={primaryButton} onClick={timer.newRound}>Nouveau tour</button>} />
+    <WorkflowHeading step={3} title="Bilan du tour" description={`${date} · ${timer.people.length} participants`} action={<Button disableElevation size="small" variant="contained" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 12 }} id="new-round-button" type="button" className={primaryButton} onClick={timer.newRound}>Nouveau tour</Button>} />
     <ScreenTabs className={segmentedTabs} label="Bilan du point quotidien" value={view} onChange={setView} tabs={[{ value: 'ranking', label: 'Classement' }, { value: 'stats', label: 'Statistiques' }]} />
     <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.3fr)_minmax(280px,1fr)] gap-3 max-[800px]:grid-cols-1">
-      <section id="session-leaderboard" aria-labelledby="leaderboard-title" className={`${card} flex min-h-0 min-w-0 flex-col gap-2 p-3 [&>.list-pagination]:h-11 [&>.list-pagination>button]:size-11 ${view !== 'ranking' ? 'max-[800px]:hidden' : ''}`}>
+      <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} id="session-leaderboard" aria-labelledby="leaderboard-title" className={`${card} flex min-h-0 min-w-0 flex-col gap-2 p-3 [&>.list-pagination]:h-11 [&>.list-pagination>button]:size-11 ${view !== 'ranking' ? 'max-[800px]:hidden' : ''}`}>
         <div className="flex shrink-0 items-center justify-between border-b border-line pb-2"><h2 id="leaderboard-title" className="text-sm font-semibold">Classement · Maîtrise du temps</h2><span className="text-[10px] text-muted">/ 1 000 pts</span></div>
         <div className="shrink-0 rounded-lg border border-orange-200 bg-linear-to-r from-orange-50 to-white px-3 py-2 motion-safe:animate-enter">
           <span className="text-[10px] font-semibold text-amber-800">🏆 {winners.length > 1 ? `${winners.length} premiers ex æquo` : winners.length ? 'Meilleur score' : 'Aucun passage mesurable'}</span>
@@ -33,8 +34,8 @@ export function SessionResults({ timer }: { timer: StandupTimer }) {
           <strong className={`shrink-0 text-sm tabular-nums ${person.score === null ? 'text-muted' : 'text-brand'}`}>{person.score ?? '—'}<span className="ml-1 text-[9px] font-normal">pts</span></strong>
         </li>} />
         <p className="shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">400 pts + 300 avant le signal + 300 pour 25–85 % du temps.<span className="max-[650px]:hidden"> Bonus progressif en dehors de cette zone. −100 par reprise (max. 200), dépassement jusqu’à −300. Pause ≠ reprise.</span> Humeur non notée.</p>
-      </section>
-      <section id="session-statistics" aria-labelledby="statistics-title" className={`${card} flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto p-3 ${view !== 'stats' ? 'max-[800px]:hidden' : ''}`}>
+      </Paper>
+      <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} id="session-statistics" aria-labelledby="statistics-title" className={`${card} flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto p-3 ${view !== 'stats' ? 'max-[800px]:hidden' : ''}`}>
         <h2 id="statistics-title" className="shrink-0 border-b border-line pb-2 text-sm font-semibold">Le bilan d’aujourd’hui</h2>
         <dl className="grid shrink-0 grid-cols-2 gap-2">
           {[['Temps de parole', formatTime(stats.speakingSeconds)], ['Moyenne / personne', formatTime(stats.averageSeconds)], ['Avant le signal', `${stats.withinTime} / ${stats.measured}`], ['Temps utilisé à 100 %', String(stats.expired)]].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-[10px] text-muted">{label}</dt><dd className="mt-0.5 text-xl font-semibold tabular-nums text-brand">{value}</dd></div>)}
@@ -44,7 +45,7 @@ export function SessionResults({ timer }: { timer: StandupTimer }) {
         </div>
         <MoodSlideSummary people={timer.people} />
         <p className="mt-auto shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">Tour terminé envoyé à Neon pour les statistiques des 5 derniers jours. Vérifiez la confirmation « Neon ✓ » avant de quitter ; en cas d’échec, réessayez. Aucune copie locale. Pauses exclues ; le temps après le signal n’est pas mesuré.</p>
-      </section>
+      </Paper>
     </div>
   </div>;
 }

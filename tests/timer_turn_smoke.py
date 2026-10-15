@@ -38,9 +38,9 @@ with sync_playwright() as p:
             page.wait_for_function("document.querySelector('header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
             stage = page.locator('#main-content > section, #main-content > div').first
             expect(stage).to_be_visible()
-            assert stage.evaluate('el => getComputedStyle(el).animationName') == ('none' if motion == 'reduce' else 'page-reveal'), (motion, path)
-            brand_line = page.locator('.site-header > div[aria-hidden=true]')
-            assert brand_line.evaluate('el => getComputedStyle(el).animationName') == ('none' if motion == 'reduce' else 'brand-flow'), (motion, path)
+            expect(page.locator('[data-route-transition]')).to_be_visible()
+            expect(page.get_by_role('list', name='Progression du point quotidien')).to_be_visible()
+            expect(page.locator('.MuiStepConnector-line')).to_have_count(2)
             for width, height in SIZES:
                 page.set_viewport_size({'width': width, 'height': height})
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), (path, width)
@@ -66,13 +66,12 @@ with sync_playwright() as p:
         page.get_by_role('button', name='Nouveau bilan', exact=True).click()
         dialog = page.get_by_role('dialog')
         expect(dialog).to_be_visible()
-        if motion == 'no-preference':
-            assert dialog.evaluate('el => el.getAnimations().some(a => a.effect.getTiming().duration === 420)')
+        expect(dialog.locator('.MuiDialogTitle-root')).to_be_visible()
         dialog.get_by_role('button', name='Annuler').click()
         expect(dialog).not_to_be_visible()
         page.goto(BASE + '/mood')
         expect(page.locator('#meter-catalogue-select')).to_have_value('-2')
-        expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé pour la journée')
+        expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé après le premier vote')
         expect(page.locator('#meter-catalogue-select')).to_be_disabled()
         expect(page.locator('#random-meter-button')).to_be_disabled()
         expect(page.get_by_role('button', name='Continuer vers le minuteur', exact=False)).to_be_enabled()

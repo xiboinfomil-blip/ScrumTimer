@@ -12,6 +12,7 @@ DEFAULT_ID, CREATED_ID = 'a' * 64, 'b' * 64
 USED_ID, NEW_ID = 'deck-1234567890abcdef1234', 'deck-abcdef1234567890abcd'
 CATALOG = [{'title': 'Used meter', 'remoteId': USED_ID, 'slides': []},
            {'title': 'New meter', 'remoteId': NEW_ID, 'slides': []}]
+YESTERDAY = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
 NO_STORAGE = """for (const name of ['localStorage', 'sessionStorage']) Object.defineProperty(window, name, {get() { throw new Error('Browser storage forbidden'); }});"""
 
 
@@ -24,7 +25,7 @@ class WorkspaceMock:
     def __init__(self):
         initial = empty_team()
         initial['roster'] = [{'id': 'alice', 'name': 'Alice <safe>', 'present': True,
-                              'mood': 2, 'moodUpdatedAt': None}]
+                              'mood': None, 'moodUpdatedAt': None}]
         initial['usedMoodMeters'] = [USED_ID]
         self.teams = {DEFAULT_ID: {'name': 'Mon équipe', 'team': initial, 'revision': 1}}
         self.active = DEFAULT_ID
@@ -33,8 +34,9 @@ class WorkspaceMock:
         self.daily = {}
         self.requests = []
         self.daily_posts = []
+        self.daily_patches = []
         self.rounds = {DEFAULT_ID: [{
-            'id': 'alice-history', 'completedAt': datetime.now(timezone.utc).isoformat(),
+            'id': 'alice-history', 'completedAt': YESTERDAY,
             'people': [{'id': 'alice', 'name': 'Alice <safe>', 'mood': 2,
                         'speakingSeconds': 30, 'budgetSeconds': 120, 'timeUp': False,
                         'score': 900, 'meterTitle': 'Used meter'}],
@@ -89,15 +91,21 @@ class WorkspaceMock:
                 route.fulfill(json={'saved': True})
             else:
                 assert method == 'GET'
-                route.fulfill(json={'rounds': deepcopy(rounds)})
+                route.fulfill(json={'rounds': deepcopy(rounds), 'day': self.day})
         elif path == '/api/daily-meter':
             key = (team_id, self.day)
-            if method == 'POST':
+            if method in ('POST', 'PATCH'):
                 candidate = deepcopy(request.post_data_json)
                 allowed = {USED_ID: 'Used meter', NEW_ID: 'New meter', 'original': 'Baromètre original'}
                 assert candidate == {'meterId': candidate['meterId'], 'title': allowed[candidate['meterId']]}
-                self.daily_posts.append((team_id, self.day, candidate))
-                self.daily.setdefault(key, candidate)
+                if method == 'POST':
+                    self.daily_posts.append((team_id, self.day, candidate))
+                    self.daily.setdefault(key, candidate)
+                else:
+                    assert key in self.daily
+                    assert not any(person['mood'] is not None for person in self.teams[team_id]['team']['roster'])
+                    self.daily_patches.append((team_id, self.day, candidate))
+                    self.daily[key] = candidate
             else:
                 assert method == 'GET'
             route.fulfill(json={'day': self.day, 'meter': deepcopy(self.daily.get(key))})
@@ -123,9 +131,16 @@ def meter_locked(page, meter, day):
     select = page.locator('#meter-catalogue-select')
     expect(select).to_be_disabled()
     expect(select.locator('option:checked')).to_contain_text(meter['title'])
-    expect(page.get_by_role('button', name='Afficher un autre baromètre au hasard', exact=True)).to_be_disabled()
+    expect(page.locator('#random-meter-button')).to_be_disabled()
     expect(page.locator('#daily-meter-note')).to_contain_text(day)
-    expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé pour la journée')
+    expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé après le premier vote')
+
+
+def meter_editable(page, day):
+    expect(page.locator('#meter-catalogue-select')).to_be_enabled()
+    expect(page.get_by_role('button', name='Afficher un autre baromètre au hasard', exact=True)).to_be_enabled()
+    expect(page.locator('#daily-meter-note')).to_contain_text(day)
+    expect(page.locator('#daily-meter-note')).to_contain_text('Choisissez dans la liste avant le premier vote')
 
 
 def choose_team(page, current, target, query, width):
@@ -152,7 +167,7 @@ def choose_team(page, current, target, query, width):
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for width, height in SIZES:
-        context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce')
+        context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce', service_workers='block')
         context.add_init_script(NO_STORAGE)
         db = WorkspaceMock()
         context.route('**/api/**', db.api)
@@ -177,11 +192,24 @@ with sync_playwright() as p:
         expect(page.locator('#meter-catalogue-select')).to_have_value('0')
         first_meter = deepcopy(db.daily[(DEFAULT_ID, db.day)])
         assert first_meter == {'meterId': NEW_ID, 'title': 'New meter'}
-        meter_locked(page, first_meter, db.day)
+        meter_editable(page, db.day)
+        # Selection changes are mocked PATCHes, persist on reload, and do not
+        # replace the single daily assignment POST or create a historical round.
+        page.locator('#meter-catalogue-select').select_option('-2')
+        meter_editable(page, db.day)
+        assert db.daily[(DEFAULT_ID, db.day)] == {'meterId': 'original', 'title': 'Baromètre original'}
+        page.reload()
+        expect(page.locator('#meter-catalogue-select')).to_have_value('-2')
+        meter_editable(page, db.day)
+        page.locator('#meter-catalogue-select').select_option('0')
+        meter_editable(page, db.day)
+        assert db.daily[(DEFAULT_ID, db.day)] == first_meter
+        assert len(db.daily_patches) == 2
         people_panel(page, width)
         page.get_by_role('button', name='Humeur 2 pour Alice <safe>', exact=True).click()
         saved(page)
         assert db.teams[DEFAULT_ID]['team']['roster'][0]['mood'] == 2
+        meter_locked(page, first_meter, db.day)
         page.reload()
         meter_locked(page, first_meter, db.day)
         assert len(db.daily_posts) == 1, db.daily_posts
@@ -225,12 +253,12 @@ with sync_playwright() as p:
         expect(page.get_by_role('list', name='Classement des participants', exact=True)).to_have_count(0)
 
         page.get_by_role('link', name='Humeurs', exact=True).click()
-        page.locator('#daily-meter-note').filter(has_text='Verrouillé pour la journée').wait_for()
+        meter_editable(page, db.day)
         second_meter = deepcopy(db.daily[(CREATED_ID, db.day)])
-        meter_locked(page, second_meter, db.day)
         people_panel(page, width)
         page.get_by_role('button', name='Humeur 2 pour Bob <safe>', exact=True).click()
         saved(page)
+        meter_locked(page, second_meter, db.day)
         expect(page.get_by_role('button', name='Humeur 2 pour Bob <safe>', exact=True)).to_have_attribute('aria-pressed', 'true')
         page.get_by_role('button', name='Continuer vers le minuteur', exact=False).click()
         page.get_by_role('button', name='Démarrer', exact=True).click()
@@ -265,18 +293,26 @@ with sync_playwright() as p:
         expect(page.get_by_text('Bob <safe>', exact=True)).to_be_visible()
         expect(page.get_by_text('Alice <safe>', exact=True)).to_have_count(0)
         page.get_by_role('link', name='Humeurs', exact=True).click()
-        meter_locked(page, second_meter, db.day)
+        expect(page.get_by_role('region', name='Point quotidien du jour', exact=True)).to_be_visible()
+        expect(page.locator('#meter-catalogue-select')).to_have_count(0)
         posts_before_reload = len(db.daily_posts)
         page.reload()
-        meter_locked(page, second_meter, db.day)
+        expect(page.get_by_role('region', name='Point quotidien du jour', exact=True)).to_be_visible()
         assert len(db.daily_posts) == posts_before_reload
 
         # A new Mauritius calendar day has its own assignment; yesterday is immutable.
         yesterday = db.day
         db.day = (datetime.fromisoformat(db.day) + timedelta(days=1)).date().isoformat()
+        # Mirror server day-expiry of persisted check-ins, not a completed
+        # workflow carried into the next day by the fixture.
+        for person in db.teams[CREATED_ID]['team']['roster']:
+            person.update(mood=None, moodUpdatedAt=None, moodSlide=None)
         page.reload()
-        page.locator('#daily-meter-note').filter(has_text=db.day).wait_for()
+        meter_editable(page, db.day)
         today_meter = deepcopy(db.daily[(CREATED_ID, db.day)])
+        people_panel(page, width)
+        page.get_by_role('button', name='Humeur 2 pour Bob <safe>', exact=True).click()
+        saved(page)
         meter_locked(page, today_meter, db.day)
         assert today_meter['meterId'] != second_meter['meterId']
         assert db.daily[(CREATED_ID, yesterday)] == second_meter
@@ -289,6 +325,8 @@ with sync_playwright() as p:
                                  ('/api/daily-meter', 'POST')]:
                 assert (path, method, team_id) in db.requests, (width, path, method, team_id)
         assert ('/api/history', 'POST', CREATED_ID) in db.requests
+        assert ('/api/daily-meter', 'PATCH', DEFAULT_ID) in db.requests
+        assert len(db.daily_patches) == 2
         assert not errors, (width, errors)
         context.close()
         print(f'PASS: {width}x{height} multiteam creation/search/switch, isolated members/history/headers, daily lock/reload/first-write-wins/day rollover')

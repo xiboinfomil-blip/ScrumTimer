@@ -1,5 +1,6 @@
 'use client';
 
+import { Button, IconButton, Paper } from '@mui/material';
 import { card, primaryButton, secondaryButton } from '@/components/ui/styles';
 import { timerUrgency } from '@/lib/timer';
 import type { StandupTimer } from './timer-page';
@@ -29,7 +30,7 @@ export function TimerPanel({ timer, className = '' }: { timer: StandupTimer; cla
   const pulse = running && critical ? 'motion-safe:animate-critical-glow' : running && nearly ? 'motion-safe:animate-warning-glow' : '';
 
   return (
-    <section className={`timer-panel ${card} relative isolate grid min-h-0 min-w-0 grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 overflow-hidden rounded-2xl p-3 text-center max-[650px]:gap-1 ${panelColor} ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
+    <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} className={`timer-panel ${card} relative isolate grid min-h-0 min-w-0 grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 overflow-hidden rounded-2xl p-3 text-center max-[650px]:gap-1 ${panelColor} ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
       <div className="col-span-full flex min-w-0 items-center justify-between gap-2 self-start">
         <span className="text-left text-[11px] text-muted">{person ? `Passage ${people.findIndex(candidate => candidate.id === person.id) + 1} / ${people.length}` : 'Terminé'}</span>
         <span className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1.5 text-[9px] font-semibold max-[650px]:px-1.5 max-[650px]:py-1 max-[650px]:text-[8px] ${statusColor}`} id="status-pill" data-status={status} role="status"><span className={`size-1.5 shrink-0 rounded-full bg-current ${running ? 'motion-safe:animate-pulse' : ''} motion-reduce:animate-none`} aria-hidden="true" />{status}</span>
@@ -56,18 +57,18 @@ export function TimerPanel({ timer, className = '' }: { timer: StandupTimer; cla
         </div>
       </div>
       <div className="col-span-full flex min-w-0 items-center justify-center gap-2 max-[650px]:gap-1.5">
-        {person && <button type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-brand hover:bg-blue-50" aria-label={`Reporter le passage de ${person.name}`} onClick={() => timer.postpone(person.id)}>↷</button>}
-        {!timer.focusMode && <button type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-lg text-brand hover:bg-blue-50" id="reset-button" aria-label="Réinitialiser le minuteur de la personne qui parle" title="Réinitialiser le minuteur (R)" onClick={timer.reset} aria-keyshortcuts="R">↺</button>}
-        <button type="button" id="start-button" className={`${running || ended ? secondaryButton : primaryButton} min-h-11 min-w-0 flex-1 max-[650px]:px-2 max-[650px]:text-[11px]`} disabled={!person} onClick={timer.toggle} aria-keyshortcuts="Space">
+        {person && <IconButton size="small" sx={{ width: 44, height: 44, borderRadius: 2 }} type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-brand hover:bg-blue-50" aria-label={`Reporter le passage de ${person.name}`} onClick={() => timer.postpone(person.id)}>↷</IconButton>}
+        {!timer.focusMode && <IconButton size="small" sx={{ width: 44, height: 44, borderRadius: 2 }} type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-lg text-brand hover:bg-blue-50" id="reset-button" aria-label="Réinitialiser le minuteur de la personne qui parle" title="Réinitialiser le minuteur (R)" onClick={timer.reset} aria-keyshortcuts="R">↺</IconButton>}
+        <Button disableElevation size="small" variant={running || ended ? 'outlined' : 'contained'} sx={{ minHeight: 44, minWidth: 0, px: 1, textTransform: 'none', fontSize: 11 }} type="button" id="start-button" className={`${running || ended ? secondaryButton : primaryButton} min-h-11 min-w-0 flex-1 max-[650px]:px-2 max-[650px]:text-[11px]`} disabled={!person} onClick={timer.toggle} aria-keyshortcuts="Space">
           <span aria-hidden="true">{running ? 'Ⅱ' : ended ? '↺' : '▶'}</span> {running ? 'Pause' : ended ? 'Relancer' : turnStarted ? 'Reprendre' : 'Démarrer'}
-        </button>
-        <button type="button" id="next-button" className={`${ended ? primaryButton : secondaryButton} min-h-11 max-[650px]:px-2 max-[650px]:text-[11px]`} disabled={!person} onClick={timer.next} aria-keyshortcuts="N">Suivant <span aria-hidden="true">→</span></button>
+        </Button>
+        <Button disableElevation size="small" variant={ended ? 'contained' : 'outlined'} sx={{ minHeight: 44, minWidth: 0, px: 1, textTransform: 'none', fontSize: 11 }} type="button" id="next-button" className={`${ended ? primaryButton : secondaryButton} min-h-11 max-[650px]:px-2 max-[650px]:text-[11px]`} disabled={!person} onClick={timer.next} aria-keyshortcuts="N">Suivant <span aria-hidden="true">→</span></Button>
       </div>
       <div id="timer-feedback" className={`col-span-full flex min-h-5 items-center justify-center gap-1.5 text-[10px] leading-snug [@media(max-height:650px)]:hidden ${feedbackColor}`}>
         <span id="feedback-icon" className={`shrink-0 ${complete ? 'text-success' : ended ? 'text-danger' : nearly ? 'text-amber-700' : 'text-brand'}`} aria-hidden="true">{complete ? '✓' : ended ? '!' : nearly ? '◷' : running ? '◎' : '↗'}</span>
         <span id="feedback-text">{feedback}</span>
       </div>
-      {timer.focusMode ? <div className="flex min-h-11 items-center justify-between gap-2 border-t border-line text-[11px] text-muted"><span>🔒 Réglages verrouillés</span><button id="manage-timer-button" type="button" className={`${secondaryButton} min-h-11`} onClick={timer.manage}>✎ Modifier</button></div> : <TimerSettings timer={timer} />}
-    </section>
+      {timer.focusMode ? <div className="flex min-h-11 items-center justify-between gap-2 border-t border-line text-[11px] text-muted"><span>🔒 Réglages verrouillés</span><Button disableElevation size="small" variant="outlined" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} id="manage-timer-button" type="button" className={`${secondaryButton} min-h-11`} onClick={timer.manage}>✎ Modifier</Button></div> : <TimerSettings timer={timer} />}
+    </Paper>
   );
 }

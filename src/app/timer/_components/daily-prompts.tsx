@@ -1,4 +1,5 @@
 import { card } from '@/components/ui/styles';
+import { Paper } from '@mui/material';
 
 const prompts = [
   {
@@ -20,7 +21,7 @@ const prompts = [
 
 export function DailyPrompts({ className = '' }: { className?: string }) {
   return (
-    <section className={`daily-prompts ${card} flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden rounded-2xl p-3 ${className}`} aria-labelledby="prompts-title">
+    <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} className={`daily-prompts ${card} flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden rounded-2xl p-3 ${className}`} aria-labelledby="prompts-title">
       <div className="shrink-0">
         <h2 id="prompts-title" className="flex h-11 items-center border-b border-line text-sm font-semibold">Pour guider le point</h2>
       </div>
@@ -33,6 +34,6 @@ export function DailyPrompts({ className = '' }: { className?: string }) {
           </article>
         ))}
       </div>
-    </section>
+    </Paper>
   );
 }

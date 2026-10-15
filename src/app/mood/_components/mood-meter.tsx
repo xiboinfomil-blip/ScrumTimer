@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button, IconButton, NativeSelect, Paper } from '@mui/material';
 import { card } from '@/components/ui/styles';
 import {
   chooseUnusedDeck, displayTitle, groupMoodMeters, moodMeterId, isAnimatedImage, overlayCropStyle,
@@ -234,20 +235,20 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
   const playing = !paused && (wide || mobileVisible);
 
   return (
-    <section ref={panelRef} className={`${card} flex min-h-0 min-w-0 flex-1 flex-col gap-2 rounded-2xl p-3 ${className}`} aria-labelledby="meter-title">
+    <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} ref={panelRef} className={`${card} flex min-h-0 min-w-0 flex-1 flex-col gap-2 rounded-2xl p-3 ${className}`} aria-labelledby="meter-title">
       <h2 id="meter-title" className="sr-only">Le baromètre d’humeur</h2>
       <div className="flex min-w-0 shrink-0 items-center gap-2">
         <label className="sr-only" htmlFor="meter-catalogue-select">Catalogue · {catalog.length} baromètres</label>
-        <select id="meter-catalogue-select" className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-slate-50/60 px-3 text-xs font-medium text-brand focus:bg-white disabled:opacity-75" disabled={!canChange} aria-describedby="daily-meter-note" value={String(selection.deck)} onChange={event => void selectDeck(Number(event.target.value))}>
+        <NativeSelect disableUnderline inputProps={{ id: 'meter-catalogue-select', 'aria-describedby': 'daily-meter-note' }} sx={{ height: 44, minWidth: 0, fontSize: 12, '& select': { boxSizing: 'border-box', height: 44, pl: 1.5, pr: 4 } }} className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-slate-50/60 text-xs font-medium text-brand focus:bg-white disabled:opacity-75" disabled={!canChange} value={String(selection.deck)} onChange={event => void selectDeck(Number(event.target.value))}>
           <option value="-1" disabled>{status === 'loading' ? 'Chargement…' : 'Choisissez un baromètre'}</option>
           <option value="-2">Baromètre original · choix manuel</option>
           {groupMoodMeters(catalog).map(({ label, entries }) => <optgroup key={label} label={`${label} (${entries.length})`}>
             {entries.map(({ deck: item, index }) => <option key={moodMeterId(item)} value={index}>{displayTitle(item)}{state.usedMoodMeters?.includes(moodMeterId(item)) ? ' · Déjà utilisé' : ''}</option>)}
           </optgroup>)}
-        </select>
-        <button id="random-meter-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-lg text-brand hover:bg-blue-50" aria-label="Afficher un autre baromètre au hasard"
+        </NativeSelect>
+        <IconButton size="small" sx={{ width: 44, height: 44, borderRadius: 2 }} id="random-meter-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-lg text-brand hover:bg-blue-50" aria-label="Afficher un autre baromètre au hasard"
           title="Choisir un autre baromètre avant le premier vote" disabled={!canChange}
-          onClick={() => void selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}>↝</button>
+          onClick={() => void selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}>↝</IconButton>
       </div>
       <p id="daily-meter-note" role="status" className="shrink-0 text-[11px] font-medium text-brand">{savingMeter ? 'Enregistrement du baromètre partagé…' : daily ? `Baromètre du ${daily.day} · Commun à toute l’équipe · ${hasVotes ? 'Verrouillé après le premier vote.' : 'Choisissez dans la liste avant le premier vote.'}` : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</p>
       {stacked ? <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(0,1fr)] gap-2 overflow-hidden rounded-xl" aria-label="Toutes les diapositives du baromètre">
@@ -262,19 +263,19 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
       )}
       {!stacked && <div className="flex h-11 shrink-0 items-center justify-between gap-1 text-xs text-muted">
         <div className="flex min-w-0 items-center gap-1">
-        <button id="meter-prev-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-brand hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Diapositive précédente" disabled={!deck || selection.slide === 0} onClick={() => moveSlide(-1)}>←</button>
+        <IconButton size="small" sx={{ width: 44, height: 44, borderRadius: 2 }} id="meter-prev-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-brand hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Diapositive précédente" disabled={!deck || selection.slide === 0} onClick={() => moveSlide(-1)}>←</IconButton>
         <span id="meter-slide-count" className="min-w-0 rounded-full bg-slate-100 px-2 py-1 text-center text-[11px] font-medium tabular-nums" aria-live="polite">{slide
           ? `${selection.slide + 1} / ${deck.slides.length}` : 'Aucune diapositive'}</span>
-        <button id="meter-next-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-brand hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Diapositive suivante" disabled={!slide || selection.slide === deck.slides.length - 1} onClick={() => moveSlide(1)}>→</button>
+        <IconButton size="small" sx={{ width: 44, height: 44, borderRadius: 2 }} id="meter-next-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-brand hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Diapositive suivante" disabled={!slide || selection.slide === deck.slides.length - 1} onClick={() => moveSlide(1)}>→</IconButton>
         </div>
-        <button id="meter-animation-button" type="button" disabled={!slide}
+        <Button disableElevation size="small" variant="outlined" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 12, '&[hidden]': { display: 'none' } }} id="meter-animation-button" type="button" disabled={!slide}
           className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg border border-line px-3 text-xs font-semibold text-brand hover:bg-blue-50 disabled:opacity-50" hidden={Boolean(deck?.remoteId)}
           aria-pressed={paused} aria-label={paused ? 'Lire les animations' : 'Mettre les animations en pause'}
           onClick={() => setPaused(value => !value)}>
-          {paused ? '▶ Reprendre' : 'Ⅱ Stop'}</button>
+          {paused ? '▶ Reprendre' : 'Ⅱ Stop'}</Button>
       </div>}
       {deck?.remoteId && (!slide || conversion !== 'idle') && <div role="status" className="shrink-0 text-[11px] text-muted">
-        {conversion === 'error' ? <>Présentation indisponible. Choisissez un autre baromètre ou <button type="button" className="min-h-11 px-2 text-brand underline" onClick={() => { setConversion('loading'); setRetry(value => value + 1); }}>Réessayer</button></> : 'Chargement des diapositives SVG depuis Google…'}
+        {conversion === 'error' ? <>Présentation indisponible. Choisissez un autre baromètre ou <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" className="min-h-11 px-2 text-brand underline" onClick={() => { setConversion('loading'); setRetry(value => value + 1); }}>Réessayer</Button></> : 'Chargement des diapositives SVG depuis Google…'}
       </div>}
       <p id="meter-source-note" className={deck && !deck.remoteId ? 'sr-only' : 'shrink-0 text-[10px] text-muted'} role="status">{deck?.remoteId
         ? `${stacked ? `${deck.slides.length} diapositives affichées ensemble. ` : ''}SVG statiques fournis par Google ; GIF non animés.` : deck
@@ -282,6 +283,6 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
         : status === 'loading' ? 'Chargement du catalogue…'
         : status === 'error' ? 'Catalogue indisponible. Le baromètre original reste disponible dans la liste.'
         : selection.deck === -2 ? 'Baromètre original choisi manuellement.' : 'Sélection automatique parmi les baromètres non utilisés uniquement.'}</p>
-    </section>
+    </Paper>
   );
 }

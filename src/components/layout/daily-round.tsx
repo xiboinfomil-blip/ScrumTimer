@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button, Chip, Paper } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PaginatedList } from '@/components/ui/paginated-list';
-import { card, primaryButton, secondaryButton } from '@/components/ui/styles';
 import { formatTime } from '@/lib/timer';
 
 /** Available on every device, even after the transient timer/session is gone. */
@@ -20,16 +20,16 @@ export function DailyRound() {
     setConfirm(false);
     if (await resetToday()) router.replace('/participants');
   };
-  return <section className={`${card} mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-3 p-4`} aria-label="Point quotidien du jour">
+  return <Paper component="section" variant="outlined" className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-3 p-4" aria-label="Point quotidien du jour">
     <div className="shrink-0">
-      <p className="text-xs font-semibold text-success">Point quotidien terminé aujourd’hui</p>
+      <Chip size="small" color="success" variant="outlined" label="Point quotidien terminé aujourd’hui" sx={{ maxWidth: '100%', fontSize: 12 }} />
       <h1 className="mt-1 text-xl font-bold">{activeTeamName}</h1>
       <p className="mt-2 text-sm text-muted">Un seul point quotidien par équipe et par jour. Le bilan est disponible sur tous les appareils.</p>
       <p className="mt-1 text-xs text-muted">{new Intl.DateTimeFormat('fr-FR', { timeZone: 'Indian/Mauritius', dateStyle: 'long', timeStyle: 'short' }).format(new Date(round.completedAt))} · {people.length} participants</p>
     </div>
     <div className="flex shrink-0 flex-wrap gap-2">
-      <button type="button" className={primaryButton} onClick={() => setView(value => !value)} aria-expanded={view}>{view ? 'Masquer le bilan' : 'Voir le bilan du jour'}</button>
-      <button type="button" className={secondaryButton} disabled={teamBusy || cloudStatus !== 'saved'} onClick={() => setConfirm(true)}>Réinitialiser aujourd’hui</button>
+      <Button type="button" variant="contained" sx={{ minHeight: 44, fontSize: 12, textTransform: 'none' }} onClick={() => setView(value => !value)} aria-expanded={view}>{view ? 'Masquer le bilan' : 'Voir le bilan du jour'}</Button>
+      <Button type="button" variant="outlined" sx={{ minHeight: 44, fontSize: 12, textTransform: 'none' }} disabled={teamBusy || cloudStatus !== 'saved'} onClick={() => setConfirm(true)}>Réinitialiser aujourd’hui</Button>
     </div>
     {view && <>
       <h2 className="shrink-0 border-b border-line pb-2 text-sm font-semibold">Bilan enregistré · Classement</h2>
@@ -39,5 +39,5 @@ export function DailyRound() {
       </li>} />
     </>}
     <ConfirmDialog open={confirm} title="Réinitialiser le point du jour ?" description="Le bilan et les humeurs d’aujourd’hui seront supprimés pour toute l’équipe, sur tous les appareils. Les équipes, participants et bilans des jours précédents sont conservés. Vous pourrez refaire le point avec le même baromètre du jour." confirmLabel="Réinitialiser aujourd’hui" danger onConfirm={() => void reset()} onClose={() => setConfirm(false)} />
-  </section>;
+  </Paper>;
 }

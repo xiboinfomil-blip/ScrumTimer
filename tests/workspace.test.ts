@@ -8,6 +8,7 @@ import { changeDailyMeter, createTeam, listTeams, mauritiusDay, readDailyMeter, 
 import { readHistory, readTeam, resetDailyRound, writeHistory, writeTeam } from '../src/lib/relational-store.ts';
 import { validateTeamInput } from '../src/lib/team-validation.ts';
 import catalog from '../src/lib/remote-mood-catalog.json' with { type: 'json' };
+import { readMoodFetchCache } from '../src/lib/mood-fetch-cache.ts';
 
 const workspace = 'a'.repeat(64); const foreignWorkspace = 'b'.repeat(64);
 const original = { meterId: 'original', title: 'Baromètre original' };
@@ -84,6 +85,8 @@ test('PGlite: shared teams across devices, independent selection, daily singleto
         return results;
       }),
     } as unknown as Parameters<typeof writeTeam>[0];
+    await engine.exec(migration('0003_remote_mood_cache'));
+    await readMoodFetchCache(client, catalog, clock);
     const first = await listTeams(client);
     assert.deepEqual(first, { teams: [{ id: workspace, name: 'Mon équipe', memberCount: 1 }], activeTeamId: workspace });
     assert.deepEqual(await listTeams(client), first);
@@ -133,6 +136,11 @@ test('PGlite: shared teams across devices, independent selection, daily singleto
     await saveDailyMeter(client, second, original);
     assert.deepEqual((await changeDailyMeter(client, second, remote)).meter, remote, 'dropdown changes shared daily choice before votes');
     assert.deepEqual((await changeDailyMeter(client, second, original)).meter, original, 'original is selectable');
+    const discovered = { meterId: 'deck-aaaaaaaaaaaaaaaaaaaa', title: 'New source presentation' };
+    await engine.query('INSERT INTO remote_mood_catalog(id,google_id,title,category) VALUES($1,$2,$3,$4)', [discovered.meterId, 'new-source', discovered.title, 'Movies']);
+    assert.deepEqual((await changeDailyMeter(client, second, discovered)).meter, discovered, 'database-only discoveries are selectable without rebuilding');
+    await assert.rejects(changeDailyMeter(client, second, { ...discovered, title: 'Forged title' }));
+    await changeDailyMeter(client, second, original);
     const matching = validateTeamInput({ ...legacyTeam, roster: [{ ...legacyTeam.roster[0], moodUpdatedAt: new Date().toISOString(), moodSlide: { ...legacyTeam.roster[0].moodSlide!, meterId: original.meterId, title: original.title } }] });
     const todaysMeter = (await readDailyMeter(client, second)).meter!;
     matching.roster[0].moodSlide!.meterId = todaysMeter.meterId;

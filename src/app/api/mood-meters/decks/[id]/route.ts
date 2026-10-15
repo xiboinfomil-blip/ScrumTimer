@@ -1,11 +1,9 @@
-import { findPresentation } from '@/lib/google-slides';
 import { cachedMoodDeck } from '@/lib/remote-mood-cache';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const item = findPresentation(id);
-  if (!item) return new Response(null, { status: 404 });
+  if (!/^deck-[a-f0-9]{20}$/.test(id)) return new Response(null, { status: 404 });
   try {
     const deck = await cachedMoodDeck(id);
     if (!deck) return new Response(null, { status: 404 });

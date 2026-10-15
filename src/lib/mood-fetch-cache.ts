@@ -6,9 +6,16 @@ type Database = Pick<NeonHttpDatabase, 'execute' | 'batch'>;
 export type RemoteMoodSource = { id: string; googleId: string; title: string; category: string };
 export const MOOD_CACHE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-// Every read first takes the same singleton lock. Deletion and reseeding are one
-// transaction, so other visitors never observe a half-empty weekly catalogue.
-export async function readMoodFetchCache(db: Database, source: RemoteMoodSource[], now = new Date()) {
+// Valid live-source hits need only one snapshot read. Cache fills take the same
+// singleton lock; deletion and reseeding never expose a half-empty catalogue.
+export async function readMoodFetchCache(db: Database, source: RemoteMoodSource[] | (() => Promise<RemoteMoodSource[]>), now = new Date()) {
+  if (typeof source === 'function') {
+    const hit = await db.execute(sql`SELECT c.id,c.google_id,c.title,c.category,c.loaded_at,s.generation FROM remote_mood_catalog c CROSS JOIN remote_mood_cache_state s WHERE s.id=1 AND s.expires_at>${now.toISOString()}::timestamptz ORDER BY c.title,c.id`);
+    if (hit.rows.length) return hit.rows as { id: string; google_id: string; title: string; category: string; loaded_at: string | null; generation: string }[];
+    // Fetch before locking/deleting: upstream failure preserves the old cache.
+    source = await source();
+    if (!source.length) throw new Error('Empty mood catalogue');
+  }
   const instant = now.toISOString();
   const generation = randomUUID();
   const expires = new Date(now.getTime() + MOOD_CACHE_WEEK_MS).toISOString();
@@ -23,7 +30,7 @@ export async function readMoodFetchCache(db: Database, source: RemoteMoodSource[
   return results[5].rows as { id: string; google_id: string; title: string; category: string; loaded_at: string | null; generation: string }[];
 }
 
-export async function loadCachedMoodPages(db: Database, source: RemoteMoodSource[], id: string, load: (googleId: string) => Promise<string[]>, now = new Date()) {
+export async function loadCachedMoodPages(db: Database, source: RemoteMoodSource[] | (() => Promise<RemoteMoodSource[]>), id: string, load: (googleId: string) => Promise<string[]>, now = new Date()) {
   const rows = await readMoodFetchCache(db, source, now);
   const item = rows.find(row => row.id === id);
   if (!item) return null;
