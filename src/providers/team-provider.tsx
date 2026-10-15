@@ -224,6 +224,8 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       if (generation.current !== token || controller.signal.aborted) return false;
       selected = true;
       selectedId.current = list.activeTeamId;
+      // Hide the previous guarded route before a newly created empty team hydrates.
+      if (method === 'POST') window.history.replaceState(window.history.state, '', `/manage-team?team=${list.activeTeamId}`);
       setTeams(list.teams);
       setActiveTeamId(list.activeTeamId);
       setState(defaultTeam());

@@ -31,7 +31,9 @@ Après le redémarrage, rechargez la page (Ctrl+F5 si nécessaire). Les données
 
 ## Parcours et comportement
 
-- **`/participants`** : ajouter les noms, gérer les présences et supprimer une sélection après confirmation. La racine `/` redirige vers cette route.
+- **`/teams`** : écran de démarrage avec recherche des équipes, ouverture, accès à la gestion et création. La racine `/` redirige vers cette route.
+- **`/manage-team`** : ajouter, rechercher, renommer et retirer les membres, individuellement ou par sélection avec confirmation. Une nouvelle équipe ouvre cet écran.
+- **`/participants`** : confirmer uniquement les présences et absences du jour, puis continuer vers les humeurs. Le lien « Gérer l’équipe » ouvre la gestion des membres.
 - **`/mood`** : consulter les baromètres locaux (fonds et GIF), choisir une humeur **1–4** pour chaque personne présente. Les GIF jouent automatiquement en boucle au chargement et à chaque changement de diapositive ou de baromètre, y compris si la réduction des mouvements est activée (lecture explicitement demandée). **Stop / Reprendre** fige ou reprend les animations de la diapositive actuelle ; **Précédente / Suivante** changent manuellement de diapositive. Aucun changement automatique de diapositive. Les autres animations de l’interface respectent la réduction des mouvements. Au moins une personne présente et toutes ses humeurs sont nécessaires pour continuer.
 - **`/timer`** : ordre mélangé contenant uniquement les présents, minuteur par personne, pause, réinitialisation, ajout de 30 secondes, préalerte et fin sonore facultative. Le passage suivant reste manuel.
 - **`/statistics`** : les 5 derniers jours civils UTC, aujourd’hui inclus, graphique léger, passages, temps moyen, respect du temps et détails des tours terminés. Pas de bibliothèque graphique lourde. Les baromètres utilisés portent « Déjà utilisé », restent sélectionnables, mais sont exclus du choix automatique ; le baromètre original est un choix manuel.

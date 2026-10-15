@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Alert, Button, Chip, InputBase, Paper } from '@mui/material';
@@ -93,7 +94,7 @@ export function TeamSwitcher() {
     setCreating(false);
     setOpen(false);
     trigger.current?.focus();
-    router.replace(`/participants${window.location.search}`);
+    router.replace(`/manage-team${window.location.search}`);
   };
 
   return <div ref={root} className="relative min-w-0 max-w-52 flex-1 min-[801px]:max-w-40 min-[1101px]:max-w-52">
@@ -119,6 +120,7 @@ export function TeamSwitcher() {
       </ul>
       {!results.length && <p className="px-2 py-3 text-xs text-muted">Aucune équipe trouvée.</p>}
       <div className="mt-2 border-t border-line pt-2">
+        <div className="mb-1 grid grid-cols-2 gap-1"><Button component={Link} href={`/teams?team=${activeTeamId}`} onClick={() => setOpen(false)} sx={{ minHeight: 44, minWidth: 0, fontSize: 11, textTransform: 'none' }}>Toutes les équipes</Button><Button component={Link} href={`/manage-team?team=${activeTeamId}`} onClick={() => setOpen(false)} disabled={disabled} sx={{ minHeight: 44, minWidth: 0, fontSize: 11, textTransform: 'none' }}>Gérer l’équipe</Button></div>
         {!creating ? <Button type="button" disabled={disabled} className={`${focus} gap-2 rounded-xl hover:bg-blue-50`} sx={{ minHeight: 44, width: '100%', justifyContent: 'flex-start', px: 1, fontSize: 12, textTransform: 'none' }} onClick={() => { setCreating(true); setError(''); }}><NavIcon name="plus" className="size-4" />Créer une équipe</Button>
           : <form className="flex flex-col gap-2 p-1" onSubmit={event => { event.preventDefault(); void create(); }}>
             <label htmlFor={`${panelId}-name`} className="text-xs font-semibold text-brand">Nom de la nouvelle équipe</label>
@@ -127,7 +129,7 @@ export function TeamSwitcher() {
               <Button type="submit" variant="contained" disabled={disabled} className={`${focus} flex-1`} sx={{ minHeight: 44, fontSize: 12, textTransform: 'none' }}>{pending ? 'Création…' : 'Créer l’équipe'}</Button>
               <Button type="button" disabled={pending} className={focus} sx={{ minHeight: 44, fontSize: 12, textTransform: 'none' }} onClick={() => { setCreating(false); setError(''); }}>Annuler</Button>
             </div>
-            <p className="text-[10px] text-muted">Équipe vide : ajoutez ensuite les membres dans Participants.</p>
+            <p className="text-[10px] text-muted">Équipe vide : ajoutez ensuite les membres dans Gérer l’équipe.</p>
           </form>}
       </div>
       {error && <Alert id={`${panelId}-error`} severity="error" role="alert" className="mt-1" sx={{ fontSize: 12 }}>{error}</Alert>}

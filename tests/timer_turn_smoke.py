@@ -47,7 +47,7 @@ with sync_playwright() as p:
             if motion == 'reduce':
                 assert page.evaluate("document.getAnimations().filter(a => a.playState === 'running').length") == 0, path
         page.set_viewport_size({'width': 1366, 'height': 768})
-        page.goto(BASE + '/participants')
+        page.goto(BASE + '/manage-team')
         page.locator('#checkin-name').fill('Action test')
         action = page.get_by_role('button', name='Enregistrer cette personne')
         action.evaluate('el => el.click()')
@@ -55,6 +55,7 @@ with sync_playwright() as p:
             page.wait_for_function("Array.from(document.querySelectorAll('button')).some(el => el.getAnimations().some(a => a.effect.getTiming().duration === 380))")
         feedback = action.evaluate('el => el.getAnimations().some(a => a.effect.getTiming().duration === 380)')
         assert feedback == (motion == 'no-preference'), (motion, 'tap feedback')
+        page.get_by_role('searchbox', name='Rechercher un membre', exact=True).fill('Action test')
         row = page.locator('li').filter(has_text='Action test')
         expect(row).to_have_count(1)
         row.get_by_role('checkbox').check()
@@ -63,6 +64,7 @@ with sync_playwright() as p:
         expect(deletion).to_be_visible()
         deletion.get_by_role('button', name='Supprimer', exact=True).click()
         expect(row).to_have_count(0)
+        page.goto(BASE + '/participants')
         page.get_by_role('button', name='Nouveau bilan', exact=True).click()
         dialog = page.get_by_role('dialog')
         expect(dialog).to_be_visible()

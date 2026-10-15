@@ -16,7 +16,7 @@ export function EditPersonDialog({ person, onSave, onClose }: { person: Person; 
     if (saveError) { setError(saveError); input.current?.focus(); return; }
     onClose();
   }
-  return <Dialog open onClose={onClose} aria-labelledby="edit-person-title" maxWidth={false} slotProps={{ paper: { className: 'text-ink', sx: { m: 2, width: 'calc(100% - 32px)', maxWidth: 400, maxHeight: 'calc(100dvh - 32px)', p: 2, borderRadius: 3 } } }}>
+  return <Dialog open onClose={onClose} aria-labelledby="edit-person-title" maxWidth={false} slotProps={{ paper: { className: 'text-ink', sx: { m: 2, width: 'calc(100% - 32px)', maxWidth: 400, maxHeight: 'calc(100dvh - 32px)', p: 2, borderRadius: '16px' } } }}>
     <form onSubmit={submit} noValidate className="flex flex-col gap-3">
       <h2 id="edit-person-title" className="text-base font-semibold">Modifier le nom du participant</h2>
       <label htmlFor="edit-person-name" className="text-sm">Nom du participant</label>

@@ -30,7 +30,7 @@ with sync_playwright() as p:
     page = context.new_page()
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
-    page.goto(BASE + '/participants')
+    page.goto(BASE + '/manage-team')
     expect(page.get_by_text('Alice', exact=True)).to_be_visible()
     original_revision = db['revision']
     for invalid in ['   ', 'x' * 61]:

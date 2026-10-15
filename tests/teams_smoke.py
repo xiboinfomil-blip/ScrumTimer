@@ -235,7 +235,7 @@ with sync_playwright() as p:
         panel.get_by_role('textbox', name='Nom de la nouvelle équipe', exact=True).fill('  Équipe Bêta  ')
         panel.get_by_role('button', name='Créer l’équipe', exact=True).click()
         expect(switcher(page, 'Équipe Bêta')).to_be_enabled()
-        expect(page).to_have_url(re.compile(r'/participants(?:\?team=[a-f0-9]{64})?$'))
+        expect(page).to_have_url(re.compile(r'/manage-team(?:\?team=[a-f0-9]{64})?$'))
         saved(page)
         assert db.active == CREATED_ID
         assert not db.teams[CREATED_ID]['team']['roster']
