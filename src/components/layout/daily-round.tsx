@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button, Paper } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { RoundFeedback } from '@/components/ui/round-feedback';
 import { DailyDashboard } from './daily-dashboard';
 
 /** Available on every device, even after the transient timer/session is gone. */
@@ -24,10 +25,11 @@ export function DailyRound() {
       <span className="shrink-0 text-[10px] font-semibold text-success" title="Point quotidien terminé aujourd’hui">✓ Terminé</span><span className="sr-only">Point quotidien terminé aujourd’hui</span>
     </div>
     <div className="flex shrink-0 flex-wrap gap-2">
-      <Button type="button" variant="contained" sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 10, textTransform: 'none' }} onClick={() => setView(value => !value)} aria-expanded={view} aria-controls="daily-dashboard">{view ? 'Masquer le bilan' : 'Voir le bilan du jour'}</Button>
-      <Button type="button" variant="text" sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 10, textTransform: 'none' }} disabled={teamBusy || cloudStatus !== 'saved'} onClick={() => setConfirm(true)}>Réinitialiser aujourd’hui</Button>
+      <Button type="button" variant="contained" aria-label={view ? 'Masquer le bilan' : 'Voir le bilan du jour'} sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 10, textTransform: 'none' }} onClick={() => setView(value => !value)} aria-expanded={view} aria-controls="daily-dashboard"><span className="max-[650px]:hidden">{view ? 'Masquer le bilan' : 'Voir le bilan du jour'}</span><span className="min-[650px]:hidden">{view ? 'Masquer' : 'Voir le bilan'}</span></Button>
+      <Button type="button" variant="text" aria-label="Réinitialiser aujourd’hui" sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 10, textTransform: 'none' }} disabled={teamBusy || cloudStatus !== 'saved'} onClick={() => setConfirm(true)}><span className="max-[650px]:hidden">Réinitialiser aujourd’hui</span><span className="min-[650px]:hidden">Réinitialiser</span></Button>
+      <RoundFeedback round={round} />
     </div>
     <DailyDashboard round={round} expanded={view} />
-    <ConfirmDialog open={confirm} title="Réinitialiser le point du jour ?" description="Le bilan et les humeurs d’aujourd’hui seront supprimés pour toute l’équipe, sur tous les appareils. Les équipes, participants et bilans des jours précédents sont conservés. Vous pourrez refaire le point avec le même baromètre du jour." confirmLabel="Réinitialiser aujourd’hui" danger onConfirm={() => void reset()} onClose={() => setConfirm(false)} />
+    <ConfirmDialog open={confirm} title="Réinitialiser le point du jour ?" description="Le bilan, ses retours d’utilité et les humeurs d’aujourd’hui seront supprimés pour toute l’équipe, sur tous les appareils. Les équipes, participants et bilans des jours précédents sont conservés. Vous pourrez refaire le point avec le même baromètre du jour." confirmLabel="Réinitialiser aujourd’hui" danger onConfirm={() => void reset()} onClose={() => setConfirm(false)} />
   </Paper>;
 }

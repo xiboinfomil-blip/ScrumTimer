@@ -61,3 +61,22 @@ export const standupSessions = pgTable('standup_sessions', {
 export const speakingTurns = pgTable('speaking_turns', {
   teamId: text('team_id').notNull(), sessionId: text('session_id').notNull(), participantId: text('participant_id').notNull(), position: integer('position').notNull(), nameSnapshot: text('name_snapshot').notNull(), mood: integer('mood'), speakingSeconds: doublePrecision('speaking_seconds').notNull(), budgetSeconds: doublePrecision('budget_seconds').notNull(), timeUp: boolean('time_up').notNull(), score: integer('score'), meterId: text('meter_id'),
 }, t => [primaryKey({ columns: [t.teamId, t.sessionId, t.participantId] }), foreignKey({ columns: [t.teamId, t.sessionId], foreignColumns: [standupSessions.teamId, standupSessions.id] }).onDelete('cascade'), foreignKey({ columns: [t.teamId, t.participantId], foreignColumns: [participants.teamId, participants.id] }), foreignKey({ columns: [t.teamId, t.meterId], foreignColumns: [moodMeters.teamId, moodMeters.id] }), unique('speaking_turns_position').on(t.teamId, t.sessionId, t.position), check('speaking_turns_position_bounds', sql`${t.position} BETWEEN 0 AND 99`), check('speaking_turns_name', sql`length(${t.nameSnapshot}) BETWEEN 1 AND 60 AND ${t.nameSnapshot} = btrim(${t.nameSnapshot}) AND ${t.nameSnapshot} !~ '[[:cntrl:]]'`), check('speaking_turns_mood', sql`${t.mood} BETWEEN 1 AND 4`), check('speaking_turns_times', sql`${t.speakingSeconds} BETWEEN 0 AND 86400 AND ${t.budgetSeconds} BETWEEN 0 AND 86400`), check('speaking_turns_score', sql`${t.score} BETWEEN 0 AND 1000`)]);
+
+// Separate CAS state: prompt edits never change the roster's revision/write gate.
+export const teamMeetingSettings = pgTable('team_meeting_settings', {
+  teamId: text('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }),
+  revision: integer('revision').notNull().default(0),
+  writeTransaction: bigint('write_transaction', { mode: 'bigint' }).notNull().default(sql`0`),
+}, t => [primaryKey({ columns: [t.teamId] }), check('team_meeting_settings_revision', sql`${t.revision} >= 0`)]);
+export const teamDiscussionPrompts = pgTable('team_discussion_prompts', {
+  teamId: text('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }),
+  position: integer('position').notNull(), prompt: text('prompt').notNull(),
+}, t => [primaryKey({ columns: [t.teamId, t.position] }), check('team_discussion_prompts_position', sql`${t.position} BETWEEN 0 AND 4`),
+  check('team_discussion_prompts_text', sql`length(${t.prompt}) BETWEEN 1 AND 160 AND ${t.prompt} = btrim(${t.prompt}) AND ${t.prompt} !~ '[[:cntrl:]]'`)]);
+export const roundFeedback = pgTable('round_feedback', {
+  teamId: text('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull(), participantId: text('participant_id').notNull(), value: text('value').notNull(),
+}, t => [primaryKey({ columns: [t.teamId, t.sessionId, t.participantId] }),
+  foreignKey({ columns: [t.teamId, t.sessionId], foreignColumns: [standupSessions.teamId, standupSessions.id] }).onDelete('cascade'),
+  foreignKey({ columns: [t.teamId, t.sessionId, t.participantId], foreignColumns: [speakingTurns.teamId, speakingTurns.sessionId, speakingTurns.participantId] }).onDelete('cascade'),
+  check('round_feedback_value', sql`${t.value} IN ('utile','mitige','pas-utile')`)]);
