@@ -3,9 +3,22 @@ import test from 'node:test';
 import { completedRound, dailyRoundStatistics, historyCutoff, historyLeaderboard, normalizeHistory, summarizeDays, type HistoryRound } from '../src/lib/history.ts';
 import { chooseUnusedDeck, moodMeterId, type MoodMeterDeck } from '../src/lib/mood-meter.ts';
 import { normalizeTeam } from '../src/lib/team-storage.ts';
+import { groupDailyMoods } from '../src/lib/daily-moods.ts';
 
 const now = new Date('2026-10-14T12:00:00Z');
 const round: HistoryRound = { id: 'round-1', completedAt: '2026-10-14T10:00:00Z', people: [{ id: 'alice', name: 'Alice', mood: 2, speakingSeconds: 30, budgetSeconds: 120, timeUp: false, score: 1000, meterTitle: 'Alligators' }] };
+test('daily moods group exact saved slide choices without guessing missing or changed check-ins', () => {
+  const slide = { title: 'Alligators', image: '/mood-meters/slides/test/1.svg', slideNumber: 1 };
+  const roster = normalizeTeam({ roster: [{ id: 'alice', name: 'Alice', mood: 2, moodUpdatedAt: '2026-10-14T09:00:00Z', moodSlide: slide }] }).roster;
+  const groups = groupDailyMoods(round, roster);
+  assert.equal(groups[0].context?.image, slide.image);
+  assert.equal(groups[0].choices[1].people[0].name, 'Alice');
+  assert.equal(groupDailyMoods(round, [])[0].context, null);
+  assert.equal(groupDailyMoods(round, [{ ...roster[0], mood: 3 }])[0].context, null);
+  assert.equal(groupDailyMoods(round, [{ ...roster[0], moodUpdatedAt: '2026-10-14T11:00:00Z' }])[0].context, null);
+  const mixed = { ...round, people: [...round.people, { ...round.people[0], id: 'bob', name: 'Bob', meterTitle: 'Other' }] };
+  assert.equal(groupDailyMoods(mixed, roster).length, 2);
+});
 test('daily dashboard uses recorded scores, shared ranks and measured time categories', () => {
   const people = [
     { ...round.people[0], id: 'a', name: 'Alice', speakingSeconds: 30 },
