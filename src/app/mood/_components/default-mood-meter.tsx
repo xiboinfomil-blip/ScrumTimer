@@ -6,8 +6,8 @@ const moods = [
 ];
 
 export function DefaultMoodMeter() {
-  return <div id="default-mood-meter" className="flex h-full min-h-0 w-full flex-col gap-2 p-2" aria-label="Baromètre par défaut : humeur et énergie">
-    <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-2">
+  return <div id="default-mood-meter" className="flex h-full min-h-0 w-full flex-col gap-2 overflow-y-auto p-2" aria-label="Baromètre par défaut : humeur et énergie">
+    <div className="grid min-h-44 flex-1 shrink-0 grid-cols-2 grid-rows-2 gap-2">
       {moods.map(item => <article key={item.number} className={`flex min-h-0 flex-col justify-center rounded-xl border px-3 py-2 ${item.color}`}>
         <div className="flex items-center justify-between gap-2"><span className="text-xl font-bold text-brand">{item.number}</span><span className="text-2xl" aria-hidden="true">{item.face}</span></div>
         <h3 className="mt-1 text-xs font-semibold text-ink">{item.mood}</h3>

@@ -118,6 +118,8 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
   const [wide, setWide] = useState(false);
   const [conversion, setConversion] = useState<'idle' | 'loading' | 'error'>('idle');
   const [retry, setRetry] = useState(0);
+  const [catalogRetry, setCatalogRetry] = useState(0);
+  const [loadError, setLoadError] = useState('');
   const [daily, setDaily] = useState<{ day: string; meter: { meterId: string; title: string } } | null>(null);
 
   useEffect(() => {
@@ -130,6 +132,8 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
 
   useEffect(() => {
     const controller = new AbortController();
+    setStatus('loading');
+    setLoadError('');
     const timeout = setTimeout(() => { controller.abort(); setStatus('error'); }, 50000);
     let active = true;
     async function load() {
@@ -156,15 +160,18 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
         setSelection({ deck: selected, slide: 0 });
         if (decks[selected]?.remoteId) setConversion('loading');
         setStatus('ready');
-      } catch {
-        if (active && !controller.signal.aborted) setStatus('error');
+      } catch (error) {
+        if (active && !controller.signal.aborted) {
+          setLoadError(error instanceof Error ? error.message : 'Catalogue indisponible.');
+          setStatus('error');
+        }
       } finally {
         clearTimeout(timeout);
       }
     }
     void load();
     return () => { active = false; clearTimeout(timeout); controller.abort(); };
-  }, [activeTeamId]);
+  }, [activeTeamId, catalogRetry]);
 
   const deck = catalog[selection.deck];
   const slide = deck?.slides[selection.slide];
@@ -251,7 +258,7 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
           onClick={() => void selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}>↝</IconButton>
       </div>
       <p id="daily-meter-note" role="status" className="shrink-0 text-[11px] font-medium text-brand">{savingMeter ? 'Enregistrement du baromètre partagé…' : daily ? `Baromètre du ${daily.day} · Commun à toute l’équipe · ${hasVotes ? 'Verrouillé après le premier vote.' : 'Choisissez dans la liste avant le premier vote.'}` : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</p>
-      {stacked ? <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(0,1fr)] gap-2 overflow-hidden rounded-xl" aria-label="Toutes les diapositives du baromètre">
+      {stacked ? <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(140px,1fr)] gap-2 overflow-y-auto rounded-xl" aria-label="Toutes les diapositives du baromètre">
         {deck.slides.map((item, index) => <div key={`${selection.deck}:${index}:${retry}`} className="relative flex min-h-0 flex-col overflow-hidden rounded-[14px] motion-safe:animate-page-reveal">
           <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`} />
         </div>)}
@@ -261,7 +268,7 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
           {pending ? <MoodMeterLoading /> : selection.deck === -2 ? <DefaultMoodMeter /> : <p className="p-4 text-center text-xs text-muted">Choisissez un baromètre dans la liste. Les baromètres déjà utilisés restent disponibles.</p>}
         </div>
       )}
-      {!stacked && <div className="flex h-11 shrink-0 items-center justify-between gap-1 text-xs text-muted">
+      {!stacked && deck && <div className="flex h-11 shrink-0 items-center justify-between gap-1 text-xs text-muted">
         <div className="flex min-w-0 items-center gap-1">
         <IconButton size="small" sx={{ width: 44, height: 44, borderRadius: 2 }} id="meter-prev-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-brand hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Diapositive précédente" disabled={!deck || selection.slide === 0} onClick={() => moveSlide(-1)}>←</IconButton>
         <span id="meter-slide-count" className="min-w-0 rounded-full bg-slate-100 px-2 py-1 text-center text-[11px] font-medium tabular-nums" aria-live="polite">{slide
@@ -281,8 +288,9 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
         ? `${stacked ? `${deck.slides.length} diapositives affichées ensemble. ` : ''}SVG statiques fournis par Google ; GIF non animés.` : deck
         ? 'Les GIF jouent en boucle à l’ouverture de chaque diapositive. Stop fige les animations ; les flèches changent la diapositive.'
         : status === 'loading' ? 'Chargement du catalogue…'
-        : status === 'error' ? 'Catalogue indisponible. Le baromètre original reste disponible dans la liste.'
+        : status === 'error' ? loadError || 'Catalogue indisponible. Réessayez le chargement.'
         : selection.deck === -2 ? 'Baromètre original choisi manuellement.' : 'Sélection automatique parmi les baromètres non utilisés uniquement.'}</p>
+      {status === 'error' && <Button type="button" variant="outlined" sx={{ minHeight: 44, flexShrink: 0 }} onClick={() => setCatalogRetry(value => value + 1)}>Réessayer le catalogue</Button>}
     </Paper>
   );
 }

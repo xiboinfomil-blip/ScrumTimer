@@ -25,8 +25,9 @@ async function main() {
   const columns = await db.execute(sql`SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND table_name IN (${tableNames}) AND data_type IN ('json','jsonb')`);
   console.log(`Persisted JSON columns: ${columns.rows.length}`);
   if (columns.rows.length) throw new Error('Unsupported JSON columns');
-  const ownership = await db.execute(sql`SELECT count(*)::int AS n FROM workspaces w LEFT JOIN teams t ON t.id=w.selected_team_id WHERE w.selected_team_id IS NULL OR t.workspace_id IS DISTINCT FROM w.id`);
-  if (Number(ownership.rows[0].n)) throw new Error('Missing or foreign active teams');
+  // Team selection is React-only, not a durable per-device workspace pointer.
+  const ownership = await db.execute(sql`SELECT count(*)::int AS n FROM teams t LEFT JOIN workspaces w ON w.id=t.workspace_id WHERE w.id IS NULL`);
+  if (Number(ownership.rows[0].n)) throw new Error('Missing team workspace');
   const fields = await db.execute(sql`SELECT column_name,is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='teams' AND column_name IN ('workspace_id','name')`);
   if (fields.rows.length !== 2 || fields.rows.some(row => row.is_nullable !== 'NO')) throw new Error('Missing team ownership constraints');
   const uniqueNames = await db.execute(sql`SELECT indexname FROM pg_indexes WHERE schemaname='public' AND tablename='teams' AND indexname='teams_workspace_name' AND indexdef ILIKE '%UNIQUE%lower(name)%'`);

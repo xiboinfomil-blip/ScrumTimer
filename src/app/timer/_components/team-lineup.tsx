@@ -22,7 +22,7 @@ export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; cla
       : 'Mélanger les personnes qui n’ont pas encore parlé, y compris le prochain intervenant';
 
   return (
-    <Paper component="aside" elevation={0} sx={{ borderRadius: 3 }} className={`team-panel ${card} flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl p-3 [&_.person-list]:gap-1 [&_.list-pagination]:h-11 [&_.list-pagination>button]:size-11 ${className}`} aria-labelledby="team-title">
+    <Paper component="aside" elevation={0} sx={{ borderRadius: 3 }} className={`team-panel ${card} flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl p-3 [&_.person-list]:gap-1 ${className}`} aria-labelledby="team-title">
       <div className="flex shrink-0 items-center justify-between gap-2">
         <div className="min-w-0">
           <h2 id="team-title" className="flex items-center gap-2 text-sm font-semibold">Équipe <span className={countPill} id="team-count">{people.length}</span></h2>

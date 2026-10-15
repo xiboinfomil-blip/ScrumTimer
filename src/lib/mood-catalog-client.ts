@@ -6,7 +6,10 @@ export async function loadMoodCatalog(signal: AbortSignal): Promise<MoodMeterDec
   const value = await response.json();
   if (value?.remote === true) {
     const remote = await fetch('/api/mood-meters/catalog', { signal, cache: 'no-store' });
-    if (!remote.ok) throw new Error('Catalogue Google indisponible.');
+    if (!remote.ok) {
+      const failure = await remote.json().catch(() => null);
+      throw new Error(typeof failure?.error === 'string' ? failure.error : 'Catalogue Google indisponible.');
+    }
     return parseMoodMeterCatalog(await remote.json());
   }
   return parseMoodMeterCatalog(value);
