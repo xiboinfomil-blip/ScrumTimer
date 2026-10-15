@@ -1,6 +1,7 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { useState } from 'react';
+import { Button, NativeSelect, InputBase, Dialog, DialogTitle, DialogContent, DialogActions, useMediaQuery } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
 import { groupDailyMoods } from '@/lib/daily-moods';
 import type { HistoryRound } from '@/lib/history';
@@ -10,20 +11,30 @@ const moodColors = ['border-blue-200 bg-blue-50 text-blue-900', 'border-teal-200
 
 export function DailyMoodPanel({ round }: { round: HistoryRound }) {
   const { state } = useTeam();
-  const reduced = useReducedMotion();
+  const [selected, setSelected] = useState(0);
+  const [choice, setChoice] = useState<number | null>(null);
+  const [page, setPage] = useState(0);
+  const [preview, setPreview] = useState(false);
+  const short = useMediaQuery('(max-height: 650px)');
   const groups = groupDailyMoods(round, state.roster);
-  return <section aria-labelledby="daily-moods-heading" className="min-w-0 space-y-4" data-dashboard-column="moods">
-    <header className="rounded-2xl border border-orange-200 bg-orange-50 p-4"><p className="text-[10px] font-bold uppercase tracking-widest text-amber-800">02 · Les humeurs de l’équipe</p><h2 id="daily-moods-heading" className="mt-1 text-lg font-bold text-brand">Baromètres & choix partagés</h2><p className="mt-2 text-xs text-muted">Chaque image garde ses propres groupes. Les couleurs distinguent les repères 1–4 : ce ne sont ni des notes, ni un classement.</p></header>
-    {groups.map((group, index) => <motion.article key={group.key} initial={reduced ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduced ? 0 : .3, delay: reduced ? 0 : Math.min(index, 4) * .05 }} className="min-w-0 rounded-2xl border border-line bg-white p-4">
-      <div className="flex items-start justify-between gap-2"><h3 className="min-w-0 break-words text-sm font-bold text-brand">{group.title}</h3><span className="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-brand">{group.people.length} choix</span></div>
-      {group.context ? <MoodSlidePreview key={group.context.image} context={group.context} idPrefix={`daily-meter-${index}`} /> : <div className="mt-3 rounded-xl border border-dashed border-line bg-slate-50 p-4 text-xs leading-relaxed text-muted" role="status">Image exacte non disponible pour ce bilan. Le titre et les choix enregistrés sont conservés ; aucune autre image n’est substituée.</div>}
-      <p className="mt-4 text-[10px] text-muted">Disposition de la diapositive : 1 · 4 en haut, 2 · 3 en bas.</p>
-      <div className="mt-2 grid grid-cols-2 gap-2">{group.choices.map(({ mood, people }) => <div key={mood} className={`min-w-0 rounded-xl border p-2 sm:p-3 ${moodColors[mood - 1]}`} data-mood-choice={mood}>
-        <div className="flex items-center justify-between gap-2"><h4 className="flex items-center gap-2 text-xs font-bold"><span className="grid size-6 place-items-center rounded-full border border-current">{mood}</span>Repère {mood}</h4><span className="text-xs font-bold tabular-nums">{people.length}</span></div>
-        {people.length ? <ul className="mt-2 flex flex-wrap gap-1.5" aria-label={`${group.title}, repère ${mood}`}>{people.map(person => <li key={person.id} className="max-w-full break-words rounded-lg border border-current/15 bg-white/70 px-2 py-1 text-[11px] font-medium">{person.name}</li>)}</ul> : <p className="mt-2 text-[10px] opacity-75">Aucun choix</p>}
-      </div>)}</div>
-      {group.missing.length > 0 && <div className="mt-3 rounded-lg bg-slate-100 p-3 text-xs text-muted"><h4 className="font-semibold">Sans repère renseigné · {group.missing.length}</h4><ul className="mt-1 flex flex-wrap gap-2">{group.missing.map(person => <li key={person.id}>{person.name}</li>)}</ul></div>}
-    </motion.article>)}
-    <p className="text-[10px] leading-relaxed text-muted">Les humeurs ne modifient jamais les points. Les archives ne gardent pas les images : l’aperçu apparaît uniquement lorsqu’un choix individuel inchangé conserve sa diapositive exacte dans l’équipe.</p>
+  const index = Math.min(selected, Math.max(0, groups.length - 1));
+  const group = groups[index];
+  if (!group) return null;
+  const people = choice === null ? group.people : group.people.filter(person => person.mood === choice);
+  const capacity = short ? 1 : 2;
+  const pages = Math.max(1, Math.ceil(people.length / capacity));
+  const current = Math.min(page, pages - 1);
+  return <section aria-labelledby="daily-moods-heading" className="flex min-h-0 min-w-0 flex-1 flex-col gap-1 overflow-hidden" data-dashboard-column="moods">
+    <header className="flex shrink-0 items-center justify-between gap-1"><h2 id="daily-moods-heading" className={short && groups.length > 1 ? 'sr-only' : 'truncate text-xs font-bold text-brand'} title={group.title}>Baromètres & choix partagés</h2>{short && groups.length > 1 && <NativeSelect value={index} onChange={event => { setSelected(Number(event.target.value)); setChoice(null); setPage(0); }} input={<InputBase />} inputProps={{ 'aria-label': 'Baromètre du bilan' }} sx={{ minHeight: 44, minWidth: 0, flex: 1, fontSize: 11 }}>{groups.map((item, itemIndex) => <option key={item.key} value={itemIndex}>{item.title}</option>)}</NativeSelect>}{short && group.context && <Button sx={{ minHeight: 44, minWidth: 44, fontSize: 10, px: .5 }} onClick={() => setPreview(true)}>Voir image</Button>}</header>
+    {!short && (groups.length > 1 ? <NativeSelect value={index} onChange={event => { setSelected(Number(event.target.value)); setChoice(null); setPage(0); }} input={<InputBase />} inputProps={{ 'aria-label': 'Baromètre du bilan' }} sx={{ minHeight: 44, flexShrink: 0, fontSize: 11, borderBottom: 1, borderColor: 'divider' }}>{groups.map((item, itemIndex) => <option key={item.key} value={itemIndex}>{item.title} · {item.people.length} choix</option>)}</NativeSelect> : <p className="shrink-0 truncate text-[10px] text-muted" title={group.title}>{group.title}</p>)}
+    {!short && (group.context ? <MoodSlidePreview key={group.context.image} compact context={group.context} idPrefix={`daily-meter-${index}`} /> : <p className="shrink-0 rounded-lg bg-slate-50 p-2 text-[10px] text-muted" role="status">Image exacte non disponible. Titre et choix conservés, sans image de remplacement.</p>)}
+    <div className="grid shrink-0 grid-cols-2 gap-1" aria-label="Repères du baromètre">{group.choices.map(({ mood, people: members }) => <Button key={mood} data-mood-choice={mood} aria-pressed={choice === mood} onClick={() => { setChoice(choice === mood ? null : mood); setPage(0); }} className={`border! ${moodColors[mood - 1]}`} sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 11, justifyContent: 'space-between', textTransform: 'none', borderRadius: 2 }}><span>Repère {mood}</span><strong>{members.length}</strong></Button>)}</div>
+    <div className="flex shrink-0 flex-col overflow-hidden" key={`${group.key}-${choice}`}>
+      <ul className="daily-mood-list" aria-label="Choix individuels">{people.slice(current * capacity, (current + 1) * capacity).map(person => <li key={person.id} className="flex h-6 shrink-0 items-center gap-2 px-1 text-[11px]"><span className={`grid size-5 shrink-0 place-items-center rounded ${person.mood ? moodColors[person.mood - 1] : 'bg-slate-100 text-muted'}`}>{person.mood ?? '—'}</span><span className="truncate" title={person.name}>{person.name}</span></li>)}</ul>
+      {!people.length && <p className="text-[10px] text-muted">Aucun choix pour ce repère.</p>}
+      <nav className="flex h-11 items-center justify-between" aria-label="Pages des choix"><Button disabled={current === 0} sx={{ minHeight: 44, minWidth: 44 }} aria-label="Choix précédents" onClick={() => setPage(current - 1)}>←</Button><span className="text-[9px] text-muted" aria-live="polite">{choice === null ? 'Tous' : `Repère ${choice}`} · {current + 1}/{pages}</span><Button disabled={current === pages - 1} sx={{ minHeight: 44, minWidth: 44 }} aria-label="Choix suivants" onClick={() => setPage(current + 1)}>→</Button></nav>
+    </div>
+    <p className="shrink-0 text-[9px] leading-tight text-muted [@media(max-height:650px)]:hidden">Couleurs = repères, pas des notes. L’humeur ne change pas les points.</p>
+    <Dialog open={preview} onClose={() => setPreview(false)} fullWidth maxWidth="md" aria-labelledby="daily-image-title"><DialogTitle id="daily-image-title">{group.title}</DialogTitle><DialogContent>{group.context && <MoodSlidePreview context={group.context} idPrefix="daily-meter-dialog" />}</DialogContent><DialogActions><Button sx={{ minHeight: 44 }} onClick={() => setPreview(false)}>Fermer l’image</Button></DialogActions></Dialog>
   </section>;
 }
