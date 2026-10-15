@@ -33,6 +33,8 @@ interface TeamContextValue {
   activeTeamName: string;
   teamBusy: boolean;
   dailyReady: boolean;
+  todayRound: HistoryRound | null;
+  resetToday: () => Promise<boolean>;
   setDailyReady: (ready: boolean) => void;
   switchTeam: (id: string) => Promise<boolean>;
   createTeam: (name: string) => Promise<boolean>;
@@ -55,6 +57,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
   const [teamBusy, setTeamBusy] = useState(true);
   const [dailyReady, setDailyReady] = useState(false);
+  const [todayRound, setTodayRound] = useState<HistoryRound | null>(null);
   const [retry, setRetry] = useState(0);
   const selectedId = useRef<string | null>(null);
   const busy = useRef(true);
@@ -91,8 +94,21 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         } else {
           const round = pendingRounds.current[0];
           const response = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId }, body: JSON.stringify(round), signal: controller.signal });
+          if (response.status === 409) {
+            const existing = await fetch('/api/history', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal });
+            if (!existing.ok) throw new Error('history reload');
+            const history = await existing.json();
+            if (generation.current !== currentGeneration || controller.signal.aborted) return;
+            const winner = normalizeHistory(history.rounds).find(item => new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(item.completedAt)) === history.day);
+            if (!winner) throw new Error('daily result unavailable');
+            setTodayRound(winner);
+            pendingRounds.current = pendingRounds.current.filter(item => item.id !== round.id);
+            notify('Ce point quotidien a déjà été terminé sur un autre appareil. Le bilan enregistré est affiché.', 'warning');
+            continue;
+          }
           if (!response.ok) throw new Error('history save');
           if (generation.current !== currentGeneration || controller.signal.aborted) return;
+          setTodayRound(round);
           pendingRounds.current = pendingRounds.current.filter(item => item.id !== round.id);
         }
       }
@@ -113,7 +129,12 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     const response = await fetch('/api/team', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal });
     if (!response.ok) throw new Error('Chargement de l’équipe impossible.');
     const saved = await response.json();
+    const historyResponse = await fetch('/api/history', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal });
+    if (!historyResponse.ok) throw new Error('Chargement du bilan du jour impossible.');
+    const history = await historyResponse.json();
     if (generation.current !== token || controller.signal.aborted) return false;
+    const day = history.day ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date());
+    setTodayRound(normalizeHistory(history.rounds).find(round => new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(round.completedAt)) === day) ?? null);
     revision.current = saved.revision;
     latest.current = normalizeTeam(saved.team);
     setState(latest.current);
@@ -172,6 +193,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     busy.current = true;
     setTeamBusy(true);
     setDailyReady(false);
+    setTodayRound(null);
     hydrated.current = false;
     setReady(false);
     setCloudStatus('loading');
@@ -262,8 +284,34 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     } else if (hydrated.current) void flush();
     else { setCloudStatus('loading'); setRetry(value => value + 1); }
   }, [flush, notify]);
+  const resetToday = useCallback(async () => {
+    const teamId = selectedId.current;
+    if (!teamId || !todayRound || busy.current || uploading.current || dirty.current || pendingRounds.current.length || conflict.current) {
+      notify('Attendez la confirmation des sauvegardes avant de réinitialiser.', 'warning'); return false;
+    }
+    busy.current = true;
+    setTeamBusy(true);
+    const controller = new AbortController();
+    loadController.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch('/api/history', { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId }, body: JSON.stringify({ roundId: todayRound.id }), signal: controller.signal });
+      if (!response.ok) throw new Error();
+      setDailyReady(false);
+      // Leave the guarded timer route before clearing its completed-result gate.
+      window.history.replaceState(null, '', '/participants');
+      return await hydrateTeam(teamId, controller, generation.current);
+    } catch {
+      // Reset may have committed before a network failure: require authoritative reload.
+      hydrated.current = false;
+      setReady(false);
+      setCloudStatus('error');
+      notify('Réinitialisation non confirmée. Réessayez Neon pour recharger le bilan.', 'error');
+      return false;
+    } finally { clearTimeout(timeout); busy.current = false; setTeamBusy(false); }
+  }, [todayRound, hydrateTeam, notify]);
   const activeTeamName = teams.find(team => team.id === activeTeamId)?.name ?? '';
-  return <TeamContext.Provider value={{ teams, activeTeamId, activeTeamName, teamBusy, dailyReady, setDailyReady, switchTeam, createTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;
+  return <TeamContext.Provider value={{ teams, activeTeamId, activeTeamName, teamBusy, dailyReady, todayRound, resetToday, setDailyReady, switchTeam, createTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;
 }
 
 export function useTeam() {

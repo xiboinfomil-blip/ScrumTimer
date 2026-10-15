@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -13,7 +14,7 @@ import { EditPersonDialog } from './edit-person-dialog';
 import { ParticipantsActions, ParticipantsHeading, ParticipantsToolbar } from './participants-controls';
 
 export function ParticipantsPage() {
-  const { state, updateTeam } = useTeam();
+  const { state, todayRound, updateTeam } = useTeam();
   const notify = useNotify();
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -61,6 +62,7 @@ export function ParticipantsPage() {
   }
   return <div id="participants-page" className={`${routeStage} mx-auto w-full max-w-6xl`}>
     <ParticipantsHeading total={state.roster.length} present={present.length} onFresh={() => setDialog('fresh')} />
+    {todayRound && <p className="shrink-0 rounded-xl border border-green-200 bg-green-50 px-3 text-xs text-success">Point quotidien déjà terminé aujourd’hui. <Link href="/timer" className="inline-flex min-h-11 items-center font-semibold underline">Voir le bilan ou réinitialiser</Link></p>}
     <section className={`card participants-panel ${card} flex min-h-0 w-full flex-1 flex-col gap-2 p-3 max-[650px]:p-2 ${state.roster.length ? 'max-h-160' : 'max-h-64'}`} aria-label="Les participants">
       <AddPersonForm />
       <ParticipantsToolbar total={state.roster.length} selectedCount={selectedIds.size} onSelectAll={checked => setSelected(new Set(checked ? state.roster.map(person => person.id) : []))} onDelete={() => requestDeletion(selectedIds)} />

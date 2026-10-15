@@ -28,10 +28,10 @@ function NavIcon({ name, className = 'size-4' }: { name: 'people' | 'mood' | 'ti
 
 export function Navbar() {
   const pathname = usePathname();
-  const { state, ready, cloudStatus, retryCloud, updateTeam } = useTeam();
+  const { state, ready, todayRound, cloudStatus, retryCloud, updateTeam } = useTeam();
   const currentStep = steps.findIndex(step => step.path === pathname);
-  const hasPeople = ready && state.roster.some(person => person.present);
-  const canUseTimer = ready && hasValidSession(state);
+  const hasPeople = ready && (Boolean(todayRound) || state.roster.some(person => person.present));
+  const canUseTimer = ready && (Boolean(todayRound) || hasValidSession(state));
   const cloudLoading = cloudStatus !== 'error' && (!ready || cloudStatus === 'loading');
   const cloudLabel = cloudLoading ? 'Chargement…'
     : cloudStatus === 'saved' ? 'Neon ✓'

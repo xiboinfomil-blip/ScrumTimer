@@ -2,8 +2,6 @@ import 'server-only';
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import * as schema from '@/db/schema';
-import { cookies } from 'next/headers';
-import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { configureNeonNetwork } from './neon-network';
 import { resolveSelectedTeam, WorkspaceError } from './workspace-store';
@@ -18,19 +16,11 @@ export function database() {
   connection ??= createDatabase();
   return connection;
 }
-export async function privateSpace() {
-  const store = await cookies();
-  const existing = store.get('standup-space')?.value;
-  if (existing && /^[a-f0-9]{64}$/.test(existing)) return existing;
-  const id = randomBytes(32).toString('hex');
-  store.set('standup-space', id, { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'false', path: '/', maxAge: 60 * 60 * 24 * 365 });
-  return id;
-}
 export function sameOrigin(request: Request) {
   return request.headers.get('origin') === new URL(request.url).origin;
 }
 export async function selectedTeam(request: Request) {
-  return resolveSelectedTeam(database(), await privateSpace(), request.headers.get('X-Team-Id'));
+  return resolveSelectedTeam(database(), request.headers.get('X-Team-Id'));
 }
 export function databaseFailure(error: unknown) {
   if (error instanceof WorkspaceError) return NextResponse.json({ error: error.message }, { status: error.status, headers: { 'Cache-Control': 'no-store' } });

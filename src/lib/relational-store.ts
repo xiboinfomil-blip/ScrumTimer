@@ -2,7 +2,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
 import type { TeamState } from '../types/team.ts';
 import { historyCutoff, type HistoryRound } from './history.ts';
-import { mauritiusDay } from './workspace-store.ts';
+import { mauritiusDay, WorkspaceError } from './workspace-store.ts';
 
 type Database = Pick<NeonHttpDatabase, 'execute' | 'batch'>;
 // Transaction IDs are server-generated, unique gates, NOT revision+1 (which a stale
@@ -39,7 +39,7 @@ export function historyWriteStatements(id: string, round: HistoryRound, now = ne
   return [
     // Serialize against profile CAS, without changing its revision or write gate.
     sql`SELECT id FROM teams WHERE id=${id} FOR UPDATE`,
-    sql`INSERT INTO standup_sessions(team_id,id,completed_at,write_transaction) SELECT ${id},${round.id},${round.completedAt}::timestamptz,txid_current() WHERE EXISTS(SELECT 1 FROM teams WHERE id=${id}) ON CONFLICT DO NOTHING RETURNING id`,
+    sql`INSERT INTO standup_sessions(team_id,id,completed_at,write_transaction) SELECT ${id},${round.id},${round.completedAt}::timestamptz,txid_current() WHERE EXISTS(SELECT 1 FROM teams WHERE id=${id}) AND NOT EXISTS(SELECT 1 FROM standup_sessions WHERE team_id=${id} AND (completed_at AT TIME ZONE 'Indian/Mauritius')::date=${mauritiusDay(now)}::date) ON CONFLICT DO NOTHING RETURNING id`,
     sql`INSERT INTO participants(team_id,id,name) SELECT ${id},p.id,p.name FROM ${people} ${fields} WHERE ${gate} ON CONFLICT DO NOTHING`,
     sql`INSERT INTO mood_meters(team_id,id,title) SELECT DISTINCT ${id},p."meterTitle",p."meterTitle" FROM ${people} ${fields} WHERE ${gate} AND p."meterTitle" IS NOT NULL ON CONFLICT DO NOTHING`,
     sql`INSERT INTO speaking_turns(team_id,session_id,participant_id,position,name_snapshot,mood,speaking_seconds,budget_seconds,time_up,score,meter_id) SELECT ${id},${round.id},p.id,p.position,p.name,p.mood,p."speakingSeconds",p."budgetSeconds",p."timeUp",p.score,p."meterTitle" FROM ${people} ${fields} WHERE ${gate}`,
@@ -57,8 +57,21 @@ export async function writeTeam(db: Database, id: string, revision: number, team
   return results[1].rows.length ? Number(results[1].rows[0].revision) : null;
 }
 export async function writeHistory(db: Database, id: string, round: HistoryRound) {
+  if (mauritiusDay(new Date(round.completedAt)) !== mauritiusDay()) throw new WorkspaceError(400, 'Seul le bilan du jour peut être enregistré.');
   const results = await batch(db, historyWriteStatements(id, round));
-  return results[0].rows.length > 0;
+  if (results[1].rows.length) return true;
+  const existing = await db.execute(sql`SELECT id FROM standup_sessions WHERE team_id=${id} AND id=${round.id}`);
+  return existing.rows.length > 0;
+}
+/** Reset only today's result/check-ins; the durable roster and older history survive. */
+export async function resetDailyRound(db: Database, id: string, roundId: string, now = new Date()) {
+  const results = await batch(db, [
+    sql`SELECT id FROM teams WHERE id=${id} FOR UPDATE`,
+    sql`UPDATE teams SET revision=revision+1,updated_at=now(),write_transaction=txid_current() WHERE id=${id} AND EXISTS(SELECT 1 FROM standup_sessions WHERE team_id=${id} AND id=${roundId} AND (completed_at AT TIME ZONE 'Indian/Mauritius')::date=${mauritiusDay(now)}::date) RETURNING revision`,
+    sql`DELETE FROM standup_sessions WHERE team_id=${id} AND (completed_at AT TIME ZONE 'Indian/Mauritius')::date=${mauritiusDay(now)}::date AND ${teamGate(id)}`,
+    sql`DELETE FROM participant_check_ins WHERE team_id=${id} AND ${teamGate(id)}`,
+  ]);
+  return results[1].rows.length > 0;
 }
 export async function readTeam(db: Database, id: string, now = new Date()) {
   // One statement gives a consistent MVCC snapshot even during concurrent writes.

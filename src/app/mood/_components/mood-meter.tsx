@@ -10,6 +10,7 @@ import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood-catalog-client';
 import { AnimatedImage } from './animated-image';
 import { useTeam } from '@/providers/team-provider';
 import { DefaultMoodMeter, MoodMeterLoading } from './default-mood-meter';
+import { useNotify } from '@/providers/notification-provider';
 
 const slideError = 'Diapositive indisponible. Le baromètre par défaut est affiché.';
 const meterStage = 'meter-stage relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden rounded-[14px] border border-line bg-slate-50';
@@ -101,7 +102,11 @@ export function MeterSlide({ slide, title, paused, idPrefix = 'meter' }: {
 }
 
 export function MoodMeter({ className = '', mobileVisible = true }: { className?: string; mobileVisible?: boolean }) {
-  const { state, updateTeam, activeTeamId, setDailyReady } = useTeam();
+  const { state, updateTeam, activeTeamId, setDailyReady, cloudStatus } = useTeam();
+  const notify = useNotify();
+  const [savingMeter, setSavingMeter] = useState(false);
+  const changeController = useRef<AbortController | null>(null);
+  useEffect(() => () => changeController.current?.abort(), []);
   const initialUsed = useRef(state.usedMoodMeters ?? []);
   const panelRef = useRef<HTMLElement>(null);
   // GIF playback is explicitly requested; Stop remains available at all times.
@@ -181,23 +186,43 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deck?.remoteId, retry]);
   useEffect(() => {
-    const usable = Boolean(daily && (selection.deck === -2 || showSlide));
+    const usable = Boolean(daily && !savingMeter && (selection.deck === -2 || showSlide));
     setDailyReady(usable);
     updateTeam(current => ({ ...current, currentMoodSlide: showSlide ? { title, image: slide.image, slideNumber: selection.slide + 1, meterId: moodMeterId(deck) } : null }));
     // Keep today's assigned slide available for late votes on the timer route.
     // The provider resets readiness when changing teams.
-  }, [slide, showSlide, title, selection.slide, selection.deck, deck, updateTeam, daily, setDailyReady]);
+  }, [slide, showSlide, title, selection.slide, selection.deck, deck, updateTeam, daily, savingMeter, setDailyReady]);
   const autoplayAnimations = () => {
     setPaused(false);
   };
-  const selectDeck = (index: number) => {
-    if (daily) return;
-    if (index === -2) { setSelection({ deck: -2, slide: 0 }); setConversion('idle'); return; }
-    if (!Number.isInteger(index) || !catalog[index]) return;
-    setConversion(catalog[index].remoteId ? 'loading' : 'idle');
-    if (index === selection.deck) setRetry(value => value + 1);
-    setSelection({ deck: index, slide: 0 });
-    autoplayAnimations();
+  const hasVotes = state.roster.some(person => person.mood !== null);
+  const canChange = Boolean(daily && !hasVotes && !savingMeter && status === 'ready' && cloudStatus === 'saved');
+  const selectDeck = async (index: number) => {
+    if (!canChange || index === selection.deck || (index !== -2 && (!Number.isInteger(index) || !catalog[index]))) return;
+    const controller = new AbortController();
+    changeController.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    setSavingMeter(true);
+    setDailyReady(false);
+    try {
+      const meter = index === -2 ? { meterId: 'original', title: 'Baromètre original' } : { meterId: moodMeterId(catalog[index]), title: catalog[index].title };
+      const response = await fetch('/api/daily-meter', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Team-Id': activeTeamId! }, body: JSON.stringify(meter), signal: controller.signal });
+      const assigned = await response.json();
+      if (!response.ok) throw new Error(assigned.error ?? 'Changement non confirmé. Rechargez avant de voter.');
+      if (controller.signal.aborted) return;
+      setDaily(assigned);
+      setConversion(catalog[index]?.remoteId ? 'loading' : 'idle');
+      setSelection({ deck: index, slide: 0 });
+      autoplayAnimations();
+    } catch (error) {
+      if (changeController.current !== controller) return;
+      setStatus('error');
+      setDaily(null);
+      notify(error instanceof Error && error.name !== 'AbortError' ? error.message : 'Changement non confirmé. Rechargez avant de voter.', 'error');
+    } finally {
+      clearTimeout(timeout);
+      if (changeController.current === controller) { changeController.current = null; setSavingMeter(false); }
+    }
   };
   const moveSlide = (direction: number) => {
     if (!deck) return;
@@ -213,16 +238,16 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
       <h2 id="meter-title" className="sr-only">Le baromètre d’humeur</h2>
       <div className="flex min-w-0 shrink-0 items-center gap-2">
         <label className="sr-only" htmlFor="meter-catalogue-select">Catalogue · {catalog.length} baromètres</label>
-        <select id="meter-catalogue-select" className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-slate-50/60 px-3 text-xs font-medium text-brand focus:bg-white disabled:opacity-75" disabled value={String(selection.deck)} onChange={event => selectDeck(Number(event.target.value))}>
+        <select id="meter-catalogue-select" className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-slate-50/60 px-3 text-xs font-medium text-brand focus:bg-white disabled:opacity-75" disabled={!canChange} aria-describedby="daily-meter-note" value={String(selection.deck)} onChange={event => void selectDeck(Number(event.target.value))}>
           <option value="-1" disabled>{status === 'loading' ? 'Chargement…' : 'Choisissez un baromètre'}</option>
           <option value="-2">Baromètre original · choix manuel</option>
           {catalog.map((item, index) => <option key={index} value={index}>{displayTitle(item)}{state.usedMoodMeters?.includes(moodMeterId(item)) ? ' · Déjà utilisé' : ''}</option>)}
         </select>
         <button id="random-meter-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-lg text-brand hover:bg-blue-50" aria-label="Afficher un autre baromètre au hasard"
-          title="Un seul baromètre par équipe et par jour" disabled
-          onClick={() => selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}>↝</button>
+          title="Choisir un autre baromètre avant le premier vote" disabled={!canChange}
+          onClick={() => void selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}>↝</button>
       </div>
-      <p id="daily-meter-note" role="status" className="shrink-0 text-[11px] font-medium text-brand">{daily ? `Baromètre du ${daily.day} · Commun à toute l’équipe · Verrouillé pour la journée (Maurice).` : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</p>
+      <p id="daily-meter-note" role="status" className="shrink-0 text-[11px] font-medium text-brand">{savingMeter ? 'Enregistrement du baromètre partagé…' : daily ? `Baromètre du ${daily.day} · Commun à toute l’équipe · ${hasVotes ? 'Verrouillé après le premier vote.' : 'Choisissez dans la liste avant le premier vote.'}` : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</p>
       {stacked ? <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(0,1fr)] gap-2 overflow-hidden rounded-xl" aria-label="Toutes les diapositives du baromètre">
         {deck.slides.map((item, index) => <div key={`${selection.deck}:${index}:${retry}`} className="relative flex min-h-0 flex-col overflow-hidden rounded-[14px] motion-safe:animate-page-reveal">
           <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`} />

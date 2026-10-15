@@ -42,49 +42,46 @@ async function batch(db: Database, statements: SQL[]) {
   const queries = statements.map(statement => db.execute(statement));
   return db.batch(queries as [typeof queries[number], ...typeof queries[number][]]);
 }
-const listStatement = (workspaceId: string) => sql`SELECT t.id,t.name,(SELECT count(*)::int FROM team_members m WHERE m.team_id=t.id) AS "memberCount",w.selected_team_id AS "activeTeamId" FROM teams t JOIN workspaces w ON w.id=t.workspace_id WHERE w.id=${workspaceId} ORDER BY lower(t.name),t.id`;
-function listResult(rows: Record<string, unknown>[]) {
-  return { teams: rows.map(row => ({ id: String(row.id), name: String(row.name), memberCount: Number(row.memberCount) })), activeTeamId: rows.length ? String(rows[0].activeTeamId) : null };
+// A single database namespace, not a browser identity. Legacy rows stay visible.
+const sharedWorkspace = '0'.repeat(64);
+const listStatement = () => sql`SELECT t.id,t.name,(SELECT count(*)::int FROM team_members m WHERE m.team_id=t.id) AS "memberCount" FROM teams t ORDER BY lower(t.name),t.id`;
+function listResult(rows: Record<string, unknown>[], selectedId: string | null = null) {
+  return { teams: rows.map(row => ({ id: String(row.id), name: String(row.name), memberCount: Number(row.memberCount) })), activeTeamId: selectedId ?? (rows.length ? String(rows[0].id) : null) };
 }
-export async function listTeams(db: Database, workspaceId: string) {
-  if (!capabilityId(workspaceId)) throw forbidden();
-  // Serialize bootstrap/selection on the workspace; concurrent GETs create ONE default.
+export async function listTeams(db: Database) {
+  // Serialize bootstrap globally; concurrent devices create ONE default.
   const results = await batch(db, [
-    sql`INSERT INTO workspaces(id) VALUES(${workspaceId}) ON CONFLICT DO NOTHING`,
-    sql`SELECT id FROM workspaces WHERE id=${workspaceId} FOR UPDATE`,
-    sql`INSERT INTO teams(id,workspace_id,name,duration,warning,sound) SELECT ${workspaceId},${workspaceId},'Mon équipe',120,30,true WHERE NOT EXISTS(SELECT 1 FROM teams WHERE workspace_id=${workspaceId}) ON CONFLICT DO NOTHING`,
-    sql`UPDATE workspaces w SET selected_team_id=(SELECT id FROM teams WHERE workspace_id=w.id ORDER BY lower(name),id LIMIT 1) WHERE w.id=${workspaceId} AND NOT EXISTS(SELECT 1 FROM teams WHERE id=w.selected_team_id AND workspace_id=w.id)`,
-    listStatement(workspaceId),
+    sql`INSERT INTO workspaces(id) VALUES(${sharedWorkspace}) ON CONFLICT DO NOTHING`,
+    sql`SELECT id FROM workspaces WHERE id=${sharedWorkspace} FOR UPDATE`,
+    sql`INSERT INTO teams(id,workspace_id,name,duration,warning,sound) SELECT ${sharedWorkspace},${sharedWorkspace},'Mon équipe',120,30,true WHERE NOT EXISTS(SELECT 1 FROM teams) ON CONFLICT DO NOTHING`,
+    listStatement(),
   ]);
-  return listResult(results[4].rows);
+  return listResult(results[3].rows);
 }
 /** Explicit headers never fall back to another team, even when malformed. */
-export async function resolveSelectedTeam(db: Database, workspaceId: string, explicitId: string | null = null): Promise<string> {
-  if (!capabilityId(workspaceId) || (explicitId !== null && !capabilityId(explicitId))) throw forbidden();
-  const result = await db.execute(sql`SELECT t.id FROM teams t JOIN workspaces w ON w.id=t.workspace_id WHERE w.id=${workspaceId} AND t.id=${explicitId === null ? sql`w.selected_team_id` : sql`${explicitId}`}`);
+export async function resolveSelectedTeam(db: Database, explicitId: string | null): Promise<string> {
+  if (!capabilityId(explicitId)) throw forbidden();
+  const result = await db.execute(sql`SELECT id FROM teams WHERE id=${explicitId}`);
   if (!result.rows.length) throw forbidden();
   return String(result.rows[0].id);
 }
-export async function createTeam(db: Database, workspaceId: string, value: unknown) {
+export async function createTeam(db: Database, value: unknown) {
   const name = validateTeamName(value); const id = newTeamId();
-  if (!capabilityId(workspaceId)) throw forbidden();
   const results = await batch(db, [
-    sql`SELECT id FROM workspaces WHERE id=${workspaceId} FOR UPDATE`,
-    sql`INSERT INTO teams(id,workspace_id,name,duration,warning,sound) SELECT ${id},${workspaceId},${name},120,30,true WHERE EXISTS(SELECT 1 FROM workspaces WHERE id=${workspaceId}) RETURNING id`,
-    sql`UPDATE workspaces SET selected_team_id=${id} WHERE id=${workspaceId} AND EXISTS(SELECT 1 FROM teams WHERE id=${id} AND workspace_id=${workspaceId})`,
-    listStatement(workspaceId),
+    sql`INSERT INTO workspaces(id) VALUES(${sharedWorkspace}) ON CONFLICT DO NOTHING`,
+    sql`SELECT id FROM workspaces WHERE id=${sharedWorkspace} FOR UPDATE`,
+    sql`INSERT INTO teams(id,workspace_id,name,duration,warning,sound) SELECT ${id},${sharedWorkspace},${name},120,30,true WHERE NOT EXISTS(SELECT 1 FROM teams WHERE lower(name)=lower(${name})) RETURNING id`,
+    listStatement(),
   ]);
-  if (!results[1].rows.length) throw forbidden();
-  return listResult(results[3].rows);
+  if (!results[2].rows.length) throw new WorkspaceError(409, 'Une équipe porte déjà ce nom, ou votre sélection est indisponible.');
+  return listResult(results[3].rows, id);
 }
-export async function selectTeam(db: Database, workspaceId: string, teamId: unknown) {
-  if (!capabilityId(workspaceId) || !capabilityId(teamId)) throw forbidden();
-  const results = await batch(db, [
-    sql`UPDATE workspaces SET selected_team_id=${teamId} WHERE id=${workspaceId} AND EXISTS(SELECT 1 FROM teams WHERE id=${teamId} AND workspace_id=${workspaceId}) RETURNING id`,
-    listStatement(workspaceId),
-  ]);
-  if (!results[0].rows.length) throw forbidden();
-  return listResult(results[1].rows);
+export async function selectTeam(db: Database, teamId: unknown) {
+  if (!capabilityId(teamId)) throw forbidden();
+  const rows = (await db.execute(listStatement())).rows;
+  if (!rows.some(row => row.id === teamId)) throw forbidden();
+  // Selection is returned to React only; it never updates a device record.
+  return listResult(rows, teamId);
 }
 const dailyStatement = (teamId: string, day: string) => sql`SELECT meter_id AS "meterId",title FROM team_daily_meters WHERE team_id=${teamId} AND day=${day}::date`;
 function dailyResult(day: string, rows: Record<string, unknown>[]) {
@@ -106,6 +103,18 @@ export async function saveDailyMeter(db: Database, teamId: string, value: unknow
   return dailyResult(day, results[3].rows);
 }
 /** Optional daily consistency check; legacy transport validation stays unchanged. */
+export async function changeDailyMeter(db: Database, teamId: string, value: unknown, now = new Date()) {
+  const meter = validateDailyMeter(value); const day = mauritiusDay(now);
+  const results = await batch(db, [
+    sql`SELECT id FROM teams WHERE id=${teamId} FOR UPDATE`,
+    sql`INSERT INTO mood_meter_identifiers(team_id,id) VALUES(${teamId},${meter.meterId}) ON CONFLICT DO NOTHING`,
+    sql`UPDATE team_daily_meters SET meter_id=${meter.meterId},title=${meter.title} WHERE team_id=${teamId} AND day=${day}::date AND NOT EXISTS(SELECT 1 FROM participant_check_ins WHERE team_id=${teamId} AND mood IS NOT NULL AND (mood_updated_at AT TIME ZONE 'Indian/Mauritius')::date=${day}::date) AND NOT EXISTS(SELECT 1 FROM standup_sessions WHERE team_id=${teamId} AND (completed_at AT TIME ZONE 'Indian/Mauritius')::date=${day}::date) RETURNING meter_id`,
+    dailyStatement(teamId, day),
+  ]);
+  if (!results[2].rows.length) throw new WorkspaceError(409, 'Le baromètre ne peut plus changer après le premier vote ou la fin du point quotidien. Rechargez pour retrouver le choix partagé.');
+  return dailyResult(day, results[3].rows);
+}
+
 export function validateDailyCheckIns(team: TeamState, meter: DailyMeter | null) {
   if (!meter) return;
   for (const person of team.roster) {

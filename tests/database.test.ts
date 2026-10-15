@@ -7,7 +7,7 @@ import * as schema from '../src/db/schema.ts';
 import { teamWriteStatements, historyWriteStatements } from '../src/lib/relational-store.ts';
 import { validateTeamInput, validateTeamRequest, validateHistoryInput } from '../src/lib/team-validation.ts';
 import { writeTeam, writeHistory, readTeam, readHistory } from '../src/lib/relational-store.ts';
-import { listTeams } from '../src/lib/workspace-store.ts';
+import { createTeam, listTeams } from '../src/lib/workspace-store.ts';
 
 const team = { roster: [{ id: 'person-1', name: "Élodie <script>'", present: true, mood: 2, moodUpdatedAt: '2026-10-14T10:00:00.000Z', moodSlide: { title: 'Meter', image: '/mood-meters/slides/deck/slide.svg', slideNumber: 1, meterId: 'deck' } }], duration: 120, warning: 30, sound: true, session: [], currentMoodSlide: null, usedMoodMeters: ['deck'] };
 const now = new Date('2026-10-14T12:00:00Z');
@@ -94,7 +94,7 @@ test('migration verifies all legacy data before dropping tables and never prunes
 test('PostgreSQL: legacy backfill, CAS isolation, atomic rollback, scoped reads and history idempotency', async () => {
   const { PGlite } = await import('@electric-sql/pglite');
   const engine = new PGlite();
-  const id = 'a'.repeat(64); const other = 'b'.repeat(64);
+  const id = 'a'.repeat(64); let other = 'b'.repeat(64);
   const legacy = readFileSync(new URL('../drizzle/0000_spotty_the_stranger.sql', import.meta.url), 'utf8');
   const migration = readFileSync(new URL('../drizzle/0001_abandoned_snowbird.sql', import.meta.url), 'utf8');
   const old = { ...round, id: 'ancient', completedAt: '2020-01-01T12:00:00.000Z', people: [{ ...round.people[0], id: 'removed', name: 'Ancien nom', meterTitle: 'Ancient meter' }] };
@@ -141,14 +141,15 @@ test('PostgreSQL: legacy backfill, CAS isolation, atomic rollback, scoped reads 
   const invalid = { ...changed, roster: [{ ...changed.roster[0], name: 'x'.repeat(61) }] };
   await assert.rejects(writeTeam(client, id, 8, invalid));
   assert.deepEqual(await readTeam(client, id, now), before, 'child failure rolls back parent CAS');
-  assert.equal(await writeHistory(client, other, validateHistoryInput(round, now)), false);
+  assert.equal(await writeHistory(client, other, { ...round, completedAt: new Date().toISOString() }), false);
   // Use actual current time because writeHistory's retention is a runtime policy.
   const current = { ...round, completedAt: new Date().toISOString() };
   assert.equal(await writeHistory(client, id, validateHistoryInput(current)), true);
   assert.equal(await writeHistory(client, id, validateHistoryInput({ ...current, people: [{ ...current.people[0], name: 'Duplicate must not overwrite' }] })), true);
   assert.deepEqual(await readHistory(client, id), [current]);
   assert.deepEqual(await readHistory(client, other), []);
-  await listTeams(client, other);
+  await listTeams(client);
+  other = (await createTeam(client, 'Autre équipe')).activeTeamId!;
   assert.equal(await writeTeam(client, other, 1, validateTeamInput(team)), 2, 'same participant IDs work in another private team');
   assert.equal(await writeHistory(client, other, validateHistoryInput(current)), true, 'same round ID is scoped to team');
   assert.deepEqual(await readHistory(client, other), [current]);

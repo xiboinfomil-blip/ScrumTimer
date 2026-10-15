@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import { PGlite } from '@electric-sql/pglite';
-import { createTeam, listTeams, mauritiusDay, readDailyMeter, resolveSelectedTeam, saveDailyMeter, selectTeam, validateDailyCheckIns, validateDailyMeter, validateTeamName, WorkspaceError } from '../src/lib/workspace-store.ts';
-import { readHistory, readTeam, writeHistory, writeTeam } from '../src/lib/relational-store.ts';
+import { changeDailyMeter, createTeam, listTeams, mauritiusDay, readDailyMeter, resolveSelectedTeam, saveDailyMeter, selectTeam, validateDailyCheckIns, validateDailyMeter, validateTeamName, WorkspaceError } from '../src/lib/workspace-store.ts';
+import { readHistory, readTeam, resetDailyRound, writeHistory, writeTeam } from '../src/lib/relational-store.ts';
 import { validateTeamInput } from '../src/lib/team-validation.ts';
 import catalog from '../src/lib/remote-mood-catalog.json' with { type: 'json' };
 
@@ -50,7 +50,15 @@ test('migration metadata preserves every unchanged relational table and API owne
   assert.match(read('../src/lib/database.ts'), /request.headers.get\('X-Team-Id'\)/);
 });
 
-test('PGlite: legacy migration through 0002, workspace ownership, daily singleton and scoped histories', async () => {
+test('API identity is database-only, with no cookie or browser-storage dependency', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+  for (const path of ['../src/lib/database.ts', '../src/lib/workspace-store.ts', '../src/app/api/teams/route.ts', '../src/providers/team-provider.tsx']) {
+    assert.doesNotMatch(read(path), /privateSpace|next\/headers|standup-space|localStorage|sessionStorage|indexedDB|document\.cookie|Set-Cookie/i, path);
+  }
+  assert.doesNotMatch(read('../src/lib/workspace-store.ts'), /selected_team_id/, 'legacy device selections are never consulted or mutated');
+});
+
+test('PGlite: shared teams across devices, independent selection, daily singleton and reset', async () => {
   const engine = new PGlite();
   try {
     const migration = (name: string) => readFileSync(new URL(`../drizzle/${name}.sql`, import.meta.url), 'utf8');
@@ -76,34 +84,34 @@ test('PGlite: legacy migration through 0002, workspace ownership, daily singleto
         return results;
       }),
     } as unknown as Parameters<typeof writeTeam>[0];
-    const first = await listTeams(client, workspace);
+    const first = await listTeams(client);
     assert.deepEqual(first, { teams: [{ id: workspace, name: 'Mon équipe', memberCount: 1 }], activeTeamId: workspace });
-    assert.deepEqual(await listTeams(client, workspace), first);
-    const bootstrap = await Promise.all([listTeams(client, foreignWorkspace), listTeams(client, foreignWorkspace)]);
+    assert.deepEqual(await listTeams(client), first);
+    const bootstrap = await Promise.all([listTeams(client), listTeams(client)]);
     assert.deepEqual(bootstrap[0], bootstrap[1]);
     assert.equal(bootstrap[0].teams.length, 1);
-    assert.equal((await readTeam(client, foreignWorkspace)).revision, 1);
-    const created = await createTeam(client, workspace, '  Deuxième  ');
+    assert.equal(bootstrap[0].teams[0].id, workspace, 'another phone sees the existing roster, not an empty replacement');
+    assert.equal((await readTeam(client, bootstrap[0].teams[0].id, oldClock)).team!.roster[0].name, 'Élodie');
+    const created = await createTeam(client, '  Deuxième  ');
     const second = created.activeTeamId!;
     assert.match(second, /^[a-f0-9]{64}$/);
     assert.notEqual(second, workspace);
     assert.equal(created.teams.length, 2);
     assert.deepEqual(await readTeam(client, second), { team: validateTeamInput({ ...legacyTeam, roster: [], usedMoodMeters: [] }), revision: 1 });
-    await assert.rejects(createTeam(client, workspace, 'deuxième'), (error: unknown) => (error as { code?: string }).code === '23505');
-    assert.equal((await listTeams(client, workspace)).activeTeamId, second, 'duplicate transaction cannot alter selection');
-    assert.equal((await createTeam(client, foreignWorkspace, 'Deuxième')).teams.length, 2, 'names scoped to workspace');
-    assert.equal(await resolveSelectedTeam(client, workspace), second);
-    assert.equal(await resolveSelectedTeam(client, workspace, workspace), workspace, 'explicit header takes precedence');
-    for (const id of [foreignWorkspace, 'f'.repeat(64), '', 'bad']) await assert.rejects(resolveSelectedTeam(client, workspace, id), forbidden);
-    await assert.rejects(resolveSelectedTeam(client, 'c'.repeat(64), workspace), forbidden);
-    await assert.rejects(selectTeam(client, workspace, foreignWorkspace), forbidden);
-    await assert.rejects(selectTeam(client, workspace, 'e'.repeat(64)), forbidden);
-    assert.equal((await selectTeam(client, workspace, workspace)).activeTeamId, workspace);
-    await engine.query('UPDATE workspaces SET selected_team_id=$1 WHERE id=$2', [foreignWorkspace, workspace]);
-    await assert.rejects(resolveSelectedTeam(client, workspace), forbidden);
-    assert.equal((await listTeams(client, workspace)).activeTeamId !== foreignWorkspace, true, 'repairs foreign selection');
+    await assert.rejects(createTeam(client, 'deuxième'), (error: unknown) => error instanceof WorkspaceError && error.status === 409);
+    assert.equal((await listTeams(client)).teams.length, 2, 'new teams visible without a device identity');
+    assert.equal(await resolveSelectedTeam(client, workspace), workspace);
+    assert.equal(await resolveSelectedTeam(client, second), second, 'explicit team is shared');
+    for (const id of [null, foreignWorkspace, 'f'.repeat(64), '', 'bad']) await assert.rejects(resolveSelectedTeam(client, id), forbidden);
+    await assert.rejects(selectTeam(client, foreignWorkspace), forbidden);
+    await assert.rejects(selectTeam(client, 'e'.repeat(64)), forbidden);
+    const selectionsBefore = (await engine.query('SELECT id,selected_team_id FROM workspaces ORDER BY id')).rows;
+    assert.equal((await selectTeam(client, workspace)).activeTeamId, workspace);
+    assert.equal((await selectTeam(client, second)).activeTeamId, second);
+    assert.deepEqual((await engine.query('SELECT id,selected_team_id FROM workspaces ORDER BY id')).rows, selectionsBefore, 'selection never persists device state');
+    assert.equal((await engine.query('SELECT count(*)::int AS n FROM workspaces')).rows[0].n, 2, 'only legacy and shared namespaces; no device records');
     await engine.query('UPDATE workspaces SET selected_team_id=NULL WHERE id=$1', [workspace]);
-    assert.ok((await listTeams(client, workspace)).activeTeamId);
+    assert.ok((await listTeams(client)).activeTeamId, 'legacy selection is ignored');
 
     assert.deepEqual(await readTeam(client, workspace, oldClock), { team: legacyTeam, revision: 7 });
     const expired = await readTeam(client, workspace, clock);
@@ -123,26 +131,47 @@ test('PGlite: legacy migration through 0002, workspace ownership, daily singleto
     await assert.rejects(engine.query('INSERT INTO team_daily_meters(team_id,day,meter_id,title) VALUES($1,$2,$3,$4)', [workspace, '2026-10-16', 'unregistered', 'X']), 'registry FK enforced');
     // Test real write gate with the actual server date (in-memory DB only).
     await saveDailyMeter(client, second, original);
+    assert.deepEqual((await changeDailyMeter(client, second, remote)).meter, remote, 'dropdown changes shared daily choice before votes');
+    assert.deepEqual((await changeDailyMeter(client, second, original)).meter, original, 'original is selectable');
     const matching = validateTeamInput({ ...legacyTeam, roster: [{ ...legacyTeam.roster[0], moodUpdatedAt: new Date().toISOString(), moodSlide: { ...legacyTeam.roster[0].moodSlide!, meterId: original.meterId, title: original.title } }] });
     const todaysMeter = (await readDailyMeter(client, second)).meter!;
     matching.roster[0].moodSlide!.meterId = todaysMeter.meterId;
     assert.equal(await writeTeam(client, second, 1, matching), 2);
+    await assert.rejects(changeDailyMeter(client, second, remote), (error: unknown) => error instanceof WorkspaceError && error.status === 409, 'first daily vote locks the meter');
+    assert.deepEqual((await readDailyMeter(client, second)).meter, original, 'rejected change leaves meter intact');
     const mismatched = validateTeamInput({ ...matching, roster: [{ ...matching.roster[0], moodSlide: { ...matching.roster[0].moodSlide!, meterId: 'another' } }] });
     assert.equal(await writeTeam(client, second, 2, mismatched), null, 'daily consistency guarded atomically');
     assert.equal((await readTeam(client, second)).revision, 2);
-    const builtInTeam = (await createTeam(client, workspace, 'Baromètre original')).activeTeamId!;
+    const builtInTeam = (await createTeam(client, 'Baromètre original')).activeTeamId!;
     await saveDailyMeter(client, builtInTeam, original);
     const noSlide = validateTeamInput({ ...matching, roster: [{ ...matching.roster[0], moodSlide: null }] });
     assert.equal(await writeTeam(client, builtInTeam, 1, noSlide), 2, 'built-in meter needs no image reference');
     await assert.rejects(engine.query('INSERT INTO teams(id,workspace_id,name,duration,warning,sound) VALUES($1,$2,$3,120,30,true)', ['not-64-hex', workspace, 'Invalid ID']), 'existing ID constraint retained');
     const round = { ...ancient, id: 'shared-round-id', completedAt: new Date().toISOString() };
     assert.equal(await writeHistory(client, workspace, round), true);
+    assert.equal(await writeHistory(client, workspace, round), true, 'same request is idempotent');
+    assert.equal(await writeHistory(client, workspace, { ...round, id: 'second-today' }), false, 'another completion today rejected');
+    const concurrent = await Promise.all([writeHistory(client, builtInTeam, { ...round, id: 'race-a' }), writeHistory(client, builtInTeam, { ...round, id: 'race-b' })]);
+    assert.equal(concurrent.filter(Boolean).length, 1, 'exactly one concurrent completion wins');
+    await assert.rejects(changeDailyMeter(client, builtInTeam, remote), (error: unknown) => error instanceof WorkspaceError && error.status === 409, 'completed result also locks meter');
     assert.equal(await writeHistory(client, second, { ...round, people: [{ ...round.people[0], name: 'Autre équipe' }] }), true);
     assert.deepEqual(await readHistory(client, workspace), [round]);
     assert.equal((await readHistory(client, second))[0].people[0].name, 'Autre équipe');
     assert.deepEqual(await readHistory(client, foreignWorkspace), []);
+    assert.equal(await resetDailyRound(client, workspace, 'wrong-id'), false, 'stale reset cannot delete another result');
+    const oldRound = { ...round, id: 'yesterday', completedAt: new Date(Date.now() - 86400000).toISOString() };
+    await engine.query('INSERT INTO standup_sessions(team_id,id,completed_at,write_transaction) VALUES($1,$2,$3,0)', [workspace, oldRound.id, oldRound.completedAt]);
+    const beforeReset = await readTeam(client, workspace);
+    assert.equal(await resetDailyRound(client, workspace, round.id), true);
+    assert.equal(await resetDailyRound(client, workspace, round.id), false, 'reset is conditional');
+    const afterReset = await readTeam(client, workspace);
+    assert.equal(afterReset.revision, beforeReset.revision + 1, 'invalidates stale roster writers');
+    assert.equal(afterReset.team!.roster[0].name, beforeReset.team!.roster[0].name);
+    assert.equal(afterReset.team!.roster[0].mood, null);
+    assert.equal((await readHistory(client, workspace)).some(item => item.id === oldRound.id), true, 'previous days retained');
+    assert.equal(await writeHistory(client, workspace, { ...round, id: 'after-reset' }), true);
     // Same ID continues to represent the same selected-team capability after reload.
-    assert.equal(await resolveSelectedTeam(client, workspace, workspace), workspace);
-    assert.equal((await listTeams(client, workspace)).teams.find(t => t.id === second)!.memberCount, 1);
+    assert.equal(await resolveSelectedTeam(client, workspace), workspace);
+    assert.equal((await listTeams(client)).teams.find(t => t.id === second)!.memberCount, 1);
   } finally { await engine.close(); }
 });

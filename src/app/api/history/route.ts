@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { database, selectedTeam, readJson, sameOrigin, databaseFailure } from '@/lib/database';
 import { validateHistoryInput } from '@/lib/team-validation';
-import { readHistory, writeHistory } from '@/lib/relational-store';
+import { readHistory, resetDailyRound, writeHistory } from '@/lib/relational-store';
+import { mauritiusDay, strictObject } from '@/lib/workspace-store';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const db = database(); const id = await selectedTeam(request);
-    return NextResponse.json({ rounds: await readHistory(db, id) }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ rounds: await readHistory(db, id), day: mauritiusDay() }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) { return databaseFailure(error); }
 }
 export async function POST(request: Request) {
@@ -18,7 +19,20 @@ export async function POST(request: Request) {
   try {
     const db = database(); const id = await selectedTeam(request);
     // Team bootstrap must precede history writes; never create an empty team over a saved one.
-    if (!await writeHistory(db, id, round)) return new NextResponse(null, { status: 409 });
+    if (!await writeHistory(db, id, round)) return NextResponse.json({ error: 'Le point quotidien est déjà terminé aujourd’hui.' }, { status: 409 });
     return NextResponse.json({ saved: true });
+  } catch (error) { return databaseFailure(error); }
+}
+export async function DELETE(request: Request) {
+  if (!sameOrigin(request)) return new NextResponse(null, { status: 403 });
+  let roundId: unknown;
+  try {
+    roundId = strictObject(await readJson(request), ['roundId']).roundId;
+    if (typeof roundId !== 'string' || !/^[\w-]{1,100}$/.test(roundId)) throw new Error();
+  } catch { return NextResponse.json({ error: 'Bilan invalide.' }, { status: 400 }); }
+  try {
+    const db = database(); const id = await selectedTeam(request);
+    if (!await resetDailyRound(db, id, roundId as string)) return NextResponse.json({ error: 'Le bilan a changé. Rechargez la page.' }, { status: 409 });
+    return NextResponse.json({ reset: true });
   } catch (error) { return databaseFailure(error); }
 }
