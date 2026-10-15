@@ -110,6 +110,7 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
   const changeController = useRef<AbortController | null>(null);
   useEffect(() => () => changeController.current?.abort(), []);
   const initialUsed = useRef(state.usedMoodMeters ?? []);
+  const initialHasVotes = useRef(state.roster.some(person => person.mood !== null));
   const panelRef = useRef<HTMLElement>(null);
   // GIF playback is explicitly requested; Stop remains available at all times.
   const [paused, setPaused] = useState(false);
@@ -132,6 +133,7 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
   }, []);
 
   useEffect(() => {
+    if (!activeTeamId) return;
     const controller = new AbortController();
     setStatus('loading');
     setLoadError('');
@@ -145,12 +147,23 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
         const response = await fetch('/api/daily-meter', { headers, cache: 'no-store', signal: controller.signal });
         if (!response.ok) throw new Error('daily meter');
         let assigned = await response.json();
-        if (!assigned.meter) {
-          const candidate = chooseUnusedDeck(decks, initialUsed.current);
+        if (!assigned.meter || !initialHasVotes.current) {
+          const previous = decks.findIndex(item => moodMeterId(item) === assigned.meter?.meterId);
+          const candidate = chooseUnusedDeck(decks, initialUsed.current, previous);
           const meter = candidate >= 0 ? { meterId: moodMeterId(decks[candidate]), title: decks[candidate].title } : { meterId: 'original', title: 'Baromètre original' };
-          const saved = await fetch('/api/daily-meter', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(meter), signal: controller.signal });
-          if (!saved.ok) throw new Error('daily meter save');
-          assigned = await saved.json();
+          // A locked daily choice wins if another device voted during loading.
+          // Do not replace a valid choice with the original when unused decks run out.
+          if (!assigned.meter || candidate >= 0) {
+            const saved = await fetch('/api/daily-meter', { method: assigned.meter ? 'PATCH' : 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(meter), signal: controller.signal });
+            if (saved.status === 409) {
+              const current = await fetch('/api/daily-meter', { headers, cache: 'no-store', signal: controller.signal });
+              if (!current.ok) throw new Error('daily meter reload');
+              assigned = await current.json();
+            } else {
+              if (!saved.ok) throw new Error('daily meter save');
+              assigned = await saved.json();
+            }
+          }
         }
         if (!active || controller.signal.aborted) return;
         if (!assigned.meter) throw new Error('missing daily meter');

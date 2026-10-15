@@ -49,9 +49,12 @@ with sync_playwright() as p:
         select = page.locator('#meter-catalogue-select')
         expect(select).to_be_enabled()
         expect(select.locator('optgroup')).to_have_attribute('label', 'Animaux et créatures (1)')
+        expect(select).to_have_value('0')
+        assert db['patches'] == 1, 'load randomizes an unlocked original meter'
+        select.select_option('-2')
         select.select_option('0')
         expect(select).to_have_value('0')
-        assert db['patches'] == 1
+        assert db['patches'] == 3
         assert db['meter']['meterId'] == 'deck-1234567890abcdef1234'
         page.reload()
         expect(select).to_have_value('0')
@@ -81,7 +84,7 @@ with sync_playwright() as p:
         page.reload()
         expect(select).to_be_disabled()
         expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé après le premier vote')
-        assert db['patches'] == 2
+        assert db['patches'] == 4
         assert not errors, errors
         context.close()
         print(f'PASS dropdown change/reload/vote-lock {width}x{height}')

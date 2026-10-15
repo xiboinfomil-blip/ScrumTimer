@@ -6,6 +6,8 @@ import { defaultTeam, normalizeTeam } from '@/lib/team-storage';
 import { normalizeHistory, type HistoryRound } from '@/lib/history';
 import { validateHistoryInput, validateTeamInput } from '@/lib/team-validation';
 import { useNotify } from '@/providers/notification-provider';
+import { usePathname } from 'next/navigation';
+import { resolveTeamContext, teamContextUrl } from '@/lib/team-context';
 
 export interface TeamSummary {
   id: string;
@@ -50,6 +52,7 @@ const TeamContext = createContext<TeamContextValue | null>(null);
 
 export function TeamProvider({ children }: { children: ReactNode }) {
   const notify = useNotify();
+  const pathname = usePathname();
   const [state, setState] = useState(defaultTeam);
   const [ready, setReady] = useState(false);
   const [cloudStatus, setCloudStatus] = useState<TeamContextValue['cloudStatus']>('loading');
@@ -71,6 +74,14 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   const uploading = useRef(false);
   const conflict = useRef(false);
   const pendingRounds = useRef<HistoryRound[]>([]);
+
+  useEffect(() => {
+    if (!activeTeamId) return;
+    const url = teamContextUrl(window.location.href, activeTeamId);
+    if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== url) {
+      window.history.replaceState(window.history.state, '', url);
+    }
+  }, [activeTeamId, pathname]);
 
   const flush = useCallback(async () => {
     const teamId = selectedId.current;
@@ -141,6 +152,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     const memberCount = latest.current.roster.length;
     setTeams(current => current.map(team => team.id === teamId ? { ...team, memberCount } : team));
     hydrated.current = true;
+    window.history.replaceState(window.history.state, '', teamContextUrl(window.location.href, teamId));
     dirty.current = !saved.team;
     setReady(true);
     setCloudStatus(dirty.current ? 'saving' : 'saved');
@@ -163,9 +175,11 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         const list = readTeamList(await response.json());
         if (generation.current !== token || controller.signal.aborted) return;
         setTeams(list.teams);
-        selectedId.current = list.activeTeamId;
-        setActiveTeamId(list.activeTeamId);
-        await hydrateTeam(list.activeTeamId, controller, token);
+        const teamId = resolveTeamContext(list.teams.map(team => team.id), selectedId.current
+          ?? new URL(window.location.href).searchParams.get('team'), list.activeTeamId);
+        selectedId.current = teamId;
+        setActiveTeamId(teamId);
+        await hydrateTeam(teamId, controller, token);
       } catch {
         if (generation.current === token) {
           setCloudStatus('error');

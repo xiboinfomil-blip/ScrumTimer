@@ -71,7 +71,7 @@ export function TeamSwitcher() {
     if (!success) { setError('Changement impossible. Vérifiez les sauvegardes et la connexion Neon.'); return; }
     setOpen(false);
     trigger.current?.focus();
-    router.replace('/participants');
+    router.replace(`/participants${window.location.search}`);
   };
 
   const create = async () => {
@@ -93,7 +93,7 @@ export function TeamSwitcher() {
     setCreating(false);
     setOpen(false);
     trigger.current?.focus();
-    router.replace('/participants');
+    router.replace(`/participants${window.location.search}`);
   };
 
   return <div ref={root} className="relative min-w-0 max-w-52 flex-1 min-[801px]:max-w-40 min-[1101px]:max-w-52">

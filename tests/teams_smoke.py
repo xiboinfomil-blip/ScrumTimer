@@ -160,7 +160,7 @@ def choose_team(page, current, target, query, width):
     choices.first.click()
     expect(panel).to_have_count(0)
     expect(switcher(page, target)).to_be_enabled()
-    expect(page).to_have_url(re.compile(r'/participants$'))
+    expect(page).to_have_url(re.compile(r'/participants(?:\?team=[a-f0-9]{64})?$'))
     saved(page)
 
 
@@ -193,13 +193,13 @@ with sync_playwright() as p:
         first_meter = deepcopy(db.daily[(DEFAULT_ID, db.day)])
         assert first_meter == {'meterId': NEW_ID, 'title': 'New meter'}
         meter_editable(page, db.day)
-        # Selection changes are mocked PATCHes, persist on reload, and do not
-        # replace the single daily assignment POST or create a historical round.
+        # Manual and load-time choices use PATCH without another initialization
+        # POST or historical round; refresh randomizes only before votes.
         page.locator('#meter-catalogue-select').select_option('-2')
         meter_editable(page, db.day)
         assert db.daily[(DEFAULT_ID, db.day)] == {'meterId': 'original', 'title': 'Baromètre original'}
         page.reload()
-        expect(page.locator('#meter-catalogue-select')).to_have_value('-2')
+        expect(page.locator('#meter-catalogue-select')).to_have_value('0')
         meter_editable(page, db.day)
         page.locator('#meter-catalogue-select').select_option('0')
         meter_editable(page, db.day)
@@ -235,7 +235,7 @@ with sync_playwright() as p:
         panel.get_by_role('textbox', name='Nom de la nouvelle équipe', exact=True).fill('  Équipe Bêta  ')
         panel.get_by_role('button', name='Créer l’équipe', exact=True).click()
         expect(switcher(page, 'Équipe Bêta')).to_be_enabled()
-        expect(page).to_have_url(re.compile(r'/participants$'))
+        expect(page).to_have_url(re.compile(r'/participants(?:\?team=[a-f0-9]{64})?$'))
         saved(page)
         assert db.active == CREATED_ID
         assert not db.teams[CREATED_ID]['team']['roster']
