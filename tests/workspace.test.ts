@@ -56,7 +56,7 @@ test('API identity is database-only, with no cookie or browser-storage dependenc
   for (const path of ['../src/lib/database.ts', '../src/lib/workspace-store.ts', '../src/app/api/teams/route.ts', '../src/providers/team-provider.tsx']) {
     assert.doesNotMatch(read(path), /privateSpace|next\/headers|standup-space|localStorage|sessionStorage|indexedDB|document\.cookie|Set-Cookie/i, path);
   }
-  assert.doesNotMatch(read('../src/lib/workspace-store.ts'), /selected_team_id/, 'legacy device selections are never consulted or mutated');
+  assert.doesNotMatch(read('../src/lib/workspace-store.ts').replace(/export async function deleteTeam[\s\S]*?(?=export async function selectTeam)/, ''), /selected_team_id/, 'legacy selections are only cleared for explicit deletion, never consulted or persisted during selection');
 });
 
 test('PGlite: shared teams across devices, independent selection, daily singleton and reset', async () => {

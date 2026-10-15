@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, InputBase, Paper } from '@mui/material';
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, InputBase, Paper, TextField } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
 import { NavIcon } from '@/components/layout/nav-icon';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
@@ -11,12 +11,15 @@ const inputStyle = { minHeight: 48, width: '100%', minWidth: 0, fontSize: 14, px
 const searchable = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr-FR');
 
 export function TeamsPage() {
-  const { teams, activeTeamId, teamBusy, ready, cloudStatus, switchTeam, createTeam } = useTeam();
+  const { teams, activeTeamId, teamBusy, ready, cloudStatus, switchTeam, createTeam, deleteTeam } = useTeam();
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [name, setName] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
+  const [confirmation, setConfirmation] = useState('');
+  const confirmationInput = useRef<HTMLInputElement>(null);
   const results = teams.filter(team => searchable(team.name).includes(searchable(query.trim())));
   const disabled = teamBusy || pending || !ready;
   async function choose(id: string, manage: boolean) {
@@ -39,6 +42,13 @@ export function TeamsPage() {
     if (success) router.push(`/manage-team${window.location.search}`);
     else setError('Création impossible. Ce nom existe peut-être déjà ; vérifiez aussi la connexion.');
   }
+  async function remove() {
+    if (!deleting || disabled || confirmation !== deleting.name) return;
+    setPending(true); setError('');
+    const success = await deleteTeam(deleting.id, deleting.name);
+    setPending(false); setDeleting(null); setConfirmation('');
+    if (!success) setError('Suppression non confirmée. Réessayez la connexion Neon avant de continuer.');
+  }
   return <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-4 overflow-y-auto pb-2" aria-labelledby="teams-heading">
     <header className="relative shrink-0 overflow-hidden rounded-2xl border border-line bg-white p-6 max-[650px]:p-4">
       <span className="absolute inset-y-5 left-0 w-1 rounded-r bg-accent" aria-hidden="true" />
@@ -57,10 +67,16 @@ export function TeamsPage() {
           {results.map(team => <Paper component="li" elevation={0} key={team.id} className={`flex min-w-0 flex-col gap-4 rounded-2xl border bg-white p-4 ${activeTeamId === team.id ? 'border-brand/30' : 'border-line'}`}>
             <div className="flex min-w-0 items-start gap-3"><span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-xl bg-blue-50 text-base font-bold text-brand">{Array.from(team.name)[0]?.toLocaleUpperCase('fr-FR')}</span><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-bold text-ink" title={team.name}>{team.name}</h3><p className="mt-1 text-xs text-muted">{team.memberCount} membre{team.memberCount === 1 ? '' : 's'}</p></div>{activeTeamId === team.id && <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-brand">Actuelle</span>}</div>
             <div className="mt-auto grid grid-cols-[1fr_auto] gap-2"><Button variant="contained" disableElevation disabled={disabled} onClick={() => void choose(team.id, false)} aria-label={`Ouvrir l’équipe ${team.name}`} sx={{ minHeight: 44, fontSize: 12, textTransform: 'none', borderRadius: '12px' }}>Ouvrir l’équipe <span aria-hidden="true" className="ml-2">→</span></Button><Button variant="outlined" disabled={disabled} onClick={() => void choose(team.id, true)} aria-label={`Gérer l’équipe ${team.name}`} sx={{ minHeight: 44, minWidth: 44, fontSize: 12, textTransform: 'none', borderRadius: '12px' }}>Gérer</Button></div>
+            <Button color="error" disabled={disabled || cloudStatus !== 'saved'} onClick={() => { setDeleting({ id: team.id, name: team.name }); setConfirmation(''); }} aria-label={`Supprimer l’équipe ${team.name}`} sx={{ minHeight: 44, alignSelf: 'flex-end', fontSize: 11, textTransform: 'none' }}>Supprimer l’équipe</Button>
           </Paper>)}
         </ul>}
       </section>
       <Paper component="aside" elevation={0} className="rounded-2xl border border-line bg-white p-5" aria-labelledby="create-team-heading"><span className="mb-3 grid size-10 place-items-center rounded-xl bg-orange-50 text-accent" aria-hidden="true"><NavIcon name="plus" /></span><h2 id="create-team-heading" className="text-base font-bold text-ink">Une nouvelle équipe ?</h2><p className="mt-2 text-xs leading-relaxed text-muted">Créez son espace, ajoutez ses membres, puis lancez votre premier point.</p><form onSubmit={event => void create(event)} className="mt-4 flex flex-col gap-2" noValidate><label htmlFor="new-team-name" className="text-xs font-semibold text-ink">Nom de l’équipe</label><InputBase id="new-team-name" value={name} onChange={event => setName(event.target.value)} placeholder="Ex. Équipe Produit" sx={inputStyle} className="rounded-xl border border-line bg-slate-50 focus-within:ring-2 focus-within:ring-brand/20" /><Button type="submit" variant="outlined" disabled={disabled} sx={{ minHeight: 44, mt: 1, fontSize: 12, textTransform: 'none', borderRadius: '12px' }}>Créer une équipe</Button></form><p className="mt-4 border-t border-line pt-3 text-[10px] leading-relaxed text-muted">Les équipes sont partagées sur ce site. Les présences, humeurs et bilans restent propres à chacune.</p></Paper>
     </div>
+    <Dialog open={Boolean(deleting)} onClose={() => { if (!pending) setDeleting(null); }} slotProps={{ transition: { onEntered: () => confirmationInput.current?.focus() } }} fullWidth maxWidth="sm" aria-labelledby="delete-team-title">
+      <DialogTitle id="delete-team-title">Supprimer définitivement cette équipe ?</DialogTitle>
+      <DialogContent><p className="mb-3 text-sm text-muted">L’équipe <strong>{deleting?.name}</strong>, ses participants, présences, humeurs, baromètres enregistrés, bilans, retours et questions personnalisées seront supprimés de la base pour tous les appareils. Cette action est irréversible. Les autres équipes et le catalogue partagé sont conservés.</p><TextField inputRef={confirmationInput} autoFocus fullWidth label="Recopiez le nom exact de l’équipe" value={confirmation} disabled={pending} onChange={event => setConfirmation(event.target.value)} autoComplete="off" /></DialogContent>
+      <DialogActions><Button disabled={pending} onClick={() => setDeleting(null)}>Annuler</Button><Button color="error" variant="contained" disabled={disabled || confirmation !== deleting?.name} onClick={() => void remove()}>{pending ? 'Suppression…' : 'Supprimer définitivement'}</Button></DialogActions>
+    </Dialog>
   </div>;
 }

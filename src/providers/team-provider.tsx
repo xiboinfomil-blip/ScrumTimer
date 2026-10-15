@@ -17,15 +17,15 @@ export interface TeamSummary {
 
 interface TeamList {
   teams: TeamSummary[];
-  activeTeamId: string;
+  activeTeamId: string | null;
 }
 
 function readTeamList(value: unknown): TeamList {
   const list = value as TeamList | null;
-  if (!list || !Array.isArray(list.teams) || typeof list.activeTeamId !== 'string'
+  if (!list || !Array.isArray(list.teams) || (list.activeTeamId !== null && typeof list.activeTeamId !== 'string')
     || !list.teams.every(team => typeof team.id === 'string' && typeof team.name === 'string'
       && Number.isInteger(team.memberCount) && team.memberCount >= 0)
-    || !list.teams.some(team => team.id === list.activeTeamId)) throw new Error('Liste des équipes invalide.');
+    || (list.teams.length ? !list.teams.some(team => team.id === list.activeTeamId) : list.activeTeamId !== null)) throw new Error('Liste des équipes invalide.');
   return list;
 }
 
@@ -40,6 +40,7 @@ interface TeamContextValue {
   setDailyReady: (ready: boolean) => void;
   switchTeam: (id: string) => Promise<boolean>;
   createTeam: (name: string) => Promise<boolean>;
+  deleteTeam: (id: string, name: string) => Promise<boolean>;
   state: TeamState;
   ready: boolean;
   cloudStatus: 'loading' | 'saved' | 'saving' | 'error';
@@ -161,6 +162,21 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     return true;
   }, []);
 
+  const clearSelection = useCallback(() => {
+    selectedId.current = null;
+    setActiveTeamId(null);
+    latest.current = defaultTeam();
+    setState(latest.current);
+    revision.current = 0;
+    dirty.current = false;
+    hydrated.current = true;
+    setTodayRound(null);
+    setDailyReady(false);
+    window.history.replaceState(window.history.state, '', '/teams');
+    setReady(true);
+    setCloudStatus('saved');
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     loadController.current = controller;
@@ -177,6 +193,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         const list = readTeamList(await response.json());
         if (generation.current !== token || controller.signal.aborted) return;
         setTeams(list.teams);
+        if (!list.activeTeamId) { clearSelection(); return; }
         const teamId = resolveTeamContext(list.teams.map(team => team.id), selectedId.current
           ?? new URL(window.location.href).searchParams.get('team'), list.activeTeamId);
         selectedId.current = teamId;
@@ -197,7 +214,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       }
     })();
     return () => { if (generation.current === token) generation.current = token + 1; clearTimeout(timeout); controller.abort(); loadController.current?.abort(); writeController.current?.abort(); };
-  }, [retry, flush, hydrateTeam, notify]);
+  }, [retry, flush, hydrateTeam, notify, clearSelection]);
 
   const changeTeam = useCallback(async (method: 'PATCH' | 'POST', body: { teamId: string } | { name: string }) => {
     if (busy.current || uploading.current || dirty.current || pendingRounds.current.length || conflict.current) {
@@ -224,6 +241,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       if (!response.ok) throw new Error('Le changement d’équipe a échoué. Réessayez Neon.');
       const list = readTeamList(await response.json());
       if (generation.current !== token || controller.signal.aborted) return false;
+      if (!list.activeTeamId) throw new Error('Équipe sélectionnée indisponible.');
       selected = true;
       selectedId.current = list.activeTeamId;
       // Hide the previous guarded route before a newly created empty team hydrates.
@@ -264,6 +282,46 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     }
     return changeTeam('POST', { name: clean });
   }, [changeTeam, notify]);
+
+  const deleteTeam = useCallback(async (id: string, name: string) => {
+    if (!teams.some(team => team.id === id && team.name === name) || busy.current || uploading.current || dirty.current || pendingRounds.current.length || conflict.current || !hydrated.current) {
+      notify('Suppression indisponible. Attendez la confirmation des sauvegardes et vérifiez l’équipe.', 'warning');
+      return false;
+    }
+    busy.current = true; setTeamBusy(true); setCloudStatus('saving');
+    const controller = new AbortController();
+    loadController.current?.abort(); loadController.current = controller;
+    const token = ++generation.current;
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch('/api/teams', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teamId: id, name }), signal: controller.signal });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? 'Suppression non confirmée. Réessayez Neon.');
+      const list = readTeamList(body);
+      if (generation.current !== token || controller.signal.aborted) return false;
+      setTeams(list.teams);
+      if (selectedId.current === id) {
+        // Leave stale guarded route children before changing the team state.
+        window.history.replaceState(window.history.state, '', '/teams');
+        setDailyReady(false); setTodayRound(null); setReady(false);
+        hydrated.current = false;
+        if (!list.activeTeamId) clearSelection();
+        else {
+          selectedId.current = list.activeTeamId; setActiveTeamId(list.activeTeamId);
+          await hydrateTeam(list.activeTeamId, controller, token);
+        }
+      } else setCloudStatus('saved');
+      notify('Équipe et toutes ses données associées supprimées.');
+      return true;
+    } catch (error) {
+      if (generation.current === token) {
+        // A timeout can follow a committed deletion. Block writes until reloaded.
+        hydrated.current = false; setReady(false); setCloudStatus('error');
+        notify(error instanceof Error && error.name !== 'AbortError' ? error.message : 'Suppression non confirmée. Réessayez Neon pour recharger les équipes.', 'error');
+      }
+      return false;
+    } finally { clearTimeout(timeout); if (generation.current === token) { busy.current = false; setTeamBusy(false); } }
+  }, [teams, notify, hydrateTeam, clearSelection]);
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -329,7 +387,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     } finally { clearTimeout(timeout); busy.current = false; setTeamBusy(false); }
   }, [todayRound, hydrateTeam, notify]);
   const activeTeamName = teams.find(team => team.id === activeTeamId)?.name ?? '';
-  return <TeamContext.Provider value={{ teams, activeTeamId, activeTeamName, teamBusy, dailyReady, todayRound, resetToday, setDailyReady, switchTeam, createTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;
+  return <TeamContext.Provider value={{ teams, activeTeamId, activeTeamName, teamBusy, dailyReady, todayRound, resetToday, setDailyReady, switchTeam, createTeam, deleteTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;
 }
 
 export function useTeam() {
