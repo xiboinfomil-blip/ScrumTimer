@@ -32,7 +32,7 @@ with sync_playwright() as p:
                     db['patches'] += 1
                 route.fulfill(json={'day': day, 'meter': db['meter']})
             elif path == '/api/mood-meters/catalog':
-                route.fulfill(json=[{'title': 'Test meter', 'remoteId': 'deck-1234567890abcdef1234', 'slides': []}])
+                route.fulfill(json=[{'title': 'Test meter', 'category': 'Animals & Creatures', 'remoteId': 'deck-1234567890abcdef1234', 'slides': []}])
             elif path.startswith('/api/mood-meters/decks/'):
                 route.fulfill(json={'title': 'Test meter', 'slides': ['mood-meters/slides/test/page.svg']})
             else:
@@ -46,6 +46,7 @@ with sync_playwright() as p:
         page.goto(BASE + '/mood')
         select = page.locator('#meter-catalogue-select')
         expect(select).to_be_enabled()
+        expect(select.locator('optgroup')).to_have_attribute('label', 'Animaux et créatures (1)')
         select.select_option('0')
         expect(select).to_have_value('0')
         assert db['patches'] == 1
@@ -53,6 +54,7 @@ with sync_playwright() as p:
         page.reload()
         expect(select).to_have_value('0')
         expect(select).to_be_enabled()
+        expect(select.locator('optgroup')).to_have_attribute('label', 'Animaux et créatures (1)')
         select.select_option('-2')
         expect(select).to_have_value('-2')
         if width <= 800:

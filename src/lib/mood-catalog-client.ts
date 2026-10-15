@@ -18,5 +18,5 @@ export async function loadMoodDeck(deck: MoodMeterDeck, signal: AbortSignal): Pr
   if (!response.ok) throw new Error('Présentation Google indisponible.');
   const [loaded] = parseMoodMeterCatalog([await response.json()]);
   if (!loaded?.slides.length) throw new Error('Présentation invalide.');
-  return { ...loaded, title: deck.title, remoteId: deck.remoteId };
+  return { ...loaded, title: deck.title, remoteId: deck.remoteId, category: deck.category };
 }

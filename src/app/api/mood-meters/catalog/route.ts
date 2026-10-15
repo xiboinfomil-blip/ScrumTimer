@@ -1,5 +1,9 @@
-import { remoteCatalog } from '@/lib/google-slides';
+import { cachedMoodCatalog } from '@/lib/remote-mood-cache';
 export const dynamic = 'force-dynamic';
 export async function GET() {
-  return Response.json(remoteCatalog);
+  try {
+    return Response.json(await cachedMoodCatalog(), { headers: { 'Cache-Control': 'no-store' } });
+  } catch {
+    return Response.json({ error: 'Cache des baromètres indisponible.' }, { status: 503 });
+  }
 }

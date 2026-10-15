@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import catalog from './remote-mood-catalog.json';
 
-export const remoteCatalog = catalog.map(({ id, title }) => ({ remoteId: id, title, slides: [] }));
+export const remoteCatalog = catalog.map(({ id, title, category }) => ({ remoteId: id, title, category, slides: [] }));
 export const findPresentation = (id: string) => catalog.find(item => item.id === id);
 
 export function parseGoogleSlideIds(html: string): string[] {
@@ -39,10 +39,10 @@ async function request(googleId: string, pageId?: string): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-export async function fetchGoogleSlide(googleId: string, pageId?: string): Promise<string> {
+export async function fetchGoogleSlide(googleId: string, pageId?: string, fresh = false): Promise<string> {
   const key = `${googleId}:${pageId || ''}`;
   const cached = cache.get(key);
-  if (cached && cached.expires > Date.now()) return cached.text;
+  if (!fresh && cached && cached.expires > Date.now()) return cached.text;
   const existing = pending.get(key);
   if (existing) return existing;
   if (pending.size >= 8) throw new Error('Too many Google requests');

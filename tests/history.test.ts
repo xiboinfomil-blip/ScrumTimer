@@ -21,10 +21,10 @@ test('historical leaderboard averages measured scores, shares ties and keeps par
   assert.equal(rows[3].turns, 1);
   assert.equal(historyLeaderboard([{ ...round, completedAt: '2026-09-01T00:00:00Z' }], now).length, 0);
 });
-test('history retains exactly ten UTC calendar days and excludes future and duplicate results', () => {
-  assert.equal(historyCutoff(now).toISOString(), '2026-10-05T00:00:00.000Z');
-  const oldest = { ...round, id: 'oldest', completedAt: '2026-10-05T00:00:00Z' };
-  const expired = { ...round, id: 'expired', completedAt: '2026-10-04T23:59:59Z' };
+test('history retains exactly five UTC calendar days including today and excludes future and duplicate results', () => {
+  assert.equal(historyCutoff(now).toISOString(), '2026-10-10T00:00:00.000Z');
+  const oldest = { ...round, id: 'oldest', completedAt: '2026-10-10T00:00:00Z' };
+  const expired = { ...round, id: 'expired', completedAt: '2026-10-09T23:59:59.999Z' };
   const future = { ...round, id: 'future', completedAt: '2026-10-14T12:01:00Z' };
   assert.deepEqual(normalizeHistory([round, round, oldest, expired, future, null], now).map(r => r.id), ['round-1', 'oldest']);
 });
@@ -37,9 +37,10 @@ test('history rejects malformed or unbounded participant metrics and sanitizes t
 test('daily summary fills empty days and does not call unmeasured skips on time', () => {
   const skipped = { ...round, id: 'skip', people: [{ ...round.people[0], speakingSeconds: 0, budgetSeconds: 0 }] };
   const days = summarizeDays([round, skipped], now);
-  assert.equal(days.length, 10);
+  assert.equal(days.length, 5);
+  assert.equal(days[0].date, '2026-10-10');
   assert.equal(days[0].rounds, 0);
-  assert.deepEqual(days[9], { date: '2026-10-14', rounds: 2, participants: 2, seconds: 30, withinTime: 1, moods: [0, 2, 0, 0] });
+  assert.deepEqual(days[4], { date: '2026-10-14', rounds: 2, participants: 2, seconds: 30, withinTime: 1, moods: [0, 2, 0, 0] });
 });
 test('round snapshot retains stable id, meter label and calculated score', () => {
   const result = completedRound('stable-round', [{ id: 'a', name: '<b>Alice</b>', mood: 1, present: true, moodUpdatedAt: null, moodSlide: { title: 'Used deck', image: '/mood-meters/slides/deck/1.svg', slideNumber: 1 }, done: true, started: true, speakingSeconds: 30, budgetSeconds: 120, timeUp: false, attempts: 1 }]);

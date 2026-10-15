@@ -6,10 +6,11 @@ export interface HistoryPerson {
   budgetSeconds: number; timeUp: boolean; score: number | null; meterTitle: string | null;
 }
 export interface HistoryRound { id: string; completedAt: string; people: HistoryPerson[] }
+export const HISTORY_DAYS = 5;
 export function historyCutoff(now = new Date()) {
   const cutoff = new Date(now);
   cutoff.setUTCHours(0, 0, 0, 0);
-  cutoff.setUTCDate(cutoff.getUTCDate() - 9);
+  cutoff.setUTCDate(cutoff.getUTCDate() - (HISTORY_DAYS - 1));
   return cutoff;
 }
 export function normalizeHistory(value: unknown, now = new Date()): HistoryRound[] {
@@ -35,7 +36,7 @@ export function completedRound(id: string, people: SessionSpeaker[]): HistoryRou
 }
 export function summarizeDays(value: HistoryRound[], now = new Date()) {
   const rounds = normalizeHistory(value, now);
-  return Array.from({ length: 10 }, (_, index) => {
+  return Array.from({ length: HISTORY_DAYS }, (_, index) => {
     const date = historyCutoff(now); date.setUTCDate(date.getUTCDate() + index);
     const key = date.toISOString().slice(0, 10);
     const selected = rounds.filter(round => round.completedAt.slice(0, 10) === key);

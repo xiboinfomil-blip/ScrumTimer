@@ -15,10 +15,10 @@ const round = { id: 'round-1', completedAt: now.toISOString(), people: [{ id: 'p
 
 test('normalized schema has no JSON columns, scoped identity keys and relational integrity', () => {
   const configs = Object.values(schema).map(getTableConfig);
-  assert.equal(configs.length, 12);
+  assert.equal(configs.length, 15);
   for (const table of configs) {
     for (const column of table.columns) assert.ok(!/json/i.test(column.getSQLType()), `${table.name}.${column.name}`);
-    if (!['teams', 'workspaces'].includes(table.name)) {
+    if (!['teams', 'workspaces'].includes(table.name) && !table.name.startsWith('remote_mood_')) {
       assert.equal(table.primaryKeys[0].columns[0].name, 'team_id');
       assert.ok(table.foreignKeys.length > 0);
     }
@@ -56,7 +56,7 @@ test('history writes serialize on the private team and idempotently gate all chi
     assert.ok(!s.sql.includes('private-id'));
   }
   assert.match(statements[5].sql, /WHERE team_id=\$\d+ AND completed_at/);
-  assert.ok(statements[5].params.includes('2026-10-05T00:00:00.000Z'));
+  assert.ok(statements[5].params.includes('2026-10-10T00:00:00.000Z'));
 });
 test('strict team validation accepts exact contracts and rejects malformed input without normalization', () => {
   assert.deepEqual(validateTeamInput(team).roster, team.roster);
@@ -160,5 +160,25 @@ test('PostgreSQL: legacy backfill, CAS isolation, atomic rollback, scoped reads 
   assert.equal(await writeTeam(client, id, 8, validateTeamInput({ ...team, roster: [] })), 9);
   assert.deepEqual(await readHistory(client, id), [current], 'removal preserves historical identity and name');
   assert.equal((await engine.query('SELECT count(*)::int AS n FROM participants WHERE team_id=$1 AND id=$2', [id, 'removed'])).rows[0].n, 1);
+  // Five-day retention deletes actual rows and cascades only their speaking
+  // turns. Exact midnight is retained; one millisecond earlier is expired.
+  for (const owner of [id, other]) {
+    for (const [session, completedAt] of [['boundary', '2026-10-10T00:00:00Z'], ['expired', '2026-10-09T23:59:59.999Z']]) {
+      await engine.query('INSERT INTO standup_sessions(team_id,id,completed_at) VALUES($1,$2,$3)', [owner, session, completedAt]);
+      await engine.query("INSERT INTO speaking_turns(team_id,session_id,participant_id,position,name_snapshot,mood,speaking_seconds,budget_seconds,time_up,score) VALUES($1,$2,'person-1',0,'Retained identity',2,20,120,false,900)", [owner, session]);
+    }
+  }
+  const retained = await readHistory(client, id, now);
+  assert.ok(retained.some(result => result.id === 'boundary'));
+  assert.ok(!retained.some(result => result.id === 'expired'));
+  assert.equal((await engine.query("SELECT count(*)::int AS n FROM speaking_turns WHERE team_id=$1 AND session_id='expired'", [id])).rows[0].n, 0);
+  assert.equal((await engine.query("SELECT count(*)::int AS n FROM standup_sessions WHERE team_id=$1 AND id='expired'", [other])).rows[0].n, 1, 'another team is not pruned by this read');
+  const statements = historyWriteStatements(other, { ...round, id: 'retention-write' }, now);
+  await client.batch(statements.map(statement => client.execute(statement)) as Parameters<typeof client.batch>[0]);
+  assert.equal((await engine.query("SELECT count(*)::int AS n FROM standup_sessions WHERE team_id=$1 AND id='expired'", [other])).rows[0].n, 0, 'saving a result also prunes expired history');
+  assert.equal((await engine.query("SELECT count(*)::int AS n FROM speaking_turns WHERE team_id=$1 AND session_id='expired'", [other])).rows[0].n, 0);
+  assert.equal((await engine.query("SELECT count(*)::int AS n FROM standup_sessions WHERE team_id=$1 AND id='boundary'", [other])).rows[0].n, 1);
+  assert.equal((await engine.query("SELECT count(*)::int AS n FROM participants WHERE id='person-1'")).rows[0].n, 2, 'participant identities survive retention');
+  assert.equal((await engine.query('SELECT count(*)::int AS n FROM teams')).rows[0].n, 2);
   await engine.close();
 });

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { card } from '@/components/ui/styles';
 import {
-  chooseUnusedDeck, displayTitle, moodMeterId, isAnimatedImage, overlayCropStyle,
+  chooseUnusedDeck, displayTitle, groupMoodMeters, moodMeterId, isAnimatedImage, overlayCropStyle,
   overlayMatrix, type MoodMeterDeck, type MoodMeterSlide,
 } from '../../../lib/mood-meter';
 import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood-catalog-client';
@@ -241,7 +241,9 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
         <select id="meter-catalogue-select" className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-slate-50/60 px-3 text-xs font-medium text-brand focus:bg-white disabled:opacity-75" disabled={!canChange} aria-describedby="daily-meter-note" value={String(selection.deck)} onChange={event => void selectDeck(Number(event.target.value))}>
           <option value="-1" disabled>{status === 'loading' ? 'Chargement…' : 'Choisissez un baromètre'}</option>
           <option value="-2">Baromètre original · choix manuel</option>
-          {catalog.map((item, index) => <option key={index} value={index}>{displayTitle(item)}{state.usedMoodMeters?.includes(moodMeterId(item)) ? ' · Déjà utilisé' : ''}</option>)}
+          {groupMoodMeters(catalog).map(({ label, entries }) => <optgroup key={label} label={`${label} (${entries.length})`}>
+            {entries.map(({ deck: item, index }) => <option key={moodMeterId(item)} value={index}>{displayTitle(item)}{state.usedMoodMeters?.includes(moodMeterId(item)) ? ' · Déjà utilisé' : ''}</option>)}
+          </optgroup>)}
         </select>
         <button id="random-meter-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-lg border border-line text-lg text-brand hover:bg-blue-50" aria-label="Afficher un autre baromètre au hasard"
           title="Choisir un autre baromètre avant le premier vote" disabled={!canChange}

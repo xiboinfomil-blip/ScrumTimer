@@ -70,7 +70,7 @@ with sync_playwright() as p:
     page.wait_for_function("document.querySelector('#meter-catalogue-select')?.selectedOptions[0]?.textContent === 'New meter'")
     expect(page.locator('#meter-catalogue-select')).to_be_disabled()
     expect(page.locator('#random-meter-button')).to_be_disabled()
-    expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé pour la journée')
+    expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé après le premier vote')
     assert db['daily'] == {'meterId': 'deck-abcdef1234567890abcd', 'title': 'New meter'}
     expect(page.locator('#meter-slide-stack img')).to_have_count(2)
     for width, height in [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]:
@@ -103,10 +103,19 @@ with sync_playwright() as p:
     assert len(db['rounds']) == 1
     assert db['rounds'][0]['people'][0]['speakingSeconds'] >= 1
     assert writes
+    expired = deepcopy(db['rounds'][0])
+    expired['id'] = 'expired-history'
+    expired['completedAt'] = '2020-01-01T00:00:00.000Z'
+    expired['people'][0]['id'] = 'expired-person'
+    expired['people'][0]['name'] = 'Expired participant'
+    db['rounds'].append(expired)
     page.get_by_role('link', name='Statistiques', exact=True).click()
     page.get_by_text('Historique chargé depuis Neon', exact=False).wait_for()
     expect(page.locator('dd').first).to_have_text('1')
+    expect(page.locator('#daily-heading')).to_have_text('Activité · 5 derniers jours')
+    expect(page.locator('#daily-heading').locator('..').locator('ol > li')).to_have_count(5)
     leaderboard = page.get_by_role('list', name='Classement des participants', exact=True)
+    expect(leaderboard.get_by_text('Expired participant', exact=True)).to_have_count(0)
     expect(leaderboard.get_by_text('Alice <safe>', exact=True)).to_have_count(1)
     expect(leaderboard.get_by_label('Rang 1', exact=True)).to_have_count(1)
     page.reload()

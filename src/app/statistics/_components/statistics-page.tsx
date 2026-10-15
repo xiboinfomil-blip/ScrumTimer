@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { type HistoryRound, historyLeaderboard, normalizeHistory, summarizeDays } from '@/lib/history';
+import { HISTORY_DAYS, type HistoryRound, historyLeaderboard, normalizeHistory, summarizeDays } from '@/lib/history';
 import { useTeam } from '@/providers/team-provider';
 import { card, routeStage, secondaryButton } from '@/components/ui/styles';
 
@@ -115,7 +115,7 @@ export function StatisticsPage() {
       <header className="flex shrink-0 flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h1 id="statistics-heading" className="text-xl font-bold text-brand">Statistiques</h1>
-          <p className="text-xs text-muted">{activeTeamName} · Les 10 derniers jours UTC, en un coup d’œil.</p>
+          <p className="text-xs text-muted">{activeTeamName} · Les {HISTORY_DAYS} derniers jours UTC, aujourd’hui inclus.</p>
         </div>
         <button type="button" disabled={loading} onClick={() => setRefresh((value) => value + 1)} className={`${secondaryButton} ${focus}`}>
           {loading ? 'Chargement…' : source === 'neon' ? 'Actualiser' : 'Réessayer'}
@@ -141,12 +141,12 @@ export function StatisticsPage() {
             </div>
           ))}
         </dl>
-        <p className="text-[10px] text-muted">10 jours UTC · {duration(seconds)} de parole. Moyenne et respect du temps : passages mesurés (≥ 1 s) uniquement. Les numéros d’humeur ne sont pas comparables entre baromètres.</p>
+        <p className="text-[10px] text-muted">{HISTORY_DAYS} jours UTC · {duration(seconds)} de parole. Les bilans plus anciens sont supprimés de la base au chargement ou à l’enregistrement d’un bilan de cette équipe. Moyenne et respect du temps : passages mesurés (≥ 1 s) uniquement. Les numéros d’humeur ne sont pas comparables entre baromètres.</p>
 
         <section aria-labelledby="daily-heading" className={`${card} p-3`}>
-          <h2 id="daily-heading" className="text-sm font-semibold text-brand">Activité · 10 derniers jours</h2>
+          <h2 id="daily-heading" className="text-sm font-semibold text-brand">Activité · {HISTORY_DAYS} derniers jours</h2>
           <p className="mb-2 text-[11px] text-muted">Nombre de points terminés par jour.</p>
-          <ol className="grid grid-cols-10 gap-1 sm:gap-3">
+          <ol className="grid grid-cols-5 gap-1 sm:gap-3">
             {days.map((day) => (
               <li key={day.date} className="min-w-0 text-center">
                 <span className="sr-only">{dateLabel(day.date)} : {day.rounds} points, {day.participants} tours de parole, {duration(day.seconds)}.</span>
@@ -164,7 +164,7 @@ export function StatisticsPage() {
         </section>
 
         <section aria-labelledby="leaderboard-heading" className={`${card} p-3`}>
-          <h2 id="leaderboard-heading" className="text-sm font-semibold text-brand">Classement des participants · 10 jours</h2>
+          <h2 id="leaderboard-heading" className="text-sm font-semibold text-brand">Classement des participants · {HISTORY_DAYS} jours</h2>
           <p className="mt-1 text-[11px] text-muted">Score moyen sur 1 000, pour ne pas favoriser ceux qui jouent davantage. Égalités au même rang ; passages non mesurés exclus. Les humeurs ne changent jamais le score.</p>
           {!leaderboard.length ? <p className="py-3 text-xs text-muted">Terminez un tour pour voir le classement.</p> : <>
             <ol key={currentLeaderboardPage} className="mt-2 divide-y divide-line motion-safe:animate-page-reveal" start={currentLeaderboardPage * 8 + 1} aria-label="Classement des participants">

@@ -25,6 +25,7 @@ export interface MoodMeterSlide {
 
 export interface MoodMeterDeck {
   title: string;
+  category?: string;
   slides: MoodMeterSlide[];
   remoteId?: string;
 }
@@ -86,20 +87,48 @@ export function displayTitle(deck: Pick<MoodMeterDeck, 'title'>): string {
   return deck.title.replace(/--[A-Za-z0-9_-]+$/, '').trim() || deck.title;
 }
 
+const categoryLabels: Record<string, string> = {
+  'Animals & Creatures': 'Animaux et créatures',
+  'Animation & Puppetry': 'Animation et marionnettes',
+  Celebrities: 'Célébrités',
+  'Comic Books': 'Bandes dessinées et super-héros',
+  Gaming: 'Jeux',
+  'Jobs & Hobbies': 'Métiers et loisirs',
+  Movies: 'Films',
+  'Seasons & Holidays': 'Saisons et fêtes',
+  Sports: 'Sports',
+  Supplies: 'Aliments et fournitures',
+  'Theater & Musicals': 'Théâtre et comédies musicales',
+  'TV & Web Series': 'Télévision et séries web',
+  Other: 'Autres',
+};
+
+export function groupMoodMeters(decks: MoodMeterDeck[]) {
+  const groups = new Map<string, { deck: MoodMeterDeck; index: number }[]>();
+  decks.forEach((deck, index) => {
+    const label = deck.category ? categoryLabels[deck.category] ?? deck.category : 'Autres';
+    const entries = groups.get(label) ?? [];
+    entries.push({ deck, index });
+    groups.set(label, entries);
+  });
+  return [...groups].sort(([a], [b]) => a.localeCompare(b, 'fr')).map(([label, entries]) => ({ label, entries }));
+}
+
 export function parseMoodMeterCatalog(value: unknown): MoodMeterDeck[] {
   if (!Array.isArray(value)) throw new Error('Catalogue de baromètres invalide.');
   const decks: MoodMeterDeck[] = [];
   for (const item of value) {
+    const category = record(item) && typeof item.category === 'string' && item.category.trim().length <= 100 && !/\p{Cc}/u.test(item.category) ? item.category.trim() || undefined : undefined;
     if (record(item) && typeof item.title === 'string' && typeof item.remoteId === 'string' &&
         /^deck-[a-f0-9]{20}$/.test(item.remoteId) && Array.isArray(item.slides) && item.slides.length === 0) {
-      decks.push({ title: item.title, remoteId: item.remoteId, slides: [] });
+      decks.push({ title: item.title, remoteId: item.remoteId, slides: [], ...(category ? { category } : {}) });
       continue;
     }
     if (!record(item) || typeof item.title !== 'string' ||
         !Array.isArray(item.slides) || item.slides.length === 0) continue;
     const slides = item.slides.map(parseSlide);
     if (slides.some(slide => slide === null)) continue;
-    decks.push({ title: item.title, slides: slides as MoodMeterSlide[] });
+    decks.push({ title: item.title, slides: slides as MoodMeterSlide[], ...(category ? { category } : {}) });
   }
   return decks.sort((a, b) => displayTitle(a).localeCompare(displayTitle(b), 'fr', { numeric: true }));
 }

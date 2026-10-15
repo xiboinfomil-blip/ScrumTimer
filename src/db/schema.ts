@@ -1,6 +1,21 @@
 import { sql } from 'drizzle-orm';
 import { bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
+// Disposable global source cache; never references team-owned history or check-ins.
+export const remoteMoodCacheState = pgTable('remote_mood_cache_state', {
+  id: integer('id').primaryKey(), generation: text('generation').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, t => [check('remote_mood_cache_singleton', sql`${t.id} = 1`)]);
+export const remoteMoodCatalog = pgTable('remote_mood_catalog', {
+  id: text('id').primaryKey(), googleId: text('google_id').notNull(), title: text('title').notNull(), category: text('category').notNull(),
+  loadedAt: timestamp('loaded_at', { withTimezone: true }),
+}, t => [check('remote_mood_catalog_id', sql`${t.id} ~ '^deck-[a-f0-9]{20}$'`), check('remote_mood_catalog_google_id', sql`${t.googleId} ~ '^[a-zA-Z0-9_-]+$'`)]);
+export const remoteMoodPages = pgTable('remote_mood_pages', {
+  deckId: text('deck_id').notNull().references(() => remoteMoodCatalog.id, { onDelete: 'cascade' }),
+  position: integer('position').notNull(), pageId: text('page_id').notNull(),
+}, t => [primaryKey({ columns: [t.deckId, t.position] }), unique('remote_mood_pages_identity').on(t.deckId, t.pageId),
+  check('remote_mood_pages_position', sql`${t.position} BETWEEN 0 AND 499`), check('remote_mood_pages_id', sql`${t.pageId} ~ '^[a-zA-Z0-9_.-]+$' AND ${t.pageId} !~ '[.][.]'`)]);
+
 export const workspaces = pgTable('workspaces', {
   id: text('id').primaryKey(),
   selectedTeamId: text('selected_team_id').references((): AnyPgColumn => teams.id),

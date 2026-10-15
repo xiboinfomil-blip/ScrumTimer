@@ -22,6 +22,13 @@
       "when": 1791984114608,
       "tag": "0002_workspace_daily_meters",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792038201226,
+      "tag": "0003_remote_mood_cache",
+      "breakpoints": true
     }
   ]
 }
