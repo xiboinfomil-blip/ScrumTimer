@@ -57,6 +57,16 @@ Préserver les contrôles accessibles, le focus visible, les notifications en fr
 
 ## Architecture
 
+### Chargement et consommation de ressources
+
+Les chargements de route, de l’équipe, des statistiques, des questions et du baromètre affichent des **squelettes statiques** adaptés à la page : pas de shimmer, animation infinie ou temporisation artificielle. Les erreurs Neon gardent leurs messages et boutons de nouvelle tentative ; un squelette ne remplace jamais une panne ni les gardes de validation.
+
+Les lectures indépendantes équipe/historique et catalogue/baromètre quotidien démarrent en parallèle. Le minuteur n’installe aucun intervalle en préparation ou en pause ; pendant la parole, quatre rafraîchissements par seconde remplacent les dix précédents. Les échéances restent la source du temps, et chaque action mesure exactement le temps écoulé avant de modifier le décompte. L’observation des animations est limitée aux attributs utiles et aux listes, sans observer les mutations de texte du compte à rebours.
+
+Les métadonnées publiques des baromètres ont un cache **en mémoire seulement**, 60 secondes pour le catalogue et cinq minutes pour au plus 20 présentations. Les échecs et requêtes annulées ne sont pas mémorisés ; les données d’équipe, les votes et l’historique ne sont pas mis en cache par ce mécanisme. Les images utilisent le décodage asynchrone. Le spectateur ne fait pas de requêtes ni de rafraîchissements de temps lorsque son onglet est caché et resynchronise immédiatement au retour ; la diffusion du facilitateur conserve son renouvellement pour ne pas interrompre un direct en cours.
+
+Le test [loading_performance_smoke](tests/loading_performance_smoke.py) retarde volontairement les réponses pour vérifier les squelettes, les erreurs/reprises, les lectures parallèles et le nombre réel de mises à jour du minuteur. Ces mesures locales ne constituent pas une promesse de latence en production : Neon, le proxy, Google, Redis et le réseau des utilisateurs restent des dépendances externes.
+
 ### Direct, présentation, questions et retours
 
 - Sur le minuteur, **Diffusion** ouvre les commandes : **Diffuser en direct**, **Lien spectateur** et **Présentation**. La diffusion est volontaire ; le lien `/spectator?team=…` ouvre une vue sans commandes de réunion ni navigation d’édition. Elle affiche la personne active, la suivante, le temps et les passages terminés, jamais les humeurs. Ce n’est pas une autorisation d’accès : le déploiement reste partagé sans authentification.

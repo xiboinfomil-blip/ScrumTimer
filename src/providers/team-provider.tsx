@@ -137,12 +137,14 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   }, [notify]);
 
   const hydrateTeam = useCallback(async (teamId: string, controller: AbortController, token: number) => {
-    const response = await fetch('/api/team', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal });
+    // Independent reads share the cancellation/generation gate, not a network waterfall.
+    const [response, historyResponse] = await Promise.all([
+      fetch('/api/team', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal }),
+      fetch('/api/history', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal }),
+    ]);
     if (!response.ok) throw new Error('Chargement de l’équipe impossible.');
-    const saved = await response.json();
-    const historyResponse = await fetch('/api/history', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal });
     if (!historyResponse.ok) throw new Error('Chargement du bilan du jour impossible.');
-    const history = await historyResponse.json();
+    const [saved, history] = await Promise.all([response.json(), historyResponse.json()]);
     if (generation.current !== token || controller.signal.aborted) return false;
     const day = history.day ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date());
     setTodayRound(normalizeHistory(history.rounds).find(round => new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(round.completedAt)) === day) ?? null);

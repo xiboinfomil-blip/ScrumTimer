@@ -81,7 +81,7 @@ export function AnimatedImage({
   return (
     <>
       {/* Native images are needed for GIF frames and canvas snapshots. */}
-      <img key={`image:${src}`} ref={imageRef} id={id} src={src} alt={alt} className={className} style={style}
+      <img key={`image:${src}`} ref={imageRef} id={id} src={src} alt={alt} decoding="async" className={className} style={style}
         hidden={animated && paused} />
       {animated && <canvas key={`canvas:${src}`} ref={canvasRef} hidden aria-hidden={alt ? undefined : true}
         role={alt ? 'img' : 'presentation'} aria-label={alt || undefined}

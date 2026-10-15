@@ -79,6 +79,10 @@ with sync_playwright() as p:
         expect(select).to_be_enabled()
         assert meters[B] == previous
         assert len(patches) == 2
+        # Remote slide metadata loads after the catalogue becomes selectable.
+        # Wait for that slide and its context save before injecting a server
+        # vote, or a pending client PUT can overwrite the mock's injected vote.
+        expect(page.locator('#meter-slide-stack').get_by_role('img')).to_be_visible()
         page.wait_for_function("document.querySelector('.site-header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
         # Once votes exist, refresh must neither shuffle nor send a PATCH.
         teams[B]['roster'][0]['mood'] = 2
@@ -88,8 +92,13 @@ with sync_playwright() as p:
         expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé')
         assert len(patches) == 2 and meters[B] == previous
         page.get_by_role('link', name='Participants', exact=True).click()
-        page.wait_for_function("new URL(location.href).searchParams.get('team') === '" + B + "'")
+        # The team query already matches on /mood. Wait for navigation to
+        # commit before reloading, otherwise the mobile meter tab hides Bob.
+        page.wait_for_function("location.pathname === '/participants' && new URL(location.href).searchParams.get('team') === '" + B + "'")
+        expect(page.locator('#participants-page')).to_be_visible()
         page.reload()
+        expect(page.locator('#participants-page')).to_be_visible()
+        assert urlparse(page.url).path == '/participants'
         expect(page.get_by_text('Bob', exact=True)).to_be_visible()
         expect(page.get_by_text('Alice', exact=True)).to_have_count(0)
         # Changing the team restores a distinct roster and updates the refresh context.

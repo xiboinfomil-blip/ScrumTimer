@@ -141,10 +141,12 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
     let active = true;
     async function load() {
       try {
-        const decks = await loadMoodCatalog(controller.signal);
-        if (!active || controller.signal.aborted) return;
         const headers = { 'X-Team-Id': activeTeamId! };
-        const response = await fetch('/api/daily-meter', { headers, cache: 'no-store', signal: controller.signal });
+        const [decks, response] = await Promise.all([
+          loadMoodCatalog(controller.signal),
+          fetch('/api/daily-meter', { headers, cache: 'no-store', signal: controller.signal }),
+        ]);
+        if (!active || controller.signal.aborted) return;
         if (!response.ok) throw new Error('daily meter');
         let assigned = await response.json();
         if (!assigned.meter || !initialHasVotes.current) {

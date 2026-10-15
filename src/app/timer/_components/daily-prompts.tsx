@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { card } from '@/components/ui/styles';
+import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { useTeam } from '@/providers/team-provider';
 import { DEFAULT_DISCUSSION_PROMPTS, validateDiscussionPrompts, validateMeetingSettings, type MeetingSettings } from '@/lib/meeting-settings';
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, TextField } from '@mui/material';
@@ -72,10 +73,10 @@ function TeamPrompts({ teamId, className }: { teamId: string | null; className: 
         <h2 id="prompts-title" className="text-sm font-semibold">Pour guider le point</h2>
         <Button size="small" disabled={!loaded || saving} onClick={() => { setDraft([...settings.prompts]); setEditing(true); setError(''); setNotice(''); }} aria-label="Modifier les questions de l’équipe">Modifier</Button>
       </div>
-      {!loaded && !error && <p role="status" className="text-[11px] text-muted">Chargement des questions de l’équipe…</p>}
+      {!loaded && !error && <PageSkeleton variant="timer" scope="section" label="Chargement des questions de l’équipe…" />}
       {error && !editing && <div role="alert" className="text-[11px] text-danger">{error} {!loaded && 'Questions par défaut affichées.'} <Button size="small" onClick={retry}>Réessayer</Button></div>}
       {notice && <p role="status" className="text-[11px] text-success">{notice}</p>}
-      <div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
+      {(loaded || error) && <div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
         {settings.prompts.map((prompt, index) => (
           <article className="min-w-0 shrink-0 rounded-xl border border-line bg-slate-50/60 p-2.5" key={index}>
             <span className="border-l-2 border-accent pl-1.5 text-[9px] font-semibold tracking-wide text-brand">{String(index + 1).padStart(2, '0')}{standard ? ` / ${defaultHeadings[index]}` : ' / ÉQUIPE'}</span>
@@ -83,7 +84,7 @@ function TeamPrompts({ teamId, className }: { teamId: string | null; className: 
             {standard && <p className="mt-1 text-[11px] leading-relaxed text-muted min-[801px]:max-[1100px]:hidden">{descriptions[index]}</p>}
           </article>
         ))}
-      </div>
+      </div>}
       <Dialog open={editing} onClose={() => { if (!saving) setEditing(false); }} aria-labelledby="edit-prompts-title" fullWidth maxWidth="sm">
         <DialogTitle id="edit-prompts-title">Questions de l’équipe</DialogTitle>
         <DialogContent>

@@ -65,10 +65,14 @@ export function useStandupTimer() {
     return next;
   }, [commit, notify]);
   useEffect(() => {
-    const interval = setInterval(tick, 100);
+    // No wakeups in setup/pause. Four updates/second keep the score/ring smooth;
+    // deadlines and explicit action ticks retain exact elapsed/overtime accounting.
+    if (!timer.running) return;
+    const interval = setInterval(tick, 250);
     document.addEventListener('visibilitychange', tick);
-    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', tick); audio.current?.dispose(); audio.current = null; };
-  }, [tick]);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', tick); };
+  }, [tick, timer.running]);
+  useEffect(() => () => { audio.current?.dispose(); audio.current = null; }, []);
 
   const reset = useCallback(() => { if (!latest.current.focusMode || latest.current.managing) commit(cleared(latest.current)); }, [commit, cleared]);
   const toggle = useCallback(() => {

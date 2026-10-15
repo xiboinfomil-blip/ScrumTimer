@@ -7,6 +7,7 @@ import { useTeam } from '@/providers/team-provider';
 import { card, routeStage, secondaryButton } from '@/components/ui/styles';
 import { ScoreBreakdown } from '@/components/ui/score-breakdown';
 import { StatisticsIcon } from './statistics-icon';
+import { PageSkeleton } from '@/components/ui/page-skeleton';
 
 type HistorySource = 'loading' | 'neon' | 'unavailable';
 
@@ -122,17 +123,17 @@ export function StatisticsPage() {
           <p className="mt-0.5 truncate text-[11px] text-muted" title={activeTeamName}>{activeTeamName} · Les {HISTORY_DAYS} derniers jours UTC, aujourd’hui inclus.</p></div>
         </div>
         <Button disableElevation size="small" variant="outlined" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 12 }} type="button" disabled={loading} onClick={() => setRefresh((value) => value + 1)} className={`${secondaryButton} shrink-0 rounded-xl ${focus}`}>
-          <StatisticsIcon name="refresh" className={`size-4 shrink-0 ${loading ? 'motion-safe:animate-spin' : ''}`} />
+          <StatisticsIcon name="refresh" className="size-4 shrink-0" />
           {loading ? 'Chargement…' : source === 'neon' ? 'Actualiser' : 'Réessayer'}
         </Button>
       </header>
 
       <div role="status" aria-live="polite" className="shrink-0 text-[10px] text-muted">
-        <p className="flex items-center gap-1.5"><span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${source === 'unavailable' ? 'bg-danger' : loading ? 'bg-accent motion-safe:animate-pulse' : 'bg-success'}`} />{historyStatus}<span className="max-[650px]:sr-only"> · {teamStatus}</span></p>
+        <p className="flex items-center gap-1.5"><span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${source === 'unavailable' ? 'bg-danger' : loading ? 'bg-accent' : 'bg-success'}`} />{historyStatus}<span className="max-[650px]:sr-only"> · {teamStatus}</span></p>
         {notice && <p className="mt-2 rounded-xl border border-red-200 bg-danger-soft px-3 py-2 text-danger">{notice}</p>}
       </div>
 
-      <div aria-busy={loading} className="flex flex-col gap-3">
+      {loading && cloudStatus !== 'error' ? <PageSkeleton variant="statistics" scope="section" label="Chargement du classement et des points…" /> : <div aria-busy={loading} className="flex flex-col gap-3">
         <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Indicateurs des cinq derniers jours">
           {[
             { label: 'Points terminés', value: numberFormat.format(visibleRounds.length), icon: 'calendar' as const },
@@ -246,7 +247,7 @@ export function StatisticsPage() {
         </div>
         </div>
         <details className="rounded-xl border border-line bg-slate-50/70 px-3 text-[10px] text-muted"><summary className={`min-h-11 cursor-pointer content-center font-semibold text-brand ${focus}`}>Comprendre ces statistiques</summary><p className="pb-3 leading-relaxed">{HISTORY_DAYS} jours UTC · Les bilans plus anciens sont supprimés de la base au chargement ou à l’enregistrement d’un bilan de cette équipe. Moyenne et respect du temps : passages mesurés (≥ 1 s) uniquement. Les numéros d’humeur ne sont pas comparables entre baromètres. Les scores portent sur la gestion du temps, jamais sur la qualité d’une contribution.</p></details>
-      </div>
+      </div>}
     </section>
   );
 }

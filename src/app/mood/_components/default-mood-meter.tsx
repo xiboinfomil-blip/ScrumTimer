@@ -1,3 +1,5 @@
+import { PageSkeleton } from '@/components/ui/page-skeleton';
+
 const moods = [
   { number: 1, face: '😣', mood: 'Mauvaise humeur', energy: 'Énergie élevée', color: 'bg-orange-50 border-orange-200' },
   { number: 4, face: '😊', mood: 'Bonne humeur', energy: 'Énergie élevée', color: 'bg-green-50 border-green-200' },
@@ -19,8 +21,7 @@ export function DefaultMoodMeter() {
 }
 
 export function MoodMeterLoading() {
-  return <div role="status" className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-50 p-4 text-center text-xs text-muted">
-    <span className="size-8 rounded-full border-2 border-blue-100 border-t-brand motion-safe:animate-spin" aria-hidden="true" />
-    Chargement du baromètre…
+  return <div className="absolute inset-0 z-10 flex min-h-0 flex-col bg-slate-50 p-2">
+    <PageSkeleton variant="mood" scope="section" className="flex-1" />
   </div>;
 }

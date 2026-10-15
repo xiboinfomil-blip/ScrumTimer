@@ -58,7 +58,28 @@ export function useActionMotion() {
         }
       }
     });
-    observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['open', 'aria-pressed'] });
+    // Countdown text changes should not generate global mutation records.
+    // Observe structural lists individually and only relevant main attributes.
+    const main = document.getElementById('main-content');
+    const lists = new MutationObserver(records => {
+      if (preference.matches) return;
+      for (const record of records) if (record.target instanceof HTMLElement) reveal(record.target);
+    });
+    const trackLists = () => {
+      lists.disconnect();
+      main?.querySelectorAll('ul, ol').forEach(list => lists.observe(list, { childList: true }));
+    };
+    const routes = new MutationObserver(() => {
+      trackLists();
+      main?.querySelectorAll('[data-route-transition]').forEach(stage => routes.observe(stage, { childList: true }));
+    });
+    if (main) {
+      observer.observe(main, { subtree: true, attributes: true, attributeFilter: ['open', 'aria-pressed'] });
+      // Route containers are replaced only on navigation, not on each timer tick.
+      routes.observe(main, { childList: true });
+      main.querySelectorAll('[data-route-transition]').forEach(stage => routes.observe(stage, { childList: true }));
+      trackLists();
+    }
     const stop = () => {
       if (preference.matches) {
         animations.forEach(animation => animation.stop());
@@ -71,6 +92,8 @@ export function useActionMotion() {
     preference.addEventListener('change', stop);
     return () => {
       observer.disconnect();
+      lists.disconnect();
+      routes.disconnect();
       document.removeEventListener('click', click, true);
       document.removeEventListener('change', change, true);
       document.removeEventListener('toggle', toggle, true);

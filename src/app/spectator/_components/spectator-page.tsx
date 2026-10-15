@@ -17,7 +17,7 @@ export function SpectatorPage() {
     if (!activeTeamId) return;
     const controller = new AbortController(); let busy = false;
     async function load() {
-      if (busy) return; busy = true;
+      if (busy || document.hidden) return; busy = true;
       const start = Date.now();
       try {
         const response = await fetch('/api/live-session', { headers: { 'X-Team-Id': activeTeamId! }, cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]) });
@@ -31,8 +31,10 @@ export function SpectatorPage() {
       finally { busy = false; }
     }
     void load(); const polling = setInterval(() => void load(), 2000);
-    const clock = setInterval(() => setNow(Date.now()), 200);
-    return () => { controller.abort(); clearInterval(polling); clearInterval(clock); };
+    const visible = () => { if (!document.hidden) { setNow(Date.now()); void load(); } };
+    document.addEventListener('visibilitychange', visible);
+    const clock = setInterval(() => { if (!document.hidden) setNow(Date.now()); }, 1000);
+    return () => { controller.abort(); clearInterval(polling); clearInterval(clock); document.removeEventListener('visibilitychange', visible); };
   }, [activeTeamId]);
   const stale = live && now - live.received > 6000;
   const snapshot = live && !error && !stale ? live.snapshot : null;
