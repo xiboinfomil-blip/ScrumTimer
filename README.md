@@ -58,6 +58,10 @@ Préserver les contrôles accessibles, le focus visible, les notifications en fr
 
 ## Architecture
 
+### Tableaux de bord adaptés à l’écran
+
+Le bilan du jour et les statistiques utilisent une composition bornée par la hauteur disponible, notamment sur les écrans **16:9 (1024×576, 1366×768 et 1920×1080)** : hiérarchie compacte, indicateurs toujours visibles, surfaces légères et listes paginées plutôt qu’une longue page. Le bilan conserve ses deux colonnes points/humeurs sur grand écran et ses onglets sur mobile. Les statistiques proposent deux panneaux sur ordinateur : **Activité / Classement** et **Humeurs / Points récents**. En dessous de 1024 px, une navigation unique donne accès aux quatre vues. Les explications, détails d’un participant et bilans historiques s’ouvrent dans des dialogues ; aucune information n’est supprimée pour tenir à l’écran. Les règles de score, les données enregistrées et la rétention ne changent pas.
+
 ### Chargement et consommation de ressources
 
 Les chargements de route, de l’équipe, des statistiques, des questions et du baromètre affichent des **squelettes statiques** adaptés à la page : pas de shimmer, animation infinie ou temporisation artificielle. Les erreurs Neon gardent leurs messages et boutons de nouvelle tentative ; un squelette ne remplace jamais une panne ni les gardes de validation.

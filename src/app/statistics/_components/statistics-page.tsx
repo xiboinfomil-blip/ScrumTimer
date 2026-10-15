@@ -1,32 +1,28 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button, Paper } from '@mui/material';
 import { HISTORY_DAYS, type HistoryRound, historyLeaderboard, normalizeHistory, summarizeDays } from '@/lib/history';
 import { useTeam } from '@/providers/team-provider';
-import { card, routeStage, secondaryButton } from '@/components/ui/styles';
-import { ScoreBreakdown } from '@/components/ui/score-breakdown';
+import { routeStage } from '@/components/ui/styles';
+import { PaginatedList } from '@/components/ui/paginated-list';
 import { StatisticsIcon } from './statistics-icon';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
+import { dateLabel, duration, StatisticsDetails, type RankedPerson } from './statistics-details';
 
 type HistorySource = 'loading' | 'neon' | 'unavailable';
 
 const numberFormat = new Intl.NumberFormat('fr-FR');
-const dayFormat = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit' });
-const roundFormat = new Intl.DateTimeFormat('fr-FR', {
-  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-});
+type View = 'activity' | 'ranking' | 'moods' | 'recent';
+const tabs: { value: View; label: string }[] = [
+  { value: 'activity', label: 'Activité' }, { value: 'ranking', label: 'Classement' },
+  { value: 'moods', label: 'Humeurs' }, { value: 'recent', label: 'Points récents' },
+];
+const control = 'min-h-11 min-w-11 rounded-xl px-2 text-[11px] font-semibold text-brand transition-colors hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand motion-reduce:transition-none';
 
-function duration(seconds: number) {
-  const rounded = Math.max(0, Math.round(seconds));
-  const minutes = Math.floor(rounded / 60);
-  return minutes ? `${numberFormat.format(minutes)} min ${rounded % 60} s` : `${rounded} s`;
-}
-
-function dateLabel(value: string, full = false) {
-  // Date-only summaries represent calendar days, not UTC instants.
-  const date = new Date(value.length === 10 ? `${value}T12:00:00` : value);
-  return Number.isNaN(date.getTime()) ? value : (full ? roundFormat : dayFormat).format(date);
+function ViewTabs({ value, onChange, side }: { value: View; onChange: (view: View) => void; side?: 'left' | 'right' }) {
+  return <nav aria-label={side === 'left' ? 'Sections activité et classement' : side === 'right' ? 'Sections humeurs et points' : 'Sections des statistiques'} className={`flex shrink-0 gap-1 rounded-xl bg-slate-100/80 p-1 ${side ? 'max-[1023px]:hidden' : 'min-[1024px]:hidden'}`}>
+    {tabs.filter((_, i) => !side || (side === 'left' ? i < 2 : i >= 2)).map(tab => <button key={tab.value} type="button" aria-pressed={value === tab.value} onClick={() => onChange(tab.value)} className={`${control} min-w-0 flex-1 px-1 text-[10px] ${value === tab.value ? 'bg-white text-brand shadow-sm' : 'text-muted'}`}>{tab.label}</button>)}
+  </nav>;
 }
 
 export function StatisticsPage() {
@@ -35,13 +31,19 @@ export function StatisticsPage() {
   const [source, setSource] = useState<HistorySource>('loading');
   const [notice, setNotice] = useState('');
   const [refresh, setRefresh] = useState(0);
-  const [leaderboardPage, setLeaderboardPage] = useState(0);
+  const [left, setLeft] = useState<View>('activity');
+  const [right, setRight] = useState<View>('moods');
+  const [mobile, setMobile] = useState<View>('activity');
+  const [methodology, setMethodology] = useState(false);
+  const [selectedRound, setSelectedRound] = useState<HistoryRound | null>(null);
+  const [selectedPerson, setSelectedPerson] = useState<RankedPerson | null>(null);
   const [loadedTeamId, setLoadedTeamId] = useState<string | null>(null);
 
   useEffect(() => {
     setRounds([]);
     setLoadedTeamId(null);
-    setLeaderboardPage(0);
+    setSelectedRound(null);
+    setSelectedPerson(null);
     setSource('loading');
     setNotice('');
     if (!ready || !activeTeamId) return;
@@ -93,8 +95,6 @@ export function StatisticsPage() {
   const visibleRounds = ready && loadedTeamId === activeTeamId ? rounds : [];
   const days = summarizeDays(visibleRounds);
   const leaderboard = historyLeaderboard(visibleRounds);
-  const leaderboardPages = Math.max(1, Math.ceil(leaderboard.length / 8));
-  const currentLeaderboardPage = Math.min(leaderboardPage, leaderboardPages - 1);
   const people = visibleRounds.flatMap((round) => round.people);
   const seconds = people.reduce((sum, person) => sum + person.speakingSeconds, 0);
   const measured = people.filter(person => person.speakingSeconds >= 1 && person.budgetSeconds > 0);
@@ -112,142 +112,66 @@ export function StatisticsPage() {
         : 'Échec de l’enregistrement de l’équipe dans Neon';
   const historyStatus = source === 'neon' ? 'Historique chargé depuis Neon'
     : source === 'unavailable' ? 'Historique Neon indisponible' : 'Chargement de l’historique…';
-  const focus = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand';
+  const unavailable = loading || source === 'unavailable';
+  const panel = 'flex min-h-0 min-w-0 flex-1 flex-col';
+  const panelVisibility = (view: View, desktop: View) => `${mobile !== view ? 'max-[1023px]:hidden' : ''} ${desktop !== view ? 'min-[1024px]:hidden' : ''}`;
+  const empty = (message: string) => <p className="my-2 grid min-h-0 flex-1 place-content-center rounded-xl border border-dashed border-line bg-slate-50/60 px-3 text-center text-xs text-muted">{message}</p>;
+  const closeDetails = () => { setMethodology(false); setSelectedRound(null); setSelectedPerson(null); };
 
-  return (
-    <section aria-labelledby="statistics-heading" className={`${routeStage} mx-auto w-full max-w-6xl overflow-y-auto p-1 pr-2`}>
-      <header className="flex shrink-0 items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-blue-100 bg-blue-50 text-brand max-[650px]:hidden"><StatisticsIcon name="chart" className="size-5" /></span>
-          <div className="min-w-0"><h1 id="statistics-heading" className="text-[23px] font-bold tracking-tight text-ink max-[650px]:text-lg">Le rythme de l’équipe<span className="text-accent">.</span></h1>
-          <p className="mt-0.5 truncate text-[11px] text-muted" title={activeTeamName}>{activeTeamName} · Les {HISTORY_DAYS} derniers jours UTC, aujourd’hui inclus.</p></div>
-        </div>
-        <Button disableElevation size="small" variant="outlined" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 12 }} type="button" disabled={loading} onClick={() => setRefresh((value) => value + 1)} className={`${secondaryButton} shrink-0 rounded-xl ${focus}`}>
-          <StatisticsIcon name="refresh" className="size-4 shrink-0" />
-          {loading ? 'Chargement…' : source === 'neon' ? 'Actualiser' : 'Réessayer'}
-        </Button>
-      </header>
-
-      <div role="status" aria-live="polite" className="shrink-0 text-[10px] text-muted">
-        <p className="flex items-center gap-1.5"><span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${source === 'unavailable' ? 'bg-danger' : loading ? 'bg-accent' : 'bg-success'}`} />{historyStatus}<span className="max-[650px]:sr-only"> · {teamStatus}</span></p>
-        {notice && <p className="mt-2 rounded-xl border border-red-200 bg-danger-soft px-3 py-2 text-danger">{notice}</p>}
-      </div>
-
-      {loading && cloudStatus !== 'error' ? <PageSkeleton variant="statistics" scope="section" label="Chargement du classement et des points…" /> : <div aria-busy={loading} className="flex flex-col gap-3">
-        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Indicateurs des cinq derniers jours">
-          {[
-            { label: 'Points terminés', value: numberFormat.format(visibleRounds.length), icon: 'calendar' as const },
-            { label: 'Tours de parole', value: numberFormat.format(people.length), icon: 'people' as const },
-            { label: 'Parole moyenne', value: measured.length ? duration(measured.reduce((sum, p) => sum + p.speakingSeconds, 0) / measured.length) : '—', icon: 'clock' as const },
-            { label: 'Dans le temps imparti', value: measured.length ? `${Math.round(withinTime / measured.length * 100)} %` : '—', icon: 'check' as const },
-          ].map(({ label, value, icon }) => (
-            <Paper component="div" elevation={0} key={label} className={`${card} relative overflow-hidden rounded-2xl border-slate-200/80 p-3 sm:p-4`}>
-              <dt className="flex items-center justify-between gap-2 text-[10px] font-medium text-muted"><span>{label}</span><StatisticsIcon name={icon} className={`size-4 shrink-0 ${icon === 'check' ? 'text-success' : 'text-brand/70'}`} /></dt>
-              <dd key={value} className="mt-2 text-xl font-bold tracking-tight tabular-nums text-ink motion-safe:animate-page-reveal sm:text-2xl">{loading || source === 'unavailable' ? '—' : value}</dd>
-            </Paper>
-          ))}
-        </dl>
-        <p className="flex items-center gap-2 px-1 text-[11px] text-muted"><StatisticsIcon name="clock" className="size-3.5 shrink-0" /><span><strong className="font-semibold text-ink">{loading || source === 'unavailable' ? '—' : duration(seconds)}</strong> de parole cumulée · {HISTORY_DAYS} jours UTC</span></p>
-        <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-        <div className="flex min-w-0 flex-col gap-3">
-
-        <Paper component="section" elevation={0} aria-labelledby="daily-heading" className={`${card} rounded-2xl border-slate-200/80 p-4`}>
-          <h2 id="daily-heading" className="text-sm font-semibold text-brand">Activité · {HISTORY_DAYS} derniers jours</h2>
-          <p className="mb-2 text-[11px] text-muted">Nombre de points terminés par jour.</p>
-          <ol className="grid grid-cols-5 gap-1 sm:gap-3">
-            {days.map((day) => (
-              <li key={day.date} className="min-w-0 text-center">
+  return <section aria-labelledby="statistics-heading" data-statistics-root className={`${routeStage} mx-auto w-full max-w-6xl overflow-hidden p-1`}>
+    <header className="flex min-h-11 shrink-0 items-center justify-between gap-1">
+      <div className="min-w-0"><h1 id="statistics-heading" className="text-xl font-bold tracking-tight text-ink max-[650px]:text-base">Le rythme de l’équipe<span className="text-accent">.</span></h1><p className="truncate text-[10px] text-muted" title={activeTeamName}>{activeTeamName} · {HISTORY_DAYS} jours UTC</p></div>
+      <div className="flex shrink-0 gap-1"><button type="button" aria-label={loading ? 'Chargement…' : source === 'neon' ? 'Actualiser' : 'Réessayer'} disabled={loading} onClick={() => setRefresh(v => v + 1)} className={`${control} flex items-center justify-center gap-2 border border-line disabled:opacity-40`}><StatisticsIcon name="refresh" /><span className="max-[650px]:sr-only">{loading ? 'Chargement…' : source === 'neon' ? 'Actualiser' : 'Réessayer'}</span></button><button type="button" aria-label="Comprendre ces statistiques" onClick={() => setMethodology(true)} className={`${control} border border-line text-base`}>?</button></div>
+    </header>
+    <div role="status" aria-live="polite" className={`flex shrink-0 items-center gap-1.5 text-[10px] ${notice ? 'text-danger' : 'text-muted'}`}><span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${source === 'unavailable' ? 'bg-danger' : loading ? 'bg-accent' : 'bg-success'}`} /><p>{notice ? 'Neon indisponible · Aucune donnée de remplacement.' : historyStatus}<span className="sr-only"> · {teamStatus}{notice ? ` · ${notice}` : ''}</span></p></div>
+    {loading && cloudStatus !== 'error' ? <PageSkeleton variant="statistics" scope="section" label="Chargement du classement et des points…" /> : <div aria-busy={loading} className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+      <dl className="grid shrink-0 grid-cols-4 divide-x divide-line rounded-xl border border-line bg-white py-2" aria-label="Indicateurs des cinq derniers jours">
+        {[
+          { label: 'Points terminés', short: 'Points', value: numberFormat.format(visibleRounds.length) },
+          { label: 'Tours de parole', short: 'Tours', value: numberFormat.format(people.length) },
+          { label: 'Parole moyenne', short: 'Moyenne', value: measured.length ? duration(measured.reduce((sum, p) => sum + p.speakingSeconds, 0) / measured.length) : '—' },
+          { label: 'Dans le temps imparti', short: 'À temps', value: measured.length ? `${Math.round(withinTime / measured.length * 100)} %` : '—' },
+        ].map(item => <div key={item.label} className="min-w-0 px-1.5 sm:px-3"><dt className="text-[9px] text-muted"><span className="max-[650px]:sr-only">{item.label}</span><span aria-hidden="true" className="min-[650px]:hidden">{item.short}</span></dt><dd className="mt-0.5 whitespace-nowrap text-sm font-bold tracking-tight text-brand tabular-nums sm:text-xl">{unavailable ? '—' : item.value}</dd></div>)}
+      </dl>
+      <ViewTabs value={mobile} onChange={setMobile} />
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 min-[1024px]:grid-cols-2">
+        <div data-statistics-pane="left" className={`flex min-h-0 min-w-0 flex-col gap-2 rounded-2xl border border-line bg-white p-2.5 sm:p-3 ${mobile === 'moods' || mobile === 'recent' ? 'max-[1023px]:hidden' : ''}`}>
+          <ViewTabs side="left" value={left} onChange={setLeft} />
+          <section aria-labelledby="daily-heading" className={`${panel} ${panelVisibility('activity', left)}`}>
+            <header className="shrink-0"><h2 id="daily-heading" className="text-xs font-bold text-brand">Activité · {HISTORY_DAYS} derniers jours</h2><p className="mt-1 text-[10px] text-muted">Points terminés par jour · calendrier UTC</p></header>
+            {unavailable ? empty('Activité indisponible pour le moment.') : <>
+              <ol className="my-2 grid min-h-0 flex-1 grid-cols-5 gap-2" aria-label="Activité sur cinq jours">{days.map(day => <li key={day.date} className="flex min-h-0 min-w-0 flex-col items-center gap-1 text-center">
                 <span className="sr-only">{dateLabel(day.date)} : {day.rounds} points, {day.participants} tours de parole, {duration(day.seconds)}.</span>
-                <div aria-hidden="true">
-                  <span className="text-[10px] font-semibold tabular-nums text-brand">{day.rounds}</span>
-                  <svg viewBox="0 0 24 80" className="mx-auto mt-2 h-28 w-full max-w-10" focusable="false">
-                    <rect x="3" y="0" width="18" height="80" rx="3" className="fill-slate-100" />
-                    <rect key={day.rounds} x="3" y={80 - day.rounds / maximumRounds * 80} width="18" height={day.rounds / maximumRounds * 80} rx="3" className={`origin-bottom motion-safe:animate-chart-grow ${day.date === days[days.length - 1]?.date ? 'fill-accent' : 'fill-brand'}`} />
-                  </svg>
-                  <span className="mt-1 block text-[9px] tabular-nums text-muted sm:text-[11px]">{dateLabel(day.date)}</span>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </Paper>
-
-        <Paper component="section" elevation={0} aria-labelledby="leaderboard-heading" className={`${card} rounded-2xl border-slate-200/80 p-4`}>
-          <h2 id="leaderboard-heading" className="text-sm font-semibold text-brand">Classement des participants · {HISTORY_DAYS} jours</h2>
-          <p className="mt-1 text-[11px] text-muted">Score moyen sur 1 000, pour ne pas favoriser ceux qui jouent davantage. Égalités au même rang ; passages non mesurés exclus. Les humeurs ne changent jamais le score.</p>
-          {!leaderboard.length ? <p className="mt-3 rounded-xl border border-dashed border-line bg-slate-50/60 px-3 py-6 text-center text-xs text-muted">{loading ? 'Chargement du classement…' : source === 'unavailable' ? 'Classement indisponible pour le moment.' : 'Terminez un tour pour voir le classement.'}</p> : <>
-            <ol key={currentLeaderboardPage} className="mt-3 space-y-1.5 motion-safe:animate-page-reveal" start={currentLeaderboardPage * 8 + 1} aria-label="Classement des participants">
-              {leaderboard.slice(currentLeaderboardPage * 8, currentLeaderboardPage * 8 + 8).map(person => <li key={person.id} className={`flex min-h-18 items-center gap-2 rounded-xl border p-2 text-xs ${person.rank === 1 ? 'border-amber-200/70 bg-amber-50/40' : 'border-line bg-slate-50/40'}`}>
-                <span className={`grid size-7 shrink-0 place-items-center rounded-lg text-center font-bold tabular-nums ${person.rank === 1 ? 'bg-amber-100 text-amber-800' : 'bg-white text-muted'}`} aria-label={person.rank === null ? 'Sans rang' : `Rang ${person.rank}`}>{person.rank ?? '—'}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-ink" title={person.name}>{person.name}</p>
-                  <p className="mt-0.5 text-[10px] text-muted">{person.scored} / {person.turns} passages mesurés · {person.averageSeconds === null ? 'Temps non mesuré' : `${duration(person.averageSeconds)} en moyenne`}<span className="max-[400px]:hidden"> · {person.withinTime} dans le temps</span></p>
-                  <svg viewBox="0 0 100 3" preserveAspectRatio="none" className="mt-2 h-1 w-full" aria-hidden="true"><rect width="100" height="3" rx="1.5" className="fill-slate-200/70" /><rect width={(person.averageScore ?? 0) / 10} height="3" rx="1.5" className="origin-left fill-brand motion-safe:animate-chart-grow" /></svg>
-                </div>
-                <span className="shrink-0 text-right font-bold tabular-nums text-brand">{person.averageScore === null ? '—' : numberFormat.format(person.averageScore)}<span className="block text-[9px] font-normal text-muted">/ 1 000</span></span>
-              </li>)}
-            </ol>
-            {leaderboardPages > 1 && <div className="mt-1 flex items-center justify-between gap-2 border-t border-line pt-1 text-[11px] text-muted">
-              <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" className="min-h-11 rounded-lg px-2 text-brand disabled:opacity-40" aria-label="Page précédente du classement" disabled={currentLeaderboardPage === 0} onClick={() => setLeaderboardPage(currentLeaderboardPage - 1)}>← Précédent</Button>
-              <span aria-live="polite">{currentLeaderboardPage + 1} / {leaderboardPages}</span>
-              <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" className="min-h-11 rounded-lg px-2 text-brand disabled:opacity-40" aria-label="Page suivante du classement" disabled={currentLeaderboardPage === leaderboardPages - 1} onClick={() => setLeaderboardPage(currentLeaderboardPage + 1)}>Suivant →</Button>
-            </div>}
-          </>}
-        </Paper>
+                <span aria-hidden="true" className="text-xs font-bold text-brand tabular-nums">{day.rounds}</span>
+                <svg viewBox="0 0 24 80" preserveAspectRatio="none" className="min-h-0 w-full max-w-10 flex-1" aria-hidden="true" focusable="false"><rect x="3" width="18" height="80" rx="3" className="fill-slate-100" /><rect x="3" y={80 - day.rounds / maximumRounds * 80} width="18" height={day.rounds / maximumRounds * 80} rx="3" className={day.date === days[days.length - 1]?.date ? 'fill-accent' : 'fill-brand'} /></svg>
+                <span aria-hidden="true" className="text-[10px] text-muted tabular-nums">{dateLabel(day.date)}</span>
+              </li>)}</ol>
+              <p className="shrink-0 border-t border-line pt-2 text-[10px] text-muted"><strong className="text-ink">{duration(seconds)}</strong> de parole cumulée, hors pauses.</p>
+            </>}
+          </section>
+          <section aria-labelledby="leaderboard-heading" className={`${panel} ${panelVisibility('ranking', left)}`}>
+            <header className="shrink-0"><h2 id="leaderboard-heading" className="text-xs font-bold text-brand">Classement des participants</h2><p className="mt-1 text-[10px] text-muted">Score moyen / 1 000 · égalités partagées</p></header>
+            {!leaderboard.length ? empty(source === 'unavailable' ? 'Classement indisponible pour le moment.' : 'Terminez un tour pour voir le classement.') : <PaginatedList key={`${activeTeamId}-${refresh}`} items={leaderboard} ordered className="statistics-ranking-list" renderItem={person => <li key={person.id} data-rank={person.rank ?? 'none'} data-score={person.averageScore ?? 'unavailable'} data-person={person.id} className="flex h-18 shrink-0 items-center gap-2 rounded-xl border border-line bg-slate-50/50 px-2">
+              <span className={`grid size-7 shrink-0 place-items-center rounded-lg text-xs font-bold tabular-nums ${person.rank === 1 ? 'bg-orange-100 text-amber-800' : 'bg-white text-muted'}`} aria-label={person.rank === null ? 'Sans rang' : `Rang ${person.rank}`}>{person.rank ?? '—'}</span>
+              <button type="button" onClick={() => setSelectedPerson(person)} aria-label={`Détails de ${person.name}`} className={`${control} min-w-0 flex-1 px-0 text-left`}><span className="block truncate text-xs text-ink" title={person.name}>{person.name}</span><span className="block text-[9px] font-normal text-muted">{person.scored} / {person.turns} passages notés</span><svg viewBox="0 0 100 3" preserveAspectRatio="none" className="mt-1 h-1 w-full" aria-hidden="true"><rect width="100" height="3" rx="1.5" className="fill-slate-200" /><rect width={(person.averageScore ?? 0) / 10} height="3" rx="1.5" className="fill-brand" /></svg></button>
+              <span className="shrink-0 text-right text-xs font-bold text-brand tabular-nums">{person.averageScore === null ? '—' : numberFormat.format(person.averageScore)}<span className="block text-[9px] font-normal text-muted">/ 1 000</span></span>
+            </li>} />}
+          </section>
         </div>
-        <div className="flex min-w-0 flex-col gap-3">
-        <Paper component="section" elevation={0} aria-labelledby="moods-heading" className={`${card} rounded-2xl border-slate-200/80 p-4`}>
-          <h2 id="moods-heading" className="text-sm font-semibold text-brand">Catégories d’humeur</h2>
-          <p className="mt-1 text-[11px] text-muted">Choix 1 à 4 selon le mood meter utilisé : des catégories, pas des notes de bonheur.</p>
-          <dl className="mt-3 grid grid-cols-2 gap-2">
-            {moods.map(({ mood, count }) => (
-              <div key={mood} className="flex items-center justify-between gap-2 rounded-xl border border-line bg-slate-50/70 p-3">
-                <dt className="flex items-center gap-2 text-[11px] text-muted"><span className="grid size-6 shrink-0 place-items-center rounded-md bg-white font-semibold text-brand" aria-hidden="true">{mood}</span><span>Catégorie {mood}</span></dt>
-                <dd className="text-lg font-bold tabular-nums text-ink">{loading || source === 'unavailable' ? '—' : numberFormat.format(count)}</dd>
-              </div>
-            ))}
-          </dl>
-          {missingMoods > 0 && <p className="mt-2 text-[11px] text-muted">Sans catégorie renseignée : {numberFormat.format(missingMoods)}.</p>}
-        </Paper>
-
-        <Paper component="section" elevation={0} aria-labelledby="recent-heading" className={`${card} rounded-2xl border-slate-200/80 p-4`}>
-          <h2 id="recent-heading" className="text-sm font-semibold text-brand">Points récents</h2>
-          <p className="mt-1 text-[11px] text-muted">Les 10 derniers points · durée de parole cumulée, hors pauses.</p>
-          {!recent.length ? (
-            <p className="mt-3 rounded-xl border border-dashed border-line bg-slate-50/60 px-3 py-6 text-center text-xs text-muted">{loading ? 'Chargement des points…' : source === 'unavailable' ? 'Aucun historique accessible pour le moment.' : 'Aucun point terminé dans cet historique.'}</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {recent.map((round) => {
-                const total = round.people.reduce((sum, person) => sum + person.speakingSeconds, 0);
-                const meters = [...new Set(round.people.map((person) => person.meterTitle).filter((title): title is string => Boolean(title)))];
-                return (
-                  <li key={round.id} className="rounded-xl border border-line bg-slate-50/40 p-2">
-                    <details className="group">
-                      <summary className={`min-h-11 cursor-pointer content-center rounded-lg px-1 py-2 text-xs text-brand ${focus}`}>
-                        <time dateTime={round.completedAt} className="font-semibold">{dateLabel(round.completedAt, true)}</time>
-                        <span className="mt-1 block pl-4 text-[10px] text-muted">{round.people.length} tours · {duration(total)}</span>
-                        <span className="sr-only"> · Détails des participants</span>
-                      </summary>
-                      <p className="mt-1 break-words text-[11px] text-muted">Mood meters : {meters.length ? meters.join(' · ') : 'non renseignés'}</p>
-                      <ul className="mt-2 space-y-2 rounded-xl bg-white p-2">
-                        {round.people.map((person, index) => (
-                          <li key={`${person.id}-${index}`} className="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1 border-b border-line pb-2 text-[11px] last:border-0 last:pb-0">
-                            <span className="min-w-0 break-words font-medium text-brand">{person.name}</span>
-                            <span className="text-muted">{duration(person.speakingSeconds)} / {duration(person.budgetSeconds)} · {person.speakingSeconds < 1 || person.budgetSeconds <= 0 ? 'Non mesuré' : person.speakingSeconds > person.budgetSeconds ? 'Temps imparti dépassé' : 'Dans le temps'} · {person.mood === null ? 'Sans catégorie' : `Catégorie ${person.mood}`}</span>
-                            <div className="flex basis-full items-center justify-between"><span className="font-semibold text-brand">{person.score ?? '—'} pts</span><ScoreBreakdown person={person} /></div>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Paper>
+        <div data-statistics-pane="right" className={`flex min-h-0 min-w-0 flex-col gap-2 rounded-2xl border border-line bg-white p-2.5 sm:p-3 ${mobile === 'activity' || mobile === 'ranking' ? 'max-[1023px]:hidden' : ''}`}>
+          <ViewTabs side="right" value={right} onChange={setRight} />
+          <section aria-labelledby="moods-heading" className={`${panel} ${panelVisibility('moods', right)}`}>
+            <header className="shrink-0"><h2 id="moods-heading" className="text-xs font-bold text-brand">Catégories d’humeur</h2><p className="mt-1 text-[10px] text-muted">Des catégories, pas des notes de bonheur.</p></header>
+            <dl className="my-2 grid min-h-0 flex-1 grid-cols-2 gap-2" aria-label="Répartition des catégories">{moods.map(({ mood, count }) => <div key={mood} className="flex min-h-0 flex-col justify-center rounded-xl border border-line bg-slate-50/70 px-3 py-1"><dt className="flex items-center gap-2 text-[10px] text-muted"><span aria-hidden="true" className="grid size-6 place-items-center rounded-lg border border-line bg-white font-bold text-brand">{mood}</span><span>Catégorie {mood}</span></dt><dd className="mt-1 text-2xl font-bold text-ink tabular-nums">{unavailable ? '—' : numberFormat.format(count)}</dd></div>)}</dl>
+            <p className="shrink-0 border-t border-line pt-2 text-[10px] text-muted">{unavailable ? 'Données indisponibles.' : missingMoods > 0 ? `Sans catégorie renseignée : ${numberFormat.format(missingMoods)}.` : 'Chaque choix dépend du mood meter utilisé.'}</p>
+          </section>
+          <section aria-labelledby="recent-heading" className={`${panel} ${panelVisibility('recent', right)}`}>
+            <header className="shrink-0"><h2 id="recent-heading" className="text-xs font-bold text-brand">Points récents</h2><p className="mt-1 text-[10px] text-muted">Les 10 derniers points · hors pauses</p></header>
+            {!recent.length ? empty(source === 'unavailable' ? 'Aucun historique accessible pour le moment.' : 'Aucun point terminé dans cet historique.') : <PaginatedList key={`${activeTeamId}-${refresh}`} items={recent.map(round => ({ ...round, name: dateLabel(round.completedAt, true) }))} className="statistics-recent-list" renderItem={round => <li key={round.id} data-round={round.id} className="h-18 shrink-0 rounded-xl border border-line bg-slate-50/50"><button type="button" onClick={() => setSelectedRound(round)} aria-label={`Détails du point du ${dateLabel(round.completedAt, true)}`} className={`${control} flex h-full w-full items-center justify-between gap-2 px-3 text-left`}><span className="min-w-0"><time dateTime={round.completedAt} className="block text-xs font-semibold">{dateLabel(round.completedAt, true)}</time><span className="mt-1 block text-[10px] font-normal text-muted">{round.people.length} tours · {duration(round.people.reduce((sum, p) => sum + p.speakingSeconds, 0))}</span></span><span aria-hidden="true" className="text-lg text-accent">↗</span></button></li>} />}
+          </section>
         </div>
-        </div>
-        <details className="rounded-xl border border-line bg-slate-50/70 px-3 text-[10px] text-muted"><summary className={`min-h-11 cursor-pointer content-center font-semibold text-brand ${focus}`}>Comprendre ces statistiques</summary><p className="pb-3 leading-relaxed">{HISTORY_DAYS} jours UTC · Les bilans plus anciens sont supprimés de la base au chargement ou à l’enregistrement d’un bilan de cette équipe. Moyenne et respect du temps : passages mesurés (≥ 1 s) uniquement. Les numéros d’humeur ne sont pas comparables entre baromètres. Les scores portent sur la gestion du temps, jamais sur la qualité d’une contribution.</p></details>
-      </div>}
-    </section>
-  );
+      </div>
+    </div>}
+    <StatisticsDetails methodology={methodology} notice={notice} round={selectedRound} person={selectedPerson} onClose={closeDetails} />
+  </section>;
 }
