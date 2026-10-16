@@ -5,6 +5,7 @@ import * as schema from '@/db/schema';
 import { NextResponse } from 'next/server';
 import { configureNeonNetwork } from './neon-network';
 import { resolveSelectedTeam, WorkspaceError } from './workspace-store';
+import { teamReadCache, teamReadKey } from './shared-read-cache';
 
 let connection: ReturnType<typeof createDatabase> | undefined;
 function createDatabase() {
@@ -20,7 +21,11 @@ export function sameOrigin(request: Request) {
   return request.headers.get('origin') === new URL(request.url).origin;
 }
 export async function selectedTeam(request: Request) {
-  return resolveSelectedTeam(database(), request.headers.get('X-Team-Id'));
+  const id = request.headers.get('X-Team-Id');
+  const load = () => resolveSelectedTeam(database(), id);
+  return request.method === 'GET'
+    ? teamReadCache.read(teamReadKey('identity', id ?? ''), 5_000, load)
+    : load();
 }
 export function databaseFailure(error: unknown) {
   if (error instanceof WorkspaceError) return NextResponse.json({ error: error.message }, { status: error.status, headers: { 'Cache-Control': 'no-store' } });

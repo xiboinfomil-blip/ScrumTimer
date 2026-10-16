@@ -97,7 +97,7 @@ test('DELETE teams route requires same-origin strict JSON and delegates exact-na
   assert.match(handler, /strictObject\(await readJson\(request\), \['teamId', 'name'\]\)/);
   assert.match(handler, /capabilityId\(input.teamId\)/);
   assert.match(handler, /validateTeamName\(input.name\)/);
-  assert.match(handler, /response\(await deleteTeam\(database\(\), input\)\)/);
+  assert.match(handler, /response\(await teamReadCache\.mutate\(\(\) => deleteTeam\(database\(\), input\)\)\)/);
   assert.ok(handler.indexOf('sameOrigin(request)') < handler.indexOf('readJson(request)'));
   assert.ok(handler.indexOf('readJson(request)') < handler.indexOf('database()'));
   assert.doesNotMatch(handler, /input.name\s*=|selectTeam\(/, 'never normalize confirmation or switch to another team before deleting');

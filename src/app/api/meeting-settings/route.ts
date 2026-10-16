@@ -3,11 +3,15 @@ import { database, databaseFailure, readJson, sameOrigin, selectedTeam } from '@
 import { validateMeetingSettings } from '@/lib/meeting-settings';
 import { readMeetingSettings, saveMeetingSettings } from '@/lib/meeting-store';
 import { WorkspaceError } from '@/lib/workspace-store';
+import { teamReadCache, teamReadKey } from '@/lib/shared-read-cache';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const response = (value: unknown) => NextResponse.json(value, { headers: { 'Cache-Control': 'no-store' } });
 export async function GET(request: Request) {
-  try { return response(await readMeetingSettings(database(), await selectedTeam(request))); }
+  try {
+    const id = await selectedTeam(request);
+    return response(await teamReadCache.read(teamReadKey('meeting-settings', id), 5_000, () => readMeetingSettings(database(), id)));
+  }
   catch (error) { return databaseFailure(error); }
 }
 export async function PUT(request: Request) {
@@ -15,6 +19,9 @@ export async function PUT(request: Request) {
   let input;
   try { input = validateMeetingSettings(await readJson(request)); }
   catch (error) { return databaseFailure(new WorkspaceError(400, error instanceof Error ? error.message : 'Questions invalides.')); }
-  try { return response(await saveMeetingSettings(database(), await selectedTeam(request), input)); }
+  try {
+    const id = await selectedTeam(request);
+    return response(await teamReadCache.mutate(() => saveMeetingSettings(database(), id, input)));
+  }
   catch (error) { return databaseFailure(error); }
 }

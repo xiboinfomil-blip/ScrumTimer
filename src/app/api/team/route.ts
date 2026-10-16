@@ -3,12 +3,13 @@ import { database, selectedTeam, readJson, sameOrigin, databaseFailure } from '@
 import { validateTeamRequest } from '@/lib/team-validation';
 import { readTeam, writeTeam } from '@/lib/relational-store';
 import { readDailyMeter, validateDailyCheckIns } from '@/lib/workspace-store';
+import { teamReadCache, teamReadKey } from '@/lib/shared-read-cache';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const db = database(); const id = await selectedTeam(request);
-    return NextResponse.json(await readTeam(db, id), { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json(await teamReadCache.read(teamReadKey('team', id), 5_000, () => readTeam(db, id)), { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) { return databaseFailure(error); }
 }
 export async function PUT(request: Request) {
@@ -19,7 +20,7 @@ export async function PUT(request: Request) {
   try {
     const db = database(); const id = await selectedTeam(request);
     validateDailyCheckIns(body.team, (await readDailyMeter(db, id)).meter);
-    const revision = await writeTeam(db, id, body.revision, body.team);
+    const revision = await teamReadCache.mutate(() => writeTeam(db, id, body.revision, body.team));
     if (revision === null) return NextResponse.json({ error: 'Équipe modifiée dans un autre onglet. Rechargez avant de synchroniser.' }, { status: 409 });
     return NextResponse.json({ revision });
   } catch (error) { return databaseFailure(error); }

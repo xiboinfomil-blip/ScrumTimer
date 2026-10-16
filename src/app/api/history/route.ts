@@ -3,12 +3,13 @@ import { database, selectedTeam, readJson, sameOrigin, databaseFailure } from '@
 import { validateHistoryInput } from '@/lib/team-validation';
 import { readHistory, resetDailyRound, writeHistory } from '@/lib/relational-store';
 import { mauritiusDay, strictObject } from '@/lib/workspace-store';
+import { teamReadCache, teamReadKey } from '@/lib/shared-read-cache';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const db = database(); const id = await selectedTeam(request);
-    return NextResponse.json({ rounds: await readHistory(db, id), day: mauritiusDay() }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ rounds: await teamReadCache.read(teamReadKey('history', id), 5_000, () => readHistory(db, id)), day: mauritiusDay() }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) { return databaseFailure(error); }
 }
 export async function POST(request: Request) {
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
   try {
     const db = database(); const id = await selectedTeam(request);
     // Team bootstrap must precede history writes; never create an empty team over a saved one.
-    if (!await writeHistory(db, id, round)) return NextResponse.json({ error: 'Le point quotidien est déjà terminé aujourd’hui.' }, { status: 409 });
+    if (!await teamReadCache.mutate(() => writeHistory(db, id, round))) return NextResponse.json({ error: 'Le point quotidien est déjà terminé aujourd’hui.' }, { status: 409 });
     return NextResponse.json({ saved: true });
   } catch (error) { return databaseFailure(error); }
 }
@@ -32,7 +33,7 @@ export async function DELETE(request: Request) {
   } catch { return NextResponse.json({ error: 'Bilan invalide.' }, { status: 400 }); }
   try {
     const db = database(); const id = await selectedTeam(request);
-    if (!await resetDailyRound(db, id, roundId as string)) return NextResponse.json({ error: 'Le bilan a changé. Rechargez la page.' }, { status: 409 });
+    if (!await teamReadCache.mutate(() => resetDailyRound(db, id, roundId as string))) return NextResponse.json({ error: 'Le bilan a changé. Rechargez la page.' }, { status: 409 });
     return NextResponse.json({ reset: true });
   } catch (error) { return databaseFailure(error); }
 }
