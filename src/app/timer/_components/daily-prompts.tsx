@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { useTeam } from '@/providers/team-provider';
 import { DEFAULT_DISCUSSION_PROMPTS, validateDiscussionPrompts, validateMeetingSettings, type MeetingSettings } from '@/lib/meeting-settings';
@@ -13,11 +14,20 @@ const descriptions = [
 ];
 const defaultHeadings = ['HIER', 'EN CE MOMENT', 'AUJOURD’HUI'];
 
-export function DailyPrompts({ className = '' }: { className?: string }) {
+type SpeakerContent = {
+  speakerId?: string | null;
+  speakerName?: string;
+  note?: string;
+  notesError?: string;
+  retryNotes?: () => void;
+};
+
+export function DailyPrompts({ className = '', ...speaker }: SpeakerContent & { className?: string }) {
   const { activeTeamId } = useTeam();
-  return <TeamPrompts key={activeTeamId ?? 'none'} teamId={activeTeamId} className={className} />;
+  return <TeamPrompts key={activeTeamId ?? 'none'} teamId={activeTeamId} className={className} {...speaker} />;
 }
-function TeamPrompts({ teamId, className }: { teamId: string | null; className: string }) {
+function TeamPrompts({ teamId, className, speakerId, speakerName, note, notesError, retryNotes }: SpeakerContent & { teamId: string | null; className: string }) {
+  const reduced = useReducedMotion();
   const [settings, setSettings] = useState<MeetingSettings>({ prompts: [...DEFAULT_DISCUSSION_PROMPTS], revision: 0 });
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
@@ -67,7 +77,20 @@ function TeamPrompts({ teamId, className }: { teamId: string | null; className: 
   };
   const standard = settings.prompts.length === 3 && settings.prompts.every((prompt, index) => prompt === DEFAULT_DISCUSSION_PROMPTS[index]);
   return (
-    <Paper component="section" elevation={0} className={`daily-prompts flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden rounded-2xl border border-line bg-white p-3 ${className}`} aria-labelledby="prompts-title">
+    <Paper component="section" elevation={0} className={`daily-prompts flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-line bg-white p-3 ${className}`} aria-labelledby={note ? 'sidebar-note-title' : 'prompts-title'} data-speaker-sidebar>
+      <motion.div key={`${speakerId ?? 'none'}-${note ? 'note' : 'questions'}`} initial={reduced ? false : { x: '100%' }} animate={{ x: 0 }} transition={reduced ? { duration: 0 } : { duration: .32, ease: [.22, 1, .36, 1] }} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" data-sidebar-slide>
+      {notesError && <div role="alert" className="shrink-0 text-[11px] text-danger">{notesError} <Button size="small" onClick={retryNotes}>Réessayer les notes</Button></div>}
+      {note ? <>
+        <div className="shrink-0 border-b border-line pb-3">
+          <p className="mb-1 text-[10px] font-semibold tracking-wide text-brand">LE FIL DE VOTRE PASSAGE</p>
+          <h2 id="sidebar-note-title" className="text-sm font-bold">Le pense-bête</h2>
+          <p className="mt-1 break-words text-xs text-muted">{speakerName}</p>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border-l-2 border-accent bg-orange-50/70 p-3">
+          <p data-speaker-hint className="whitespace-pre-wrap break-words text-sm leading-relaxed text-ink [overflow-wrap:anywhere]">{note}</p>
+        </div>
+        <p className="shrink-0 border-t border-line pt-3 text-[11px] text-muted [@media(max-height:650px)]:hidden">Note partagée avec l’équipe · aujourd’hui, heure de Maurice.</p>
+      </> : <>
       <div className="flex shrink-0 items-center justify-between gap-1 border-b border-line">
         <h2 id="prompts-title" className="text-sm font-bold">Le fil du point</h2>
         <Button size="small" sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 11, textTransform: 'none' }} disabled={!loaded || saving} onClick={() => { setDraft([...settings.prompts]); setEditing(true); setError(''); setNotice(''); }} aria-label="Modifier les questions de l’équipe">Modifier</Button>
@@ -85,6 +108,8 @@ function TeamPrompts({ teamId, className }: { teamId: string | null; className: 
         ))}
       </div>}
       <p className="mt-auto shrink-0 border-t border-line pt-3 text-xs leading-relaxed text-muted [@media(max-height:650px)]:hidden">L’essentiel, simplement. Un sujet à approfondir ? Gardez-le pour après le tour.</p>
+      </>}
+      </motion.div>
       <Dialog open={editing} onClose={() => { if (!saving) setEditing(false); }} aria-labelledby="edit-prompts-title" fullWidth maxWidth="sm">
         <DialogTitle id="edit-prompts-title">Questions de l’équipe</DialogTitle>
         <DialogContent>

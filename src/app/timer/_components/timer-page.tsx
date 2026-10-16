@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
 import { Button, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
@@ -17,6 +17,7 @@ import { TimerPanel } from './timer-panel';
 import { SessionResults } from './session-results';
 import { TimerManagementDialog } from './timer-management-dialog';
 import { useViewMotion } from '@/hooks/use-view-motion';
+import { useDailyHints } from '@/hooks/use-daily-hints';
 
 export type StandupTimer = ReturnType<typeof useStandupTimer>;
 
@@ -26,8 +27,12 @@ export function TimerPage() {
   const timer = useStandupTimer();
   const [view, setView] = useState<'timer' | 'team' | 'prompts'>('timer');
   const [sharing, setSharing] = useState(false);
-  const panels = useViewMotion(`${view}-${timer.focusMode}-${timer.activeId}`);
+  const panels = useViewMotion(`${view}-${timer.focusMode}`);
   const { activeTeamId, activeTeamName } = useTeam();
+  const notes = useDailyHints(activeTeamId);
+  const refreshNotes = notes.retry;
+  useEffect(() => { refreshNotes(); }, [timer.activeId, refreshNotes]);
+  const note = notes.data?.hints.find(hint => hint.participantId === timer.person?.id);
   const target = useRef<HTMLDivElement>(null);
   const presentation = usePresentation(target);
   const index = timer.people.findIndex(person => person.id === timer.activeId);
@@ -68,13 +73,13 @@ export function TimerPage() {
         tabs={[
           { value: 'timer', label: 'Minuteur' },
           { value: 'team', label: 'Participants' },
-          { value: 'prompts', label: 'Questions' },
+          { value: 'prompts', label: note ? 'Pense-bête' : 'Questions' },
         ]}
       />}
       <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 items-stretch gap-4 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'grid-cols-1' : timer.focusMode ? 'grid-cols-[minmax(0,1fr)_240px] max-[800px]:grid-cols-1' : 'grid-cols-[200px_minmax(0,1fr)_190px] min-[1100px]:grid-cols-[230px_minmax(0,1fr)_230px] max-[800px]:grid-cols-[minmax(0,1fr)]'}`} data-view={timer.focusMode || presentation.presenting ? 'timer' : view}>
         {!timer.focusMode && !presentation.presenting && <TeamLineup timer={timer} className={view !== 'team' ? 'max-[800px]:hidden' : ''} />}
-        <TimerPanel timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={!timer.focusMode && !presentation.presenting && view !== 'timer' ? 'max-[800px]:hidden' : ''} />
-        {!presentation.presenting && <DailyPrompts className={timer.focusMode || view !== 'prompts' ? 'max-[800px]:hidden' : ''} />}
+        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={!timer.focusMode && !presentation.presenting && view !== 'timer' ? 'max-[800px]:hidden' : ''} />
+        {!presentation.presenting && <DailyPrompts speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} className={timer.focusMode || view !== 'prompts' ? 'max-[800px]:hidden' : ''} />}
       </div>
       <TimerManagementDialog timer={timer} />
     </motion.div>

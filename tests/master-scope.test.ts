@@ -19,12 +19,18 @@ test('master has no standalone notes/statistics route entries or navbar referenc
 test('master timer still wires active-speaker notes and the read-only full-note dialog', () => {
   assert.match(source('src/app/timer/page.tsx'), /return <TimerPage\s*\/>/);
   const timer = source('src/app/timer/_components/timer-page.tsx');
-  assert.match(timer, /<TimerPanel timer=/);
+  assert.match(timer, /<TimerPanel notes=\{notes\} timer=/);
+  assert.match(timer, /useDailyHints\(activeTeamId\)/);
+  assert.match(timer, /refreshNotes\(\);.*\[timer\.activeId, refreshNotes\]/);
+  assert.match(timer, /<DailyPrompts speakerId=\{timer\.activeId\}.*note=\{note\?\.hint\}/);
   const panel = source('src/app/timer/_components/timer-panel.tsx');
-  assert.match(panel, /useDailyHints\(activeTeamId\)/);
   assert.match(panel, /hints\.find\(hint => hint\.participantId === person\?\.id\)/);
-  assert.match(panel, /refreshNotes\(\);.*\[person\?\.id, refreshNotes\]/);
-  assert.match(panel, /data-speaker-hint[^>]*>\{note\.hint\}/);
+  assert.doesNotMatch(panel, /data-speaker-hint/);
+  const sidebar = source('src/app/timer/_components/daily-prompts.tsx');
+  assert.match(sidebar, /data-speaker-hint[^>]*>\{note\}/);
+  assert.match(sidebar, /key=\{`\$\{speakerId/);
+  assert.match(sidebar, /initial=\{reduced \? false : \{ x: '100%' \}\}/);
+  assert.match(sidebar, /\{note \? <>/);
   assert.match(panel, /Pense-bête/);
   assert.match(panel, /<Dialog open=\{readingNote\}/);
   assert.match(panel, /Le pense-bête de \{person\?\.name/);

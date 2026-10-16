@@ -39,7 +39,7 @@ with sync_playwright() as p:
                 {'participantId': pid, 'hint': text, 'revision': 1}
                 for pid, text in hints.items()]})
         context.route('**/api/daily-hints', hints_api)
-        context.route('**/api/meeting-settings', lambda route: route.fulfill(json={'prompts': [], 'revision': 0}))
+        context.route('**/api/meeting-settings', lambda route: route.fulfill(json={'prompts': ['Qu’avez-vous fait hier ?', 'Sur quoi travaillez-vous ?', 'Que ferez-vous aujourd’hui ?'], 'revision': 0}))
         context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
         context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=[]))
         page = context.new_page()
@@ -98,6 +98,9 @@ with sync_playwright() as p:
         first = page.locator('#speaker-name').inner_text()
         assert first in ['Alice <safe>', 'Bob', 'Charlie']
         expect(page.locator('[data-speaker-hint]')).to_have_text(hints[first.lower()])
+        expect(page.locator('.timer-panel [data-speaker-hint]')).to_have_count(0)
+        expect(page.locator('[data-speaker-sidebar]')).to_contain_text(first)
+        expect(page.locator('[data-speaker-sidebar] #prompts-title')).to_have_count(0)
         page.get_by_role('button', name=f'Lire la note de {first}', exact=True).click()
         note_dialog = page.get_by_role('dialog', name=f'Le pense-bête de {first}', exact=True)
         expect(note_dialog).to_be_visible()
@@ -146,6 +149,13 @@ with sync_playwright() as p:
         expect(page.locator('[data-speaker-hint]')).to_have_text(hints[next_name.lower()])
         expect(cue).to_contain_text('À TOI DE PARLER !')
         expect(page.locator('#start-button')).to_contain_text('Pause')
+        # Next speaker without a note restores questions, with slide-only motion.
+        hints.clear()
+        page.set_viewport_size({'width': 1366, 'height': 768})
+        page.locator('#next-button').click()
+        expect(page.locator('[data-speaker-sidebar] #prompts-title')).to_be_visible()
+        expect(page.locator('[data-speaker-sidebar]')).to_contain_text('Qu’avez-vous fait hier ?')
+        expect(page.locator('[data-speaker-sidebar] [data-speaker-hint]')).to_have_count(0)
 
         current = page.locator('#speaker-name').inner_text()
         page.evaluate("""() => {

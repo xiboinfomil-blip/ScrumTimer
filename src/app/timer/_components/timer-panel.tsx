@@ -1,9 +1,8 @@
 'use client';
 
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper } from '@mui/material';
-import { useEffect, useState } from 'react';
-import { useDailyHints } from '@/hooks/use-daily-hints';
-import { useTeam } from '@/providers/team-provider';
+import { useState } from 'react';
+import type { useDailyHints } from '@/hooks/use-daily-hints';
 import { primaryButton, secondaryButton } from '@/components/ui/styles';
 import { timerUrgency } from '@/lib/timer';
 import type { StandupTimer } from './timer-page';
@@ -13,14 +12,10 @@ import { TimerIcon } from './timer-icon';
 
 const circumference = 2 * Math.PI * 136;
 
-export function TimerPanel({ timer, className = '' }: { timer: StandupTimer; className?: string }) {
+export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTimer; notes: ReturnType<typeof useDailyHints>; className?: string }) {
   const { people, person, remaining, turnTotal, running, ended, warning, turnStarted } = timer;
-  const { activeTeamId } = useTeam();
-  const notes = useDailyHints(activeTeamId);
   const [readingNote, setReadingNote] = useState(false);
   const note = notes.data?.hints.find(hint => hint.participantId === person?.id);
-  const refreshNotes = notes.retry;
-  useEffect(() => { refreshNotes(); }, [person?.id, refreshNotes]);
 
   const seconds = Math.ceil(Math.abs(remaining));
   const minutes = Math.floor(seconds / 60);
@@ -49,7 +44,6 @@ export function TimerPanel({ timer, className = '' }: { timer: StandupTimer; cla
       <div className="min-w-0 overflow-hidden">
         {timer.focusMode ? <SpeakerSlider timer={timer} /> : <h2 key={timer.activeId} id="speaker-name" className="truncate text-3xl font-bold leading-tight tracking-tight motion-safe:animate-enter max-[650px]:text-xl" title={speakerName} aria-live="polite" aria-atomic="true">{speakerName}</h2>}
         {ended ? <p id="time-up-alert" role="alert" className="text-[11px] font-semibold text-danger"><span className="sr-only">{person?.name}, </span>Temps utilisé. Merci de passer la parole.</p> : <span className="text-[11px] text-muted [@media(max-height:650px)]:hidden" id="speaker-mood" hidden={!person}>{person ? `Humeur ${person.mood} / 4 · ${running ? 'Parle maintenant' : 'À vous la parole'}` : ''}</span>}
-        {note && <p data-speaker-hint className="mx-auto mt-1 max-w-lg line-clamp-2 whitespace-pre-wrap break-words rounded-lg border-l-2 border-accent bg-orange-50/70 px-2 py-1 text-left text-[11px] leading-4 text-ink">{note.hint}</p>}
       </div>
       <div className="row-start-3 grid h-full min-h-0 min-w-0 place-items-center [container-type:size]">
         {/* Size against both dimensions of the remaining grid cell, not the viewport. */}
