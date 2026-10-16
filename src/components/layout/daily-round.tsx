@@ -2,10 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Paper } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { RoundFeedback } from '@/components/ui/round-feedback';
 import { DailyDashboard } from './daily-dashboard';
 
 /** Available on every device, even after the transient timer/session is gone. */
@@ -19,17 +17,20 @@ export function DailyRound() {
     setConfirm(false);
     if (await resetToday()) router.replace('/participants');
   };
-  return <Paper component="section" variant="outlined" className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-2 overflow-hidden rounded-2xl! border-slate-200! p-2 sm:p-3" aria-label="Point quotidien du jour">
-    <div className="flex shrink-0 items-center justify-between gap-2">
-      <div className="min-w-0 border-l-[3px] border-accent pl-2.5"><h1 className="truncate text-lg font-bold tracking-tight text-brand max-[400px]:text-base" title={activeTeamName}>Bilan du jour · {activeTeamName}</h1><p className="text-[11px] text-muted [@media(max-height:650px)]:hidden">{new Intl.DateTimeFormat('fr-FR', { timeZone: 'Indian/Mauritius', day: 'numeric', month: 'short' }).format(new Date(round.completedAt))} · {round.people.length} participants</p></div>
-      <span className="shrink-0 rounded-full bg-success-soft px-2 py-1 text-[10px] font-semibold text-success" title="Point quotidien terminé aujourd’hui">✓ Terminé</span><span className="sr-only">Point quotidien terminé aujourd’hui</span>
-    </div>
-    <div className="flex shrink-0 items-center gap-1 [&>button]:rounded-xl [&>button]:whitespace-nowrap [&>button]:text-[11px]">
-      <Button type="button" variant="contained" aria-label={view ? 'Masquer le bilan' : 'Voir le bilan du jour'} sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 11, textTransform: 'none', boxShadow: 'none' }} onClick={() => setView(value => !value)} aria-expanded={view} aria-controls="daily-dashboard"><span className="max-[650px]:hidden">{view ? 'Masquer le bilan' : 'Voir le bilan du jour'}</span><span className="min-[650px]:hidden">{view ? 'Masquer' : 'Voir le bilan'}</span></Button>
-      <Button type="button" variant="text" aria-label="Réinitialiser aujourd’hui" sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 11, textTransform: 'none' }} disabled={teamBusy || cloudStatus !== 'saved'} onClick={() => setConfirm(true)}><span className="max-[650px]:hidden">Réinitialiser aujourd’hui</span><span className="min-[650px]:hidden">Réinitialiser</span></Button>
-      <RoundFeedback round={round} />
-    </div>
+  return <section className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-3 overflow-hidden max-[650px]:gap-2 [@media(max-height:650px)]:gap-1" aria-label="Point quotidien du jour">
+    <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
+      <div className="min-w-0 flex-1 basis-56">
+        <p className="mb-1 flex items-center gap-2 text-xs font-semibold text-success"><span aria-hidden="true" className="size-2 rounded-full bg-success" />Point terminé · {new Intl.DateTimeFormat('fr-FR', { timeZone: 'Indian/Mauritius', day: 'numeric', month: 'long' }).format(new Date(round.completedAt))}</p>
+        <h1 className="text-3xl font-bold tracking-tight text-ink max-[650px]:text-xl [@media(max-height:650px)]:text-xl">Bilan du jour</h1>
+        <p className="mt-1 truncate text-sm text-muted max-[650px]:text-xs [@media(max-height:650px)]:hidden" title={activeTeamName}>{activeTeamName} · {round.people.length} participants · Un temps partagé, un recul utile.</p>
+        <span className="sr-only">Point quotidien terminé aujourd’hui</span>
+      </div>
+      <div className="flex shrink-0 items-center gap-2 max-[650px]:w-full">
+        <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand px-4 text-xs font-semibold text-white transition-colors hover:bg-brand-dark motion-reduce:transition-none max-[650px]:flex-1" aria-label={view ? 'Masquer le bilan' : 'Voir le bilan du jour'} onClick={() => setView(value => !value)} aria-expanded={view} aria-controls="daily-dashboard">{view ? 'Masquer le bilan' : 'Voir le bilan'}<span aria-hidden="true">{view ? '−' : '↗'}</span></button>
+        <button type="button" className="min-h-11 rounded-xl px-3 text-xs font-semibold text-muted hover:bg-slate-100 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50" aria-label="Réinitialiser aujourd’hui" disabled={teamBusy || cloudStatus !== 'saved'} onClick={() => setConfirm(true)}><span className="max-[650px]:hidden">Réinitialiser aujourd’hui</span><span className="min-[650px]:hidden">Réinitialiser</span></button>
+      </div>
+    </header>
     <DailyDashboard round={round} expanded={view} />
-    <ConfirmDialog open={confirm} title="Réinitialiser le point du jour ?" description="Le bilan, ses retours d’utilité et les humeurs d’aujourd’hui seront supprimés pour toute l’équipe, sur tous les appareils. Les équipes, participants et bilans des jours précédents sont conservés. Vous pourrez refaire le point avec le même baromètre du jour." confirmLabel="Réinitialiser aujourd’hui" danger onConfirm={() => void reset()} onClose={() => setConfirm(false)} />
-  </Paper>;
+    <ConfirmDialog open={confirm} title="Réinitialiser le point du jour ?" description="Le bilan et les humeurs d’aujourd’hui seront supprimés pour toute l’équipe, sur tous les appareils. Les équipes, participants et bilans des jours précédents sont conservés. Vous pourrez refaire le point avec le même baromètre du jour." confirmLabel="Réinitialiser aujourd’hui" danger onConfirm={() => void reset()} onClose={() => setConfirm(false)} />
+  </section>;
 }

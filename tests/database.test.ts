@@ -15,7 +15,7 @@ const round = { id: 'round-1', completedAt: now.toISOString(), people: [{ id: 'p
 
 test('normalized schema has no JSON columns, scoped identity keys and relational integrity', () => {
   const configs = Object.values(schema).map(getTableConfig);
-  assert.equal(configs.length, 18);
+  assert.equal(configs.length, 19);
   for (const table of configs) {
     for (const column of table.columns) assert.ok(!/json/i.test(column.getSQLType()), `${table.name}.${column.name}`);
     if (!['teams', 'workspaces'].includes(table.name) && !table.name.startsWith('remote_mood_')) {

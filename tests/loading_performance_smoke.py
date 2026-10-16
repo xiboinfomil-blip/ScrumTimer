@@ -19,7 +19,6 @@ ROUTES = {
     'participants': ('list', '#participants-page'),
     'mood': ('mood', '#mood-page'),
     'timer': ('timer', '#timer-page'),
-    'statistics': ('statistics', '#statistics-heading'),
     'teams': ('teams', '#teams-heading'),
 }
 
@@ -136,7 +135,7 @@ def gated_controls(page, route):
 
 def hydrated(page, route):
     expect(page.locator(ROUTES[route][1])).to_be_visible(timeout=30000)
-    # This also waits for route-local deferred reads on mood/timer/statistics.
+    # This also waits for route-local deferred reads on mood/timer.
     expect(page.locator('[data-page-skeleton]:visible')).to_have_count(0, timeout=30000)
     if route == 'teams':
         expect(page.get_by_role('button', name='Ouvrir l’équipe Équipe test', exact=True)).to_be_enabled()
@@ -248,35 +247,6 @@ def prompts_case(browser, mock, width, height):
     expect(panel.locator('[data-page-skeleton]')).to_have_count(0)
 
 
-def statistics_case(browser, mock, width, height):
-    page = open_page(browser, mock, width, height)
-    statistics = page.get_by_role('region', name='Le rythme de l’équipe.', exact=True)
-    indicators = statistics.locator('dl[aria-label="Indicateurs des cinq derniers jours"] dd')
-    page.goto(f'{BASE}/participants?team={TEAM_ID}')
-    hydrated(page, 'participants')
-    # Hold only the statistics read, not the provider's initial history read.
-    mock.hold('/api/history')
-    page.get_by_role('link', name='Statistiques', exact=True).click()
-    mock.wait_pending(page, '/api/history')
-    static_skeleton(page, 'statistics')
-    expect(statistics.get_by_role('button', name='Chargement…', exact=True)).to_be_disabled()
-    expect(statistics.get_by_role('definition')).to_have_count(0)
-    mock.release('/api/history', 503)
-    expect(statistics.get_by_role('status')).to_contain_text('Historique Neon indisponible')
-    expect(statistics.locator('[data-page-skeleton="statistics"]')).to_have_count(0)
-    expect(indicators).to_have_text(['—', '—', '—', '—'])
-    mock.hold('/api/history')
-    statistics.get_by_role('button', name='Réessayer', exact=True).click()
-    mock.wait_pending(page, '/api/history')
-    static_skeleton(page, 'statistics')
-    expect(statistics.get_by_role('button', name='Chargement…', exact=True)).to_be_disabled()
-    expect(indicators).to_have_count(0)
-    mock.release('/api/history')
-    expect(statistics.get_by_role('status')).to_contain_text('Historique chargé depuis Neon')
-    expect(statistics.locator('[data-page-skeleton="statistics"]')).to_have_count(0)
-    expect(indicators).to_have_text(['0', '0', '—', '—'])
-
-
 def observe_ring(page):
     page.locator('#ring-progress').evaluate("""ring => {
         window.__ringProbe?.observer.disconnect();
@@ -359,7 +329,6 @@ def main():
                               lambda b, m, w, h, target=path: initial_error_case(b, m, w, h, target)))
             cases.extend([('deferred mood/error/retry', mood_case),
                           ('deferred prompts/error/retry', prompts_case),
-                          ('deferred statistics/error/retry', statistics_case),
                           ('timer idle/running/unmount', timer_case)])
             for name, case in cases:
                 label = f'{name} {width}x{height}'

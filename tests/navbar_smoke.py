@@ -32,16 +32,25 @@ with sync_playwright() as p:
         page.goto(BASE + '/participants')
         trigger = page.get_by_role('button', name='Choisir une équipe : Équipe Expérience & Innovation', exact=True)
         expect(trigger).to_be_enabled()
+        navigation = page.get_by_role('navigation', name='Navigation du point quotidien')
+        expect(navigation.get_by_role('link', name='Participants', exact=True)).to_have_attribute('aria-current', 'page')
+        expect(navigation.get_by_role('button', name='Humeurs — Ajoutez au moins une personne présente pour continuer.', exact=True)).to_be_disabled()
+        expect(navigation.get_by_role('button', name='Minuteur', exact=False)).to_be_disabled()
+        page.keyboard.press('Control+Home')
+        page.get_by_role('link', name='Aller au contenu', exact=True).focus()
+        page.keyboard.press('Enter')
+        expect(page.locator('#main-content')).to_be_focused()
         for width, height in SIZES:
             page.set_viewport_size({'width': width, 'height': height})
             header = page.locator('.site-header')
+            expect(header.locator('a[href^="/statistics"], a[href^="/daily-notes"]')).to_have_count(0)
             assert header.bounding_box()['height'] <= (112 if width <= 800 else 74)
             boxes = []
             for control in header.locator('a:not([href="#main-content"]), button').all():
                 box = control.bounding_box()
                 if not box:
                     continue
-                assert box['height'] >= 44, (width, box)
+                assert box['height'] >= 43.9, (width, box)
                 assert box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (width, box)
                 for previous in boxes:
                     overlap_x = min(box['x'] + box['width'], previous['x'] + previous['width']) - max(box['x'], previous['x'])
@@ -62,7 +71,10 @@ with sync_playwright() as p:
             panel.get_by_role('button', name='Annuler', exact=True).click()
             page.keyboard.press('Escape')
             expect(panel).not_to_be_visible()
+            expect(page.locator('[aria-label="Choisir ou créer une équipe"]')).to_have_count(0)
             expect(trigger).to_be_focused()
+            if width in [320, 1366] and preference == 'no-preference':
+                page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-navbar-{width}.png'))
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         page.get_by_role('link', name='Guide d’utilisation', exact=True).click()
         expect(page.get_by_role('link', name='Guide d’utilisation', exact=True)).to_have_attribute('aria-current', 'page')

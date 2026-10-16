@@ -1,22 +1,21 @@
-import type { Mood } from '../types/team.ts';
+import type { Person as HistoryPerson, Round as HistoryRound } from '@infomil/scrum-shared/types';
 import { scoreSpeaker, type SessionSpeaker } from './session-results.ts';
+import { historyCutoff as sharedHistoryCutoff } from '@infomil/scrum-shared/statistics';
 
-export interface HistoryPerson {
-  id: string; name: string; mood: Mood | null; speakingSeconds: number;
-  budgetSeconds: number; timeUp: boolean; score: number | null; meterTitle: string | null;
-}
-export interface HistoryRound { id: string; completedAt: string; people: HistoryPerson[] }
+export type { HistoryPerson, HistoryRound };
 export function dailyRoundStatistics(round: HistoryRound) {
   const measured = round.people.filter(person => person.speakingSeconds >= 1 && person.budgetSeconds > 0);
   const scored = measured.filter(person => person.score !== null);
   const withinTime = measured.filter(person => person.speakingSeconds <= person.budgetSeconds).length;
-  const optimal = measured.filter(person => person.speakingSeconds >= person.budgetSeconds / 4 && person.speakingSeconds <= person.budgetSeconds).length;
+  const optimal = measured.filter(person => person.speakingSeconds / person.budgetSeconds >= .5 && person.speakingSeconds / person.budgetSeconds <= .85).length;
+  const closing = measured.filter(person => person.speakingSeconds / person.budgetSeconds > .85 && person.speakingSeconds <= person.budgetSeconds).length;
   const seconds = round.people.reduce((sum, person) => sum + person.speakingSeconds, 0);
   const overtimeSeconds = measured.reduce((sum, person) => sum + Math.max(0, person.speakingSeconds - person.budgetSeconds), 0);
   const sorted = [...round.people].sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.name.localeCompare(b.name, 'fr') || a.id.localeCompare(b.id));
   return {
     seconds, overtimeSeconds, measured: measured.length, scored: scored.length, withinTime, optimal,
-    short: withinTime - optimal,
+    short: withinTime - optimal - closing,
+    closing,
     overtime: measured.length - withinTime,
     unmeasured: round.people.length - measured.length,
     averageSeconds: measured.length ? measured.reduce((sum, person) => sum + person.speakingSeconds, 0) / measured.length : null,
@@ -29,10 +28,7 @@ export function dailyRoundStatistics(round: HistoryRound) {
 }
 export const HISTORY_DAYS = 5;
 export function historyCutoff(now = new Date()) {
-  const cutoff = new Date(now);
-  cutoff.setUTCHours(0, 0, 0, 0);
-  cutoff.setUTCDate(cutoff.getUTCDate() - (HISTORY_DAYS - 1));
-  return cutoff;
+  return new Date(sharedHistoryCutoff(now));
 }
 export function normalizeHistory(value: unknown, now = new Date()): HistoryRound[] {
   if (!Array.isArray(value)) return [];

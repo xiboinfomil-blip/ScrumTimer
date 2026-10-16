@@ -6,5 +6,5 @@ export default defineConfig([
   ...nextVitals,
   ...nextTypescript,
   { rules: { '@next/next/no-img-element': 'off', 'react-hooks/set-state-in-effect': 'off' } },
-  globalIgnores(['.next/**', 'out/**', 'public/**', 'mood-meters/**', 'next-env.d.ts', '*.js']),
+  globalIgnores(['**/.next/**', '**/out/**', '**/node_modules/**', 'public/**', 'mood-meters/**', '**/next-env.d.ts', '*.js']),
 ]);

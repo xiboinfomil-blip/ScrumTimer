@@ -34,9 +34,9 @@ export function TimerSettings({ timer }: { timer: StandupTimer }) {
   }
 
   return (
-    <form className="timer-settings col-span-full grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 rounded-xl border border-line bg-slate-50/60 p-2 text-[11px] text-muted max-[650px]:border-0 max-[650px]:p-0" noValidate onSubmit={applyDuration}>
+    <form className="timer-settings col-span-full grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 rounded-xl border border-line bg-slate-50/70 p-2 text-xs text-muted max-[650px]:border-0 max-[650px]:p-0" noValidate onSubmit={applyDuration}>
       <div className="col-span-full flex min-w-0 items-center justify-between gap-2">
-        <label className="min-w-0 text-left" htmlFor="duration-minutes">Durée</label>
+        <label className="min-w-0 text-left font-semibold text-ink" htmlFor="duration-minutes">Par personne</label>
         <div className="flex shrink-0 items-center gap-1">
           <InputBase className={`${field} h-11 w-11 bg-white px-1! py-1! text-center text-xs`} sx={{ '& input': { textAlign: 'center', p: 0 } }} type="number" id="duration-minutes" inputProps={{ min: 0, max: 60, step: 1, 'aria-label': 'Minutes' }} required value={minutes} onChange={event => setMinutes(event.target.value)} />
           <span aria-hidden="true">m</span>

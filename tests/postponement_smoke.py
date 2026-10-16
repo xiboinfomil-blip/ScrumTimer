@@ -4,13 +4,14 @@ Run only against a current localhost:3000 app. Countdown time is controlled via
 Date.now, while native timers/RAF and new Date (archive timestamps) stay real.
 """
 from copy import deepcopy
+import os
 from datetime import datetime, timedelta, timezone
 import re
 from urllib.parse import urlparse
 
 from playwright.sync_api import expect, sync_playwright
 
-BASE = 'http://localhost:3000'
+BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000').rstrip('/')
 TEAM_ID = 'a' * 64
 SIZES = [(320, 568), (1366, 768)]
 ORIGINAL = {'meterId': 'original', 'title': 'Baromètre original'}
@@ -52,6 +53,7 @@ class WorkspaceMock:
         allowed = {'/api/teams': {'GET'}, '/api/team': {'GET', 'PUT'},
                    '/api/history': {'GET', 'POST'},
                    '/api/daily-meter': {'GET', 'POST'},
+                   '/api/daily-hints': {'GET'}, '/api/meeting-settings': {'GET'},
                    '/api/mood-meters/catalog': {'GET'}}
         if method not in allowed.get(path, set()):
             self.unexpected.append((method, path))
@@ -65,7 +67,11 @@ class WorkspaceMock:
                                           'memberCount': 2}], 'activeTeamId': TEAM_ID})
             return
         assert request.headers.get('x-team-id') == TEAM_ID, (method, path)
-        if path == '/api/team':
+        if path == '/api/daily-hints':
+            route.fulfill(json={'day': self.day, 'hints': []})
+        elif path == '/api/meeting-settings':
+            route.fulfill(json={'prompts': [], 'revision': 0})
+        elif path == '/api/team':
             if method == 'GET':
                 route.fulfill(json={'team': deepcopy(self.team), 'revision': self.revision})
             else:
@@ -159,7 +165,7 @@ def run_case(browser, width, height):
         expect(page.locator('#meter-catalogue-select')).to_have_value('-2')
         expect(page.locator('#meter-catalogue-select')).to_be_enabled()
         expect(page.locator('#random-meter-button')).to_be_enabled()
-        expect(page.locator('#daily-meter-note')).to_contain_text('Choisissez dans la liste avant le premier vote')
+        expect(page.locator('#daily-meter-note')).to_contain_text('Modifiable avant le premier vote')
         assert db.daily == ORIGINAL and db.daily_posts == [ORIGINAL]
         if width <= 800:
             page.get_by_role('group', name='Panneau du bilan', exact=True).get_by_role(

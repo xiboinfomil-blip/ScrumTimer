@@ -1,0 +1,14 @@
+{
+  "name": "@infomil/scrum-shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./contracts": "./src/contracts.ts",
+    "./types": "./src/types.ts",
+    "./statistics": "./src/statistics.ts",
+    "./ui": "./src/ui.tsx",
+    "./daily-hints": "./src/daily-hints.ts"
+  },
+  "peerDependencies": { "react": ">=19" }
+}

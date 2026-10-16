@@ -15,6 +15,11 @@ with sync_playwright() as p:
         record = {'id': 'dashboard', 'completedAt': now, 'people': people}
         people[-1]['meterTitle'] = 'Autre baromètre'
         team['roster'][-1]['moodSlide'] = {'title': 'Autre baromètre', 'image': '/mood-meters/slides/test/other.svg', 'slideNumber': 1}
+        unexpected = []
+        def block_unexpected(route):
+            unexpected.append(f'{route.request.method} {route.request.url}')
+            route.fulfill(status=599, json={'error': 'Unexpected API blocked'})
+        context.route('**/api/**', block_unexpected)
         context.route('**/api/teams', lambda route: route.fulfill(json={'teams': [{'id': 'a' * 64, 'name': 'Équipe dashboard', 'memberCount': 40}], 'activeTeamId': 'a' * 64}))
         context.route('**/api/team', lambda route: route.fulfill(json={'team': team, 'revision': 1}))
         context.route('**/api/history', lambda route: route.fulfill(json={'rounds': [record]}))
@@ -24,6 +29,21 @@ with sync_playwright() as p:
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(BASE + '/timer')
+        expect(page.get_by_role('heading', name='Bilan du jour', exact=True)).to_be_visible()
+        for width, height in [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]:
+            page.set_viewport_size({'width': width, 'height': height})
+            overview = page.get_by_role('region', name='Synthèse du point')
+            expect(overview).to_be_visible()
+            expect(overview).to_contain_text('40 sur 40 passages dans le temps prévu.')
+            expect(overview).to_contain_text('Un repère, pas un jugement.')
+            toggle = page.get_by_role('button', name='Voir le bilan du jour', exact=True)
+            expect(toggle).to_have_attribute('aria-expanded', 'false')
+            for button in [toggle, page.get_by_role('button', name='Réinitialiser aujourd’hui', exact=True)]:
+                box = button.bounding_box()
+                assert box and box['height'] >= 43.9 and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (width, height, box)
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight')
+            if width in [320, 1366] and motion == 'reduce':
+                page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-daily-overview-{width}.png'))
         page.get_by_role('button', name='Voir le bilan du jour', exact=True).click()
         expect(page.get_by_role('term').filter(has_text='Score moyen')).to_be_visible()
         expect(page.locator('[aria-label="Indicateurs du bilan du jour"] > div')).to_have_count(4)
@@ -40,6 +60,9 @@ with sync_playwright() as p:
             expect(dialog).to_contain_text('Score enregistré : 1000 pts')
             dialog.get_by_role('button', name='Fermer', exact=True).click()
             expect(dialog).not_to_be_visible()
+            row = scores.locator('[data-daily-person]').first.bounding_box()
+            list_box = scores.locator('.daily-score-list').bounding_box()
+            assert row and list_box and row['y'] >= list_box['y'] - 1 and row['y'] + row['height'] <= list_box['y'] + list_box['height'] + 1, (width, height, row, list_box)
             if width < 1024:
                 page.get_by_role('button', name='Mood meters', exact=True).click()
             moods = page.locator('[data-dashboard-column=moods]')
@@ -65,7 +88,10 @@ with sync_playwright() as p:
                 assert box['height'] >= 44 and box['y'] + box['height'] <= height + 1
             if width in [320, 1366] and motion == 'reduce':
                 page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-compact-daily-{width}.png'))
+        page.get_by_role('button', name='Masquer le bilan', exact=True).click()
+        expect(page.get_by_role('region', name='Synthèse du point')).to_be_visible()
         assert not errors, errors
+        assert not unexpected, unexpected
         context.close()
     browser.close()
-    print('PASS: compact dashboard no-scroll at six sizes, 40 participants, score details, mood filters, both motion preferences')
+    print('PASS: overview and detailed dashboard at six sizes, 44px actions, fully visible score rows, 40 participants, score details, mood filters, both motion preferences; all APIs mocked')

@@ -1,18 +1,16 @@
-export type PageSkeletonVariant = 'teams' | 'list' | 'mood' | 'timer' | 'statistics';
+export type PageSkeletonVariant = 'teams' | 'list' | 'mood' | 'timer';
 
 const labels: Record<PageSkeletonVariant, string> = {
   teams: 'Chargement des équipes…',
   list: 'Chargement de votre équipe depuis Neon…',
   mood: 'Chargement du baromètre…',
   timer: 'Chargement du minuteur…',
-  statistics: 'Chargement de l’historique…',
 };
 
 export function skeletonVariantForPath(pathname: string): PageSkeletonVariant {
   if (pathname === '/' || pathname === '/teams') return 'teams';
   if (pathname === '/mood') return 'mood';
   if (pathname === '/timer' || pathname === '/spectator') return 'timer';
-  if (pathname === '/statistics') return 'statistics';
   return 'list';
 }
 
@@ -36,23 +34,6 @@ function Prompts() {
   </div>)}</div>;
 }
 
-function Statistics() {
-  return <div className="flex flex-col gap-3">
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[0, 1, 2, 3].map(index => <div key={index} className={`${surface} p-3 sm:p-4`}><Block className="h-3 w-3/4" /><Block className="mt-2 h-7 w-20" /></div>)}</div>
-    <Block className="h-4 w-48" />
-    <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-      <div className="flex min-w-0 flex-col gap-3">
-        <div className={surface}><Block className="h-4 w-3/4" /><Block className="mt-2 h-3 w-1/2" /><div className="mt-3 grid grid-cols-5 gap-3">{[0, 1, 2, 3, 4].map(index => <div key={index} className="flex flex-col items-center gap-2"><Block className="h-3 w-5" /><Block className={`h-28 w-full max-w-10 ${index === 4 ? 'bg-orange-50' : 'bg-blue-50'}`} /><Block className="h-3 w-8" /></div>)}</div></div>
-        <div className={surface}><Block className="mb-3 h-4 w-3/4" /><Rows /></div>
-      </div>
-      <div className="flex min-w-0 flex-col gap-3">
-        <div className={surface}><Block className="h-4 w-1/2" /><Block className="mt-2 h-3 w-5/6" /><div className="mt-3 grid grid-cols-2 gap-2">{[0, 1, 2, 3].map(index => <Block key={index} className="h-14" />)}</div></div>
-        <div className={surface}><Block className="mb-3 h-4 w-1/2" /><Rows count={2} /></div>
-      </div>
-    </div>
-  </div>;
-}
-
 /** Static placeholders only: no timers, shimmer, pulse or interactive imitation. */
 export function PageSkeleton({ variant = 'list', scope = 'page', label, className = '' }: {
   variant?: PageSkeletonVariant;
@@ -72,7 +53,6 @@ export function PageSkeleton({ variant = 'list', scope = 'page', label, classNam
       {variant === 'list' && <><Block className="h-13 shrink-0 rounded-xl" /><div className="grid gap-3 min-[801px]:grid-cols-2"><div className={surface}><Rows /></div><div className={`${surface} max-[800px]:hidden`}><Rows /></div></div><Block className="h-11 w-40 self-end rounded-xl bg-blue-50" /></>}
       {variant === 'mood' && <>{!section && <Block className="h-13 shrink-0 rounded-xl min-[801px]:hidden" />}<div className={`grid min-h-0 flex-1 gap-3 ${section ? '' : 'min-[801px]:grid-cols-2'}`}><div className="flex min-h-34 flex-1 flex-col gap-2 rounded-2xl border border-line bg-slate-50 p-2"><div className="grid min-h-34 flex-1 grid-cols-2 grid-rows-2 gap-2">{[0, 1, 2, 3].map(index => <div key={index} className="flex min-h-16 flex-col justify-center gap-2 rounded-xl border border-line bg-white p-3"><Block className="size-6 bg-blue-50" /><Block className="h-3 w-3/4" /></div>)}</div><Block className="h-3 w-2/3 self-center" /></div>{!section && <div className={`${surface} max-[800px]:hidden`}><Rows /></div>}</div></>}
       {variant === 'timer' && (section ? <Prompts /> : <><Block className="h-13 shrink-0 rounded-xl min-[801px]:hidden" /><div className="grid min-h-0 flex-1 gap-3 min-[801px]:grid-cols-[200px_minmax(0,1fr)_190px] min-[1100px]:grid-cols-[240px_minmax(0,1fr)_210px]"><div className={`${surface} max-[800px]:hidden`}><Rows /></div><div className={`${surface} flex min-h-0 flex-col items-center justify-center gap-4`}><Block className="h-5 w-1/2" /><div className="aspect-square w-full max-w-56 rounded-full border-8 border-blue-50 bg-slate-50 [@media(max-height:650px)]:max-w-32" /><Block className="h-11 w-36 shrink-0 rounded-xl bg-blue-50" /></div><div className={`${surface} max-[800px]:hidden`}><Prompts /></div></div></>)}
-      {variant === 'statistics' && <Statistics />}
     </div>
   </div>;
 }

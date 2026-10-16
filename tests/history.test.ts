@@ -34,8 +34,9 @@ test('daily dashboard uses recorded scores, shared ranks and measured time categ
   assert.equal(stats.seconds, 309);
   assert.equal(stats.averageSeconds, 77.25);
   assert.equal(stats.withinTime, 3);
-  assert.equal(stats.optimal, 2);
-  assert.equal(stats.short, 1);
+  assert.equal(stats.optimal, 0);
+  assert.equal(stats.short, 2);
+  assert.equal(stats.closing, 1);
   assert.equal(stats.overtime, 1);
   assert.equal(stats.overtimeSeconds, 24);
   assert.equal(stats.unmeasured, 1);
@@ -45,8 +46,24 @@ test('daily dashboard uses recorded scores, shared ranks and measured time categ
   assert.equal(empty.averageScore, null);
   assert.equal(empty.averageSeconds, null);
   assert.equal(empty.optimal, 0);
+  assert.equal(empty.closing, 0);
   const legacy = dailyRoundStatistics({ ...round, people: [{ ...people[0], score: 867 }] });
   assert.equal(legacy.averageScore, 867, 'never recalculate an archived score');
+});
+test('daily dashboard time zones include 50 and 85 percent in optimal and 100 percent in closing', () => {
+  for (const [speakingSeconds, zone] of [
+    [0, 'unmeasured'], [.5, 'unmeasured'], [1, 'short'], [59.9, 'short'],
+    [60, 'optimal'], [102, 'optimal'], [102.1, 'closing'], [120, 'closing'], [120.1, 'overtime'],
+  ] as const) {
+    const stats = dailyRoundStatistics({ ...round, people: [{ ...round.people[0], speakingSeconds }] });
+    for (const key of ['short', 'optimal', 'closing', 'overtime', 'unmeasured'] as const) {
+      assert.equal(stats[key], key === zone ? 1 : 0, `${speakingSeconds}s: ${key}`);
+    }
+    assert.equal(stats.withinTime, speakingSeconds >= 1 && speakingSeconds <= 120 ? 1 : 0);
+    assert.equal(stats.short + stats.optimal + stats.closing, stats.withinTime);
+    assert.equal(stats.short + stats.optimal + stats.closing + stats.overtime, stats.measured);
+    assert.equal(stats.ranked[0].score, 1000, 'time zones never change archived scores');
+  }
 });
 test('historical leaderboard averages measured scores, shares ties and keeps participant identities', () => {
   const second: HistoryRound = { id: 'round-2', completedAt: '2026-10-14T11:00:00Z', people: [
@@ -87,7 +104,7 @@ test('daily summary fills empty days and does not call unmeasured skips on time'
 test('round snapshot retains stable id, meter label and calculated score', () => {
   const result = completedRound('stable-round', [{ id: 'a', name: '<b>Alice</b>', mood: 1, present: true, moodUpdatedAt: null, moodSlide: { title: 'Used deck', image: '/mood-meters/slides/deck/1.svg', slideNumber: 1 }, done: true, started: true, speakingSeconds: 30, budgetSeconds: 120, timeUp: false, attempts: 1 }]);
   assert.equal(result.id, 'stable-round');
-  assert.equal(result.people[0].score, 1000);
+  assert.equal(result.people[0].score, 500);
   assert.equal(result.people[0].meterTitle, 'Used deck');
   assert.equal(normalizeHistory([result]).length, 1);
 });

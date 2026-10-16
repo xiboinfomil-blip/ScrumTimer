@@ -80,3 +80,14 @@ export const roundFeedback = pgTable('round_feedback', {
   foreignKey({ columns: [t.teamId, t.sessionId], foreignColumns: [standupSessions.teamId, standupSessions.id] }).onDelete('cascade'),
   foreignKey({ columns: [t.teamId, t.sessionId, t.participantId], foreignColumns: [speakingTurns.teamId, speakingTurns.sessionId, speakingTurns.participantId] }).onDelete('cascade'),
   check('round_feedback_value', sql`${t.value} IN ('utile','mitige','pas-utile')`)]);
+
+// Identity FK, not membership: roster writes delete/reinsert team_members.
+export const participantDailyHints = pgTable('participant_daily_hints', {
+  teamId: text('team_id').notNull(), participantId: text('participant_id').notNull(),
+  day: date('day').notNull(), hint: text('hint').notNull(), revision: integer('revision').notNull(),
+}, t => [primaryKey({ columns: [t.teamId, t.participantId] }),
+  foreignKey({ columns: [t.teamId, t.participantId], foreignColumns: [participants.teamId, participants.id] }).onDelete('cascade'),
+  index('participant_daily_hints_day').on(t.day),
+  check('participant_daily_hints_revision', sql`${t.revision} >= 1`),
+  check('participant_daily_hints_text', sql`length(${t.hint}) BETWEEN 1 AND 600 AND ${t.hint} = btrim(${t.hint}, E' \\n\\r\\t\\013\\014') AND ${t.hint} !~ '[\\x01-\\x09\\x0B-\\x1F\\x7F-\\x9F]'`),
+]);

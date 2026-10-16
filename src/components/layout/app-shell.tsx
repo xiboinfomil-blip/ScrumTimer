@@ -28,9 +28,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => transition.stop();
   }, [pathname, ready, reduced, routeScope, animateRoute]);
   useEffect(() => {
+    if (pathname === '/help') return;
     const legacy = { '#participants': '/participants', '#mood': '/mood', '#timer': '/timer' }[location.hash];
     if (legacy) router.replace(legacy);
-  }, [router]);
+  }, [pathname, router]);
   return <MotionConfig reducedMotion="user" transition={{ type: 'spring', stiffness: 420, damping: 28 }}>
     {pathname !== '/spectator' && <Navbar />}
     <main id="main-content" tabIndex={-1} className="page mx-auto flex min-h-0 w-full max-w-480 flex-1 flex-col gap-3 overflow-hidden px-6 pt-4.5 pb-2.5 max-[1100px]:px-4 max-[1100px]:pt-3 max-[650px]:gap-2 max-[650px]:px-3 max-[650px]:py-2.5">

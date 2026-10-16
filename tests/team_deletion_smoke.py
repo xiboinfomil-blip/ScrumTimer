@@ -136,6 +136,7 @@ def manage(page, key):
     assert urlparse(page.url).path == '/manage-team', page.url
     saved(page)
     selected(page, key)
+    page.get_by_text('Suppression de l’équipe', exact=True).click()
     expect(page.get_by_role('button', name='Supprimer l’équipe ' + NAMES[key],
                             exact=True)).to_be_visible()
     expect(page.get_by_role('button', name='Supprimer l’équipe ', exact=False)).to_have_count(1)
@@ -211,7 +212,7 @@ def lifecycle(page, mock):
 
     confirm_delete(page, A)
     teams_page(page)
-    expect(page.get_by_text('Aucune équipe disponible. Créez votre équipe.', exact=True)).to_be_visible()
+    expect(page.get_by_text('Votre première équipe commence ici.', exact=True)).to_be_visible()
     saved(page)
     assert mock.db == {} and mock.count('DELETE') == 3
     assert urlparse(page.url).path == '/teams' and not urlparse(page.url).query
@@ -220,7 +221,7 @@ def lifecycle(page, mock):
     for _ in range(2):
         page.reload()
         teams_page(page)
-        expect(page.get_by_text('Aucune équipe disponible. Créez votre équipe.', exact=True)).to_be_visible()
+        expect(page.get_by_text('Votre première équipe commence ici.', exact=True)).to_be_visible()
         saved(page)
         assert not urlparse(page.url).query and mock.db == {}
         assert mock.count('GET', '/api/team') == reads
@@ -232,6 +233,7 @@ def lifecycle(page, mock):
     expect(page.get_by_text('Votre équipe prend forme ici.', exact=True)).to_be_visible()
     saved(page)
     selected(page, D)
+    page.get_by_text('Suppression de l’équipe', exact=True).click()
     expect(page.get_by_role('button', name='Supprimer l’équipe ' + NAMES[D],
                             exact=True)).to_be_visible()
     assert mock.count('POST') == 1 and list(mock.db) == [D]

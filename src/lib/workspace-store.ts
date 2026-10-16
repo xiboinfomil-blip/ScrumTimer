@@ -3,6 +3,8 @@ import { sql, type SQL } from 'drizzle-orm';
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
 import catalog from './remote-mood-catalog.json' with { type: 'json' };
 import type { TeamState } from '../types/team.ts';
+import { mauritiusDay } from '@infomil/scrum-shared/statistics';
+export { mauritiusDay } from '@infomil/scrum-shared/statistics';
 
 type Database = Pick<NeonHttpDatabase, 'execute' | 'batch'>;
 export type DailyMeter = { meterId: string; title: string };
@@ -14,12 +16,6 @@ const forbidden = () => new WorkspaceError(403, 'Équipe inaccessible.');
 export const capabilityId = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 export const newTeamId = () => randomBytes(32).toString('hex');
 
-/** Calendar date at the server, independent of the browser/system timezone. */
-export function mauritiusDay(now = new Date()): string {
-  const parts = new Intl.DateTimeFormat('en', { timeZone: 'Indian/Mauritius', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
-  const part = (type: string) => parts.find(p => p.type === type)!.value;
-  return `${part('year')}-${part('month')}-${part('day')}`;
-}
 export function validateTeamName(value: unknown): string {
   if (typeof value !== 'string' || /\p{Cc}/u.test(value)) throw new WorkspaceError(400, 'Nom d’équipe invalide.');
   const name = value.trim();

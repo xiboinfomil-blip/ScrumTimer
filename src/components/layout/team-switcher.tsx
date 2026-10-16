@@ -1,16 +1,20 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ComponentProps } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { motion, useReducedMotion } from 'framer-motion';
-import { Alert, Button, Chip, InputBase, Paper } from '@mui/material';
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'framer-motion';
+import { Alert, Button, InputBase, Paper } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
 import { NavIcon } from './nav-icon';
 
 const searchable = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr-FR');
 const focus = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand';
 const MotionPaper = motion.create(Paper);
+function TeamMenu(props: ComponentProps<typeof MotionPaper>) {
+  const present = useIsPresent();
+  return <MotionPaper {...props} inert={!present} aria-hidden={!present || undefined} />;
+}
 const inputSx = { minHeight: 44, width: '100%', border: 1, borderColor: 'divider', borderRadius: '12px', px: 1.5, fontSize: 12, '&.Mui-focused': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 } };
 
 export function TeamSwitcher() {
@@ -98,13 +102,13 @@ export function TeamSwitcher() {
   };
 
   return <div ref={root} className="relative min-w-0 max-w-52 flex-1 min-[801px]:max-w-40 min-[1101px]:max-w-52">
-    <Button ref={trigger} type="button" variant="outlined" className={`${focus} rounded-xl border-slate-200 bg-slate-50/70 text-ink hover:border-brand/30 hover:bg-blue-50/60`} sx={{ minHeight: 44, width: '100%', minWidth: 0, gap: .75, px: 1, fontSize: 12, textTransform: 'none' }} aria-expanded={open} aria-controls={panelId} aria-label={`Choisir une équipe : ${activeTeamName || 'chargement'}`} disabled={teamBusy || !teams.length} onClick={() => { setOpen(value => !value); setQuery(''); setError(''); }} title={activeTeamName}>
-      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand/10 text-brand max-[1100px]:hidden"><NavIcon name="people" className="size-4" /></span>
-      <span className="min-w-0 flex-1 truncate text-left font-semibold">{activeTeamName || 'Équipes…'}</span>
-      {activeTeam && <Chip size="small" label={activeTeam.memberCount} className="bg-white text-brand" sx={{ height: 20, fontSize: 10, '& .MuiChip-label': { px: .6 } }} aria-label={`${activeTeam.memberCount} membres`} />}
+    <Button ref={trigger} type="button" variant="text" className={`${focus} rounded-xl text-ink ${open ? 'bg-blue-50' : 'hover:bg-slate-50'}`} sx={{ minHeight: 44, width: '100%', minWidth: 0, gap: .75, px: 1, fontSize: 12, textTransform: 'none' }} aria-expanded={open} aria-controls={panelId} aria-label={`Choisir une équipe : ${activeTeamName || 'chargement'}`} disabled={teamBusy || !teams.length} onClick={() => { setOpen(value => !value); setQuery(''); setError(''); }} title={activeTeamName}>
+      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-blue-50 font-bold text-brand max-[1100px]:hidden" aria-hidden="true">{activeTeamName?.trim().slice(0, 1).toLocaleUpperCase('fr-FR') || 'É'}</span>
+      <span className="min-w-0 flex-1 text-left"><span className="block text-[10px] leading-3 text-muted max-[1100px]:hidden">Équipe du jour</span><span className="block truncate font-semibold">{activeTeamName || 'Équipes…'}</span></span>
+      {activeTeam && <span className="text-[10px] tabular-nums text-muted min-[1101px]:hidden" aria-label={`${activeTeam.memberCount} membres`}>{activeTeam.memberCount}</span>}
       <NavIcon name="chevron" className={`size-3.5 shrink-0 text-muted transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`} />
     </Button>
-    {open && <MotionPaper elevation={8} id={panelId} role="region" aria-label="Choisir ou créer une équipe" initial={reducedMotion ? false : { opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reducedMotion ? 0 : 0.16 }} className="absolute top-[calc(100%+10px)] left-0 z-50 max-h-[calc(100dvh-76px)] w-88 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-2xl p-3 max-[650px]:fixed max-[650px]:inset-x-3 max-[650px]:top-14 max-[650px]:w-auto" sx={{ border: 1, borderColor: 'divider', boxShadow: '0 16px 48px #1937521f, 0 2px 8px #1937520a' }}>
+    <AnimatePresence initial={false}>{open && <TeamMenu key="team-menu" elevation={8} id={panelId} role="region" aria-label="Choisir ou créer une équipe" initial={reducedMotion ? false : { opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reducedMotion ? 0 : -4 }} transition={{ duration: reducedMotion ? 0 : 0.16, ease: [.22, 1, .36, 1] }} className="absolute top-[calc(100%+10px)] left-0 z-50 max-h-[calc(100dvh-76px)] w-88 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-2xl p-3 max-[650px]:fixed max-[650px]:inset-x-3 max-[650px]:top-14 max-[650px]:w-auto" sx={{ border: 1, borderColor: 'divider', boxShadow: '0 16px 48px #1937521f, 0 2px 8px #1937520a' }}>
       <div className="mb-3 flex items-center justify-between px-1"><div><p className="text-xs font-bold text-ink">Votre espace d’équipe</p><p className="mt-0.5 text-[11px] text-muted">Retrouvez votre collectif et ses rituels.</p></div><span className="rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-semibold text-brand">{teams.length}</span></div>
       <label htmlFor={`${panelId}-search`} className="sr-only">Rechercher une équipe</label>
       <InputBase inputRef={search} id={`${panelId}-search`} type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Rechercher une équipe…" startAdornment={<NavIcon name="search" className="mr-2 size-4 shrink-0 text-muted" />} sx={inputSx} />
@@ -134,6 +138,6 @@ export function TeamSwitcher() {
       </div>
       {error && <Alert id={`${panelId}-error`} severity="error" role="alert" className="mt-1" sx={{ fontSize: 12 }}>{error}</Alert>}
       {pending && <p role="status" className="px-2 py-1 text-xs text-muted">Chargement de l’équipe…</p>}
-    </MotionPaper>}
+    </TeamMenu>}</AnimatePresence>
   </div>;
 }

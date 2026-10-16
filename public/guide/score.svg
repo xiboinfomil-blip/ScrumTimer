@@ -1,1 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="720" height="360" viewBox="0 0 720 360"><rect width="720" height="360" rx="24" fill="#f1f5f9"/><g font-family="Arial,sans-serif"><rect x="28" y="28" width="664" height="304" rx="16" fill="white"/><text x="52" y="65" fill="#205f9d" font-size="23" font-weight="bold">Comprendre les points</text><path d="M88 105V260H640" fill="none" stroke="#94a3b8" stroke-width="2"/><rect x="90" y="109" width="68" height="149" fill="#fff4db"/><rect x="158" y="109" width="204" height="149" fill="#edf9f2"/><rect x="362" y="109" width="272" height="149" fill="#fceceb"/><path d="M90 258L158 114" stroke="#b86910" stroke-width="5"/><path d="M158 114H362" stroke="#147d52" stroke-width="5"/><path d="M362 114L634 258" stroke="#b42318" stroke-width="5"/><g fill="#475569" font-size="14"><text x="45" y="119">1000</text><text x="65" y="263">0</text><text x="86" y="282">0 %</text><text x="143" y="282">25 %</text><text x="342" y="282">100 %</text><text x="610" y="282">200 %</text></g><text x="184" y="151" fill="#147d52" font-size="18" font-weight="bold">Meilleur score</text><text x="410" y="144" fill="#b42318" font-size="16">−100 pts / 10 %</text><text x="52" y="315" fill="#64748b" font-size="13">Budget 120 s : 15 s → 500 pts · 30 à 120 s → 1 000 pts · 144 s → 800 pts.</text></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="360" viewBox="0 0 720 360" role="img" aria-labelledby="title desc">
+	<title id="title">Comprendre les points en fin de tour</title>
+	<desc id="desc">1 000 points à 50 % du budget, plateau de 50 à 85 % inclus. Perte de 100 points par 10 % du budget total sur les 15 % finaux : 850 points à 100 %. Ensuite, depuis 850 points, perte de 200 points par 10 % du budget total, pente doublée, plancher zéro à 142,5 %. Relances : moins 100 points chacune, maximum 200. Aucun score en direct.</desc>
+	<rect width="720" height="360" rx="24" fill="#f1f5f9"/>
+	<g font-family="Arial,sans-serif">
+		<rect x="28" y="20" width="664" height="324" rx="16" fill="white"/>
+		<text x="52" y="52" fill="#205f9d" font-size="23" font-weight="bold">Comprendre les points</text>
+		<text x="52" y="75" fill="#64748b" font-size="13">Fin de tour et historique uniquement · hors pénalités de relance</text>
+		<path d="M88 101V260H640" fill="none" stroke="#94a3b8" stroke-width="2"/>
+		<rect x="90" y="109" width="180" height="149" fill="#fff4db"/>
+		<rect x="270" y="109" width="126" height="149" fill="#edf9f2"/>
+		<rect x="396" y="109" width="54" height="149" fill="#fff4db"/>
+		<rect x="450" y="109" width="180" height="149" fill="#fceceb"/>
+		<path d="M90 258L270 114" fill="none" stroke="#b86910" stroke-width="5"/>
+		<path d="M270 114H396" fill="none" stroke="#147d52" stroke-width="5"/>
+		<path d="M396 114L450 135.6" fill="none" stroke="#b86910" stroke-width="5"/>
+		<path d="M450 135.6L603 258H630" fill="none" stroke="#b42318" stroke-width="5"/>
+		<g fill="#475569" font-size="12" text-anchor="middle">
+			<text x="58" y="118">1 000</text><text x="72" y="262">0</text>
+			<text x="90" y="279">0 %</text><text x="270" y="279">50 %</text>
+			<text x="396" y="279">85 %</text><text x="450" y="279">100 %</text><text x="603" y="279">142,5 %</text>
+		</g>
+		<text x="333" y="146" text-anchor="middle" fill="#147d52" font-size="16" font-weight="bold">1 000 pts</text>
+		<text x="462" y="126" fill="#b42318" font-size="13" font-weight="bold">850 pts à 100 %</text>
+		<text x="294" y="188" fill="#b86910" font-size="13">85–100 % : −100 pts / 10 %</text>
+		<text x="385" y="222" fill="#b42318" font-size="13">Après 100 % : −200 pts / 10 %</text>
+		<text x="52" y="301" fill="#64748b" font-size="12">Pourcentages du budget total initial · plancher 0 · relance −100 pts (max. 200)</text>
+		<text x="52" y="319" fill="#64748b" font-size="12">Budget 120 s : 30 s → 500 · 60–102 s → 1 000 · 120 s → 850 pts</text>
+		<text x="52" y="335" fill="#64748b" font-size="12">132 s → 650 pts · 171 s et au-delà → 0 pt · exemples hors relances</text>
+	</g>
+</svg>

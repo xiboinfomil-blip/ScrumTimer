@@ -1,11 +1,17 @@
-"""Live score thresholds, overtime and pause/resume; mocked APIs, no live writes."""
+"""Score-free timer, pause/resume and archived scores; mocked APIs, no live writes."""
 import os
+import re
 import tempfile
 from datetime import datetime, timezone
 from playwright.sync_api import sync_playwright, expect
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]
+
+def assert_score_free_timer(page):
+    expect(page.locator('#live-score')).to_have_count(0)
+    expect(page.locator('#live-score-value')).to_have_count(0)
+    expect(page.locator('.timer-panel')).not_to_contain_text(re.compile(r'\b(?:scores?|points?|pts)\b', re.IGNORECASE))
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
@@ -37,48 +43,43 @@ with sync_playwright() as p:
         page.goto(BASE + '/mood')
         page.get_by_role('button', name='Continuer vers le minuteur', exact=False).click()
         expect(page.locator('#start-button')).to_be_visible()
+        assert_score_free_timer(page)
         page.clock.install()
         now = page.evaluate('Date.now()')
         page.clock.pause_at(datetime.fromtimestamp((now + 1000) / 1000, timezone.utc))
         page.locator('#start-button').click()
         first = page.locator('#speaker-name').inner_text()
-        score = page.locator('#live-score')
-        value = page.locator('#live-score-value')
-        expect(score).to_have_attribute('data-score-zone', 'building')
+        assert_score_free_timer(page)
         page.clock.run_for(15000)
-        expect(value).to_contain_text('500 / 1 000 pts')
-        building_color = score.evaluate('el => getComputedStyle(el).color')
+        assert_score_free_timer(page)
         page.clock.run_for(15000)
-        expect(value).to_contain_text('1000 / 1 000 pts')
-        expect(score).to_have_attribute('data-score-zone', 'optimal')
-        optimal_color = score.evaluate('el => getComputedStyle(el).color')
+        assert_score_free_timer(page)
         page.clock.run_for(80000)
-        expect(value).to_contain_text('1000 / 1 000 pts')
+        assert_score_free_timer(page)
         page.locator('#start-button').click()
         page.clock.run_for(30000)
-        expect(value).to_contain_text('1000 / 1 000 pts')
+        assert_score_free_timer(page)
         page.locator('#start-button').click()
         page.clock.run_for(10000)
-        expect(value).to_contain_text('1000 / 1 000 pts')
+        assert_score_free_timer(page)
         expect(page.locator('#timer-display')).to_have_text('+00:00')
         page.clock.run_for(12000)
-        expect(score).to_have_attribute('data-score-zone', 'overtime')
-        expect(value).to_contain_text('900 / 1 000 pts')
+        assert_score_free_timer(page)
         expect(page.locator('#timer-display')).to_have_text('+00:12')
         expect(page.locator('#speaker-name')).to_have_text(first)
         expect(page.locator('#start-button')).to_contain_text('Pause')
-        overtime_color = score.evaluate('el => getComputedStyle(el).color')
-        assert len({building_color, optimal_color, overtime_color}) == 3
         page.locator('#start-button').click()
         page.clock.run_for(20000)
-        expect(value).to_contain_text('900 / 1 000 pts')
+        assert_score_free_timer(page)
         page.locator('#start-button').click()
         page.clock.run_for(12000)
-        expect(value).to_contain_text('800 / 1 000 pts')
+        assert_score_free_timer(page)
+        expect(page.locator('#timer-display')).to_have_text('+00:24')
         page.locator('#manage-timer-button').click()
         page.get_by_role('button', name='Fermer les réglages').click()
         page.clock.run_for(5000)
-        expect(value).to_contain_text('800 / 1 000 pts')
+        assert_score_free_timer(page)
+        expect(page.locator('#timer-display')).to_have_text('+00:24')
 
         for width, height in SIZES:
             page.set_viewport_size({'width': width, 'height': height})
@@ -88,31 +89,33 @@ with sync_playwright() as p:
             page.evaluate("document.getAnimations().filter(a => Number.isFinite(a.effect.getComputedTiming().endTime)).forEach(a => a.finish())")
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), (motion, width)
             ring = page.locator('#timer-ring').bounding_box()
-            score_box = score.bounding_box()
+            display_box = page.locator('#timer-display').bounding_box()
             assert ring and ring['width'] >= 90, (motion, width, ring)
-            assert score_box and score_box['y'] >= ring['y'] and score_box['y'] + score_box['height'] <= ring['y'] + ring['height'] + 1, (motion, width, ring, score_box)
+            assert display_box and display_box['y'] >= ring['y'] and display_box['y'] + display_box['height'] <= ring['y'] + ring['height'] + 1, (motion, width, ring, display_box)
+            assert_score_free_timer(page)
             for selector in ['#start-button', '#next-button', '#manage-timer-button']:
                 box = page.locator(selector).bounding_box()
                 assert box and box['height'] >= 44 and box['y'] + box['height'] <= height + 1, (motion, width, selector, box)
             if motion == 'reduce' and width in [320, 1366]:
-                page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-live-score-{width}.png'))
+                page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-score-free-timer-{width}.png'))
         if motion == 'reduce':
             assert page.evaluate("document.getAnimations().filter(a => a.playState === 'running').length") == 0
         page.locator('#next-button').click()
         expect(page.locator('#speaker-name')).not_to_have_text(first)
-        expect(score).to_have_attribute('data-score-zone', 'building')
-        page.clock.run_for(30000)
-        expect(value).to_contain_text('1000 / 1 000 pts')
+        assert_score_free_timer(page)
+        page.clock.run_for(60000)
+        assert_score_free_timer(page)
         page.locator('#next-button').click()
         expect(page.get_by_role('button', name='Voir le bilan du jour')).to_be_visible()
         page.get_by_role('button', name='Voir le bilan du jour').click()
         expect(page.get_by_role('heading', name='Bilan enregistré · Classement')).to_be_visible()
         expect(page.get_by_text('1000 pts', exact=True)).to_be_visible()
-        expect(page.get_by_text('800 pts', exact=True)).to_be_visible()
+        expect(page.get_by_text('450 pts', exact=True)).to_be_visible()
         page.get_by_role('button', name=f'Comprendre le score de {first}').click()
         breakdown = page.get_by_role('dialog')
         expect(breakdown).to_contain_text('Dépassement de 20 %')
-        expect(breakdown).to_contain_text('Score enregistré : 800 pts')
+        expect(breakdown).to_contain_text('850 − (2 000 × 0,2) = 450 pts')
+        expect(breakdown).to_contain_text('Score enregistré : 450 pts')
         expect(breakdown).to_contain_text('pas le nombre de relances ni la version du barème')
         breakdown.get_by_role('button', name='Fermer', exact=True).click()
         page.clock.run_for(1000)
@@ -123,9 +126,9 @@ with sync_playwright() as p:
         assert len(archived) == 1, archived
         snapshot = archived[0]
         people = snapshot.get('round', snapshot)['people']
-        assert sorted(person['score'] for person in people) == [800, 1000], people
-        assert sorted(person['speakingSeconds'] for person in people) == [30, 144], people
+        assert sorted(person['score'] for person in people) == [450, 1000], people
+        assert sorted(person['speakingSeconds'] for person in people) == [60, 144], people
         assert not errors, errors
         context.close()
     browser.close()
-    print('PASS: live quarter/full/overtime scoring, colors, pause/resume/management, final archive parity, six sizes and both motion preferences; mocked APIs only')
+    print('PASS: score-free setup/running/pause/overtime timer, pause/resume/management, archived scores 450/1000 and active times 144/60, ring geometry, timer controls, guide, six sizes and both motion preferences; mocked APIs only')

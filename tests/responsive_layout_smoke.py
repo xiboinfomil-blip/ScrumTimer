@@ -27,7 +27,7 @@ with sync_playwright() as p:
     context.route('**/api/**', api)
     context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
     page = context.new_page()
-    for path in ['/participants', '/mood', '/timer', '/statistics']:
+    for path in ['/participants', '/mood', '/timer']:
         page.goto(BASE + path)
         expect(page.locator('[data-route-transition]')).to_be_visible()
         expect(page.get_by_role('button', name='Choisir une équipe : Une très longue équipe de développement')).to_be_enabled()
@@ -45,9 +45,10 @@ with sync_playwright() as p:
                 }
                 return r.left<left-2 || r.right>right+2 || r.top<top-2 || r.bottom>bottom+2 ? [{text:e.textContent.slice(0,70),id:e.id,rect:[r.x,r.y,r.width,r.height],bounds:[left,top,right,bottom]}] : [];
             })''')
-            # Statistics is intentionally vertically scrollable.
-            if path != '/statistics':
-                assert not clipped, (path, width, height, clipped)
+            assert not clipped, (path, width, height, clipped)
+            if path == '/timer':
+                ring = page.locator('#timer-ring').bounding_box()
+                assert ring and ring['width'] >= 90 and ring['height'] >= 90, (width, height, ring)
             for pagination in page.locator('.list-pagination:visible').all():
                 if pagination.evaluate("e => getComputedStyle(e).visibility === 'hidden'"):
                     continue
@@ -59,15 +60,18 @@ with sync_playwright() as p:
                 page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-responsive-{path[1:]}-{width}.png'))
             print('PASS', path, width, height)
     attempts = [0]
+    recovery = [False]
     def unavailable(route):
         attempts[0] += 1
-        route.fulfill(status=503, json={'error': 'Catalogue temporairement indisponible.'}) if attempts[0] == 1 else route.fulfill(json=[])
+        route.fulfill(json=[]) if recovery[0] else route.fulfill(status=503, json={'error': 'Catalogue temporairement indisponible.'})
     context.route('**/api/mood-meters/catalog', unavailable)
     page.goto(BASE + '/mood')
-    expect(page.locator('#meter-source-note')).to_have_text('Catalogue temporairement indisponible.')
+    expect(page.locator('#meter-source-note')).to_have_text('Catalogue temporairement indisponible.', timeout=15000)
+    assert attempts[0] == 4, 'Initial read plus three automatic read retries'
+    recovery[0] = True
     page.get_by_role('button', name='Réessayer le catalogue').click()
     expect(page.locator('#meter-catalogue-select')).to_have_value('-2')
-    assert attempts[0] == 2
+    assert attempts[0] == 5
     print('PASS catalogue 503 message and retry recovery')
     context.close()
     browser.close()

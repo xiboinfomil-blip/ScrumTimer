@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Button, IconButton, Paper } from '@mui/material';
 import { PaginatedList } from '@/components/ui/paginated-list';
-import { card, countPill, textButton } from '@/components/ui/styles';
+import { countPill, textButton } from '@/components/ui/styles';
 import type { StandupTimer } from './timer-page';
 import { PostponedPeople } from './postponed-people';
 import { TimerIcon } from './timer-icon';
@@ -12,13 +12,13 @@ export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; cla
   const left = people.length - done;
 
   return (
-    <Paper component="aside" elevation={0} className={`team-panel ${card} flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border-slate-200/80 p-3 [&_.person-list]:gap-1.5 ${className}`} aria-labelledby="team-title">
+    <Paper component="aside" elevation={0} className={`team-panel flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-line bg-white p-3 [&_.person-list]:gap-1.5 ${className}`} aria-labelledby="team-title">
       <div className="flex shrink-0 items-center justify-between gap-2">
         <div className="min-w-0">
-          <h2 id="team-title" className="flex items-center gap-2 text-sm font-semibold">Équipe <span className={countPill} id="team-count">{people.length}</span></h2>
+          <h2 id="team-title" className="flex items-center gap-2 text-sm font-bold">Tour de parole <span className={countPill} id="team-count">{people.length}</span></h2>
         </div>
       </div>
-      <Button component={Link} href="/mood" disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, justifyContent: 'flex-start', textTransform: 'none', fontSize: 11 }} className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl text-[11px] text-muted hover:bg-slate-50 hover:text-brand"><TimerIcon name="back" />Humeurs</Button>
+      <Button component={Link} href="/mood" disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, justifyContent: 'flex-start', textTransform: 'none', fontSize: 11 }} className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl text-[11px] text-muted hover:bg-slate-50 hover:text-brand"><TimerIcon name="back" />Revoir les humeurs</Button>
       <div className="flex shrink-0 justify-between gap-2 border-t border-line pt-2 text-[10px] text-muted">
         <span>Passages</span>
         <span id="done-count">{done} / {people.length} {done === 1 ? 'passage terminé' : 'passages terminés'}</span>
@@ -32,7 +32,7 @@ export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; cla
           renderItem={(person, index) => {
             const active = person.id === activeId;
             return (
-              <li key={person.id} className={`person-row flex h-12 min-w-0 shrink-0 items-center gap-2 rounded-xl border px-1 transition-colors motion-safe:animate-enter ${active ? timer.ended ? 'active border-red-200 bg-danger-soft' : 'active border-brand/25 bg-blue-50 ring-1 ring-inset ring-brand/10' : person.done ? 'border-green-100 bg-success-soft/50' : 'border-line bg-slate-50/40 hover:bg-slate-50'} ${person.done ? 'done' : ''}`} data-person-id={person.id}>
+              <li key={person.id} className={`person-row flex h-14 min-w-0 shrink-0 items-center gap-2 rounded-xl border px-1 motion-safe:animate-enter ${active ? timer.ended ? 'active border-red-200 bg-danger-soft' : 'active border-brand/25 bg-blue-50 ring-1 ring-inset ring-brand/10' : person.done ? 'border-transparent bg-success-soft/40' : 'border-transparent bg-white hover:border-line hover:bg-slate-50'} ${person.done ? 'done' : ''}`} data-person-id={person.id}>
                 <span className={`grid size-5 shrink-0 place-items-center rounded-md text-[9px] font-semibold ${person.done ? 'bg-success-soft text-success' : active ? 'bg-brand text-white' : 'bg-slate-100 text-muted'}`} aria-hidden="true">{person.done ? '✓' : String(index + 1).padStart(2, '0')}</span>
                 <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, p: 0, justifyContent: 'flex-start', textTransform: 'none', color: 'inherit' }} type="button" className="flex min-h-11 min-w-0 flex-1 items-center gap-2 bg-transparent text-left" aria-label={`Donner la parole à ${person.name}${person.done ? ' (a déjà parlé)' : ''}`} aria-pressed={active} onClick={() => timer.select(person.id)}>
                   <span className="grid min-w-0 gap-1">

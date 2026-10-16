@@ -7,7 +7,8 @@ from playwright.sync_api import sync_playwright, expect
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    context = browser.new_context(reduced_motion='reduce')
+    motion = os.environ.get('BROWSER_TEST_MOTION', 'reduce')
+    context = browser.new_context(reduced_motion=motion)
     context.route('**/api/**', lambda route: route.fulfill(status=503, json={'error': 'Service indisponible'}))
     page = context.new_page()
     errors = []
@@ -33,6 +34,25 @@ with sync_playwright() as p:
         if width in [320, 1366]:
             page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-help-{width}.png'))
         page.get_by_role('heading', level=1).scroll_into_view_if_needed()
+        page.get_by_role('navigation', name='Sommaire du guide').get_by_role('link', name='Questions fréquentes', exact=True).click()
+        expect(page.locator('#questions-heading')).to_be_in_viewport()
+        question = page.locator('summary').filter(has_text='Que faire si la connexion à Neon échoue ?')
+        question.focus()
+        page.keyboard.press('Enter')
+        expect(page.locator('details').filter(has=question)).to_have_attribute('open', '')
+        expect(page.get_by_text('Utilisez Réessayer et attendez Synchronisé.', exact=False)).to_be_visible()
+        page.keyboard.press('Enter')
+        expect(page.locator('details').filter(has=question)).not_to_have_attribute('open', '')
+        if width >= 1024:
+            expect(page.get_by_role('navigation', name='Sommaire du guide')).to_be_in_viewport()
+        for link in page.get_by_role('navigation', name='Sommaire du guide').get_by_role('link').all():
+            box = link.bounding_box()
+            assert box and box['height'] >= 43.9 and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (width, box)
+    page.goto(BASE + '/help#participants')
+    expect(page.locator('#participants-heading')).to_be_in_viewport()
+    expect(page).to_have_url(BASE + '/help#participants')
+    page.goto(BASE + '/help#score')
+    expect(page.locator('#score-heading')).to_be_in_viewport()
     page.reload()
     expect(page.get_by_role('heading', level=1)).to_have_text('Une équipe, un tour de parole, un bilan.')
     # Historical explanation remains truthful for old scores, including on mobile.
@@ -44,8 +64,8 @@ with sync_playwright() as p:
     context.route('**/api/history', lambda route: route.fulfill(json={'rounds': [round_record]}))
     for width, height in [(320, 568), (1366, 768)]:
         page.set_viewport_size({'width': width, 'height': height})
-        page.goto(BASE + '/statistics')
-        page.locator('#recent-heading').locator('..').locator('details > summary').click()
+        page.goto(BASE + '/timer')
+        page.get_by_role('button', name='Voir le bilan du jour', exact=True).click()
         page.get_by_role('button', name='Comprendre le score de Alice').click()
         dialog = page.get_by_role('dialog')
         expect(dialog).to_contain_text('Score enregistré : 867 pts')
@@ -55,4 +75,4 @@ with sync_playwright() as p:
     assert not errors, errors
     context.close()
     browser.close()
-    print('PASS: guide without Neon, four illustrations, anchors, six sizes, reload and historical score explanation on mobile/desktop; mocked APIs only')
+    print(f'PASS: guide without Neon, illustrations, sticky contents, six sizes, keyboard FAQ, direct anchors, reload and historical score explanation; {motion}; mocked APIs only')

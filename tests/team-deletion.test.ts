@@ -78,6 +78,7 @@ async function seedOwnedRows(engine: PGlite, teamId: string) {
     await insert(`INSERT INTO round_feedback(team_id,session_id,participant_id,value) VALUES($1,'round','person','utile'),($1,'round','archived','mitige')`);
     await insert(`INSERT INTO team_meeting_settings(team_id,revision,write_transaction) VALUES($1,2,17)`);
     await insert(`INSERT INTO team_discussion_prompts(team_id,position,prompt) VALUES($1,0,'Un obstacle ?'),($1,1,'Une réussite ?')`);
+    await insert(`INSERT INTO participant_daily_hints(team_id,participant_id,day,hint,revision) VALUES($1,'person','2026-10-15','Préparer la démonstration',1)`);
   });
 }
 
@@ -116,7 +117,7 @@ test('PGlite: dependent-first team deletion cascades remaining ownership, clears
     // One legacy reference selects the surviving team and must not be cleared.
     await engine.query('UPDATE workspaces SET selected_team_id=$1 WHERE id=$2', [second, anotherWorkspace]);
     const tables = await teamTables(engine);
-    assert.equal(tables.length, 13, 'all current team_id tables, including migration 0004');
+    assert.equal(tables.length, 14, 'all current team_id tables, including daily hints');
     const before = await snapshot(engine, ['teams', ...tables, 'workspaces', 'remote_mood_cache_state', 'remote_mood_catalog', 'remote_mood_pages']);
     for (const table of tables) assert.ok(before[table].some(row => (row as { team_id: string }).team_id === target.id), `${table} must be populated before deletion`);
     statements.length = 0;

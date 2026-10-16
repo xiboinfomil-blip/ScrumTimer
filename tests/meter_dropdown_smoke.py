@@ -72,6 +72,20 @@ with sync_playwright() as p:
         if width <= 800:
             page.get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
         expect(page.get_by_role('group', name='Humeur de Alice : choisissez de 1 à 4').get_by_role('button')).to_have_text(['1', '2', '3', '4'])
+        person_row = page.locator('.checkin-person').first
+        expect(person_row.locator('strong')).to_be_visible()
+        assert person_row.evaluate('''row => {
+            const r = row.getBoundingClientRect();
+            return [...row.querySelectorAll('strong, button')].every(node => {
+                const b = node.getBoundingClientRect();
+                return b.top >= r.top - 1 && b.bottom <= r.bottom + 1;
+            });
+        }'''), (width, 'Member name or voting controls clipped inside row')
+        assert person_row.locator('strong').evaluate('''name => {
+            const n = name.getBoundingClientRect();
+            const list = name.closest('ul').getBoundingClientRect();
+            return n.top >= list.top - 1 && n.bottom <= list.bottom + 1;
+        }'''), (width, 'Member name clipped by paginated list')
         for button in page.get_by_role('group', name='Humeur de Alice : choisissez de 1 à 4').get_by_role('button').all():
             box = button.bounding_box()
             assert box['width'] >= 44 and box['height'] >= 44

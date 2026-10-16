@@ -1,0 +1,1 @@
+export default function Loading() { return <p role="status" className="rounded-2xl border border-slate-200 bg-white p-8 text-brand">Ouverture de votre espace…</p>; }

@@ -61,7 +61,7 @@ with sync_playwright() as p:
 
     page.goto(BASE + '/participants')
     page.get_by_text('Connexion à Neon nécessaire pour ouvrir votre équipe.', exact=True).wait_for()
-    assert page.get_by_role('heading', name='Statistiques', exact=True).count() == 0
+    expect(page.locator('.site-header a[href^="/statistics"], .site-header a[href^="/daily-notes"]')).to_have_count(0)
     assert page.get_by_text('Alice <safe>', exact=True).count() == 0
     db['offline'] = False
     page.get_by_role('button', name='Réessayer Neon', exact=True).click()
@@ -109,18 +109,16 @@ with sync_playwright() as p:
     expired['people'][0]['id'] = 'expired-person'
     expired['people'][0]['name'] = 'Expired participant'
     db['rounds'].append(expired)
-    page.get_by_role('link', name='Statistiques', exact=True).click()
-    page.get_by_text('Historique chargé depuis Neon', exact=False).wait_for()
-    expect(page.locator('dd').first).to_have_text('1')
-    expect(page.locator('#daily-heading')).to_have_text('Activité · 5 derniers jours')
-    expect(page.locator('#daily-heading').locator('..').locator('ol > li')).to_have_count(5)
-    leaderboard = page.get_by_role('list', name='Classement des participants', exact=True)
+    # Master retains today's summary, not the portal's five-day full view.
+    # Expiration/leaderboard aggregation remain covered by history and portal tests.
+    page.reload()
+    summary = page.get_by_role('region', name='Point quotidien du jour', exact=True)
+    expect(summary).to_be_visible()
+    summary.get_by_role('button', name='Voir le bilan du jour', exact=True).click()
+    leaderboard = summary.locator('.daily-score-list')
     expect(leaderboard.get_by_text('Expired participant', exact=True)).to_have_count(0)
     expect(leaderboard.get_by_text('Alice <safe>', exact=True)).to_have_count(1)
     expect(leaderboard.get_by_label('Rang 1', exact=True)).to_have_count(1)
-    page.reload()
-    page.get_by_text('Historique chargé depuis Neon', exact=False).wait_for()
-    expect(page.locator('dd').first).to_have_text('1')
     for width, height in [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]:
         page.set_viewport_size({'width': width, 'height': height})
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
@@ -128,14 +126,13 @@ with sync_playwright() as p:
         assert row and row['x'] >= 0 and row['x'] + row['width'] <= width, width
 
     db['history_offline'] = True
-    page.get_by_role('button', name='Actualiser', exact=True).click()
-    page.get_by_text('Aucune donnée de remplacement', exact=False).wait_for()
-    expect(leaderboard).to_have_count(0)
+    page.reload()
+    page.get_by_text('Connexion à Neon nécessaire pour ouvrir votre équipe.', exact=True).wait_for()
+    expect(summary).to_have_count(0)
     db['history_offline'] = False
-    page.get_by_role('button', name='Réessayer', exact=True).click()
-    page.get_by_text('Historique chargé depuis Neon', exact=False).wait_for()
-    expect(page.locator('dd').first).to_have_text('1')
+    page.get_by_role('button', name='Réessayer Neon', exact=True).click()
+    expect(summary).to_be_visible()
     assert not errors, errors
     context.close()
     browser.close()
-    print('PASS: daily meter locked/restored, stacked SVG slides at six sizes, browser storage forbidden, Neon-only hydration/retry/writes/round archive/reload/leaderboard, history failure without fallback')
+    print('PASS: daily meter locked/restored, stacked SVG slides at six sizes, browser storage forbidden, Neon-only hydration/retry/writes/round archive/reloaded daily summary, history hydration failure without fallback')

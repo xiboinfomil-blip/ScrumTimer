@@ -2,24 +2,45 @@
 
 Application Next.js App Router, React, TypeScript et **Tailwind CSS v4**, migrée depuis le site HTML/JavaScript. L’interface et les comportements restent en français. L’ouverture directe de fichiers locaux (`file://`) n’est plus prise en charge : utilisez le serveur Next.js.
 
+## Un dépôt, deux applications Vercel
+
+**Ce monorepo est la source active des deux sites.** Le maître reste à la racine pour préserver son projet Vercel existant ; le portail participants et les packages partagés appartiennent au même dépôt Git.
+
+| Emplacement | Responsabilité |
+| --- | --- |
+| Racine `.` et [src](src) | Application Scrum Master existante, API serveur et accès Neon. |
+| [apps/participants](apps/participants) | Application participants : notes, statistiques et bilan ; déploiement Vercel distinct. |
+| [packages/scrum-shared](packages/scrum-shared) | Package workspace `@infomil/scrum-shared`, utilisé par les deux applications. |
+| [src/db/schema.ts](src/db/schema.ts) et [drizzle](drizzle) | Schéma serveur et migrations canoniques, uniquement à la racine. |
+
+L’ancien dossier frère **scrumParticipants** reste intact comme sauvegarde historique, **pas comme source active**. Aucun second dépôt Git ni dépôt imbriqué n’est nécessaire. Le [guide du portail](apps/participants/README.md) complète les instructions ci-dessous.
+
 ## Installation et commandes
 
 Node.js **>= 20.9** et npm sont nécessaires. Depuis la racine du projet :
 
 | Commande | Usage |
 | --- | --- |
-| `npm install` | Installer les dépendances. |
+| `npm install` | Installer à la racine les dépendances des deux applications et lier les workspaces partagés. |
 | `npm run dev` | Préparer les ressources puis lancer le développement sur http://localhost:3000. |
 | `npm run build` | Préparer les ressources puis créer le build de production. |
 | `npm run start` | Servir un build de production existant. |
 | `npm run lint` | Vérifier les règles ESLint. |
 | `npm run typecheck` | Vérifier TypeScript sans émission. |
 | `npm run test` | Lancer le runner Node sur les tests TypeScript ; nécessite une version de Node prenant en charge `--experimental-strip-types` (Node >= 22.6). |
+| `npm run dev:participants` | Lancer le portail en développement sur http://localhost:3002. |
+| `npm run build:participants` | Créer uniquement le build de production du portail. |
+| `npm run start:participants` | Servir le build existant du portail sur http://localhost:3002. |
+| `npm run lint:participants` | Vérifier ESLint pour le portail. |
+| `npm run typecheck:participants` | Vérifier TypeScript pour le portail. |
+| `npm run test:participants` | Lancer les tests du portail. |
 | `npm run assets` | Republier les ressources navigateur dans [public](public). |
 | `npm run db:generate` | Générer une migration Drizzle après modification du schéma. |
 | `npm run db:check` | Vérifier la cohérence des migrations Drizzle. |
 | `npm run db:verify` | Vérifier la connexion Neon, les tables et le journal Drizzle sans afficher de données privées. |
 | `npm run db:migrate` | Appliquer les migrations versionnées à Neon avant le déploiement. |
+
+Toutes ces commandes se lancent depuis la racine. Les scripts sans suffixe ciblent le maître ; les variantes `:participants` délèguent au workspace du portail. **Une seule installation npm à la racine** génère/met à jour l’unique [package-lock.json](package-lock.json), versionné dans Git pour tout le monorepo. Ne pas créer de lockfile ni d’installation autonome dans le portail ou le package partagé. Les commandes de base de données restent propres au maître.
 
 Les [tests de domaine](tests/domain.test.ts) couvrent la normalisation, les transformations de données, les prérequis de session, le mélange, les échéances et les chemins du catalogue ; ils ne prouvent pas un import automatique d’anciennes données navigateur. Node 22.6+ est conseillé pour utiliser toutes les commandes, même si le minimum de l’application est 20.9.
 
@@ -31,6 +52,24 @@ Après le redémarrage, rechargez la page (Ctrl+F5 si nécessaire). Les données
 
 ## Parcours et comportement
 
+### Deux projets Vercel : maître et participants
+
+L’application racine reste le site **Scrum Master** : équipes, membres, présences, baromètres, minuteur avec pense-bête pendant la parole et résumé de fin de tour/jour. Le second site est l’application [apps/participants](apps/participants) du **même dépôt** : vues complètes **Notes / Statistiques / Bilan**, avec notes modifiables et statistiques/bilan en lecture seule. Les anciennes routes autonomes `/daily-notes` et `/statistics` du maître sont retirées (HTTP 404), sans lien dans sa navigation. Le portail ne dépend d’aucun pilote ou schéma de base de données partagé, ne reçoit pas `DATABASE_URL` et n’exécute aucune migration ; ses requêtes serveur passent par l’API dédiée du maître.
+
+Configuration Vercel faisant autorité :
+
+1. **Maître existant : ne rien déplacer et conserver Root Directory `.`**, framework **Next.js**, build `npm run build` à la racine.
+2. Créer un **nouveau projet Vercel en important le même dépôt Git**, framework **Next.js**, **Root Directory `apps/participants`**. Activer **Include source files outside of the Root Directory in the Build Step** pour inclure les packages partagés.
+3. Conserver l’installation automatique native **npm workspaces**, détectée depuis le lockfile racine versionné ; laisser **Install Command** sans surcharge. Ne pas contourner cette détection avec une commande personnalisée, `--prefix`, une copie de package ou un second lockfile.
+4. Pour le portail, le build est **`npm run build` exécuté depuis la Root Directory de l’application**, pas le build du maître à la racine. Les deux projets conservent la sortie Next.js standard. Vérifier dans les journaux Vercel la détection du workspace et du lockfile racine.
+5. Conserver les variables serveur ci-dessous, séparément pour chaque projet et environnement utilisé, puis redéployer. Le portail n’a besoin ni d’accès direct à Neon ni du corpus d’assets du maître.
+
+Configurer sur le maître `PARTICIPANT_PORTAL_URL` (origine HTTPS du second site, sans chemin) et `PARTICIPANT_PORTAL_SECRET` (secret aléatoire partagé d’au moins 32 caractères, sans espace). Sur le portail, configurer `SCRUM_MASTER_URL` (origine HTTPS de ce site) et le même `PARTICIPANT_PORTAL_SECRET`. Aucun préfixe `NEXT_PUBLIC_` et aucun secret dans Git. Pour tester localement, les origines HTTP localhost sont acceptées. Déployer les deux projets après configuration ; aucune migration supplémentaire n’est nécessaire pour ce raccordement (les tables de notes doivent déjà exister).
+
+Dans **Gérer l’équipe → Lien participants**, copier le lien signé de l’équipe. Le portail ne propose pas d’annuaire ni de changement d’équipe. Le lien HMAC couvre un identifiant d’équipe ; modifier cet identifiant invalide la signature. L’API `/api/participant-portal` exige à la fois le secret serveur et le lien signé, ne fournit que le roster simplifié, les notes et les bilans, et n’accepte en écriture que les notes validées avec jour mauricien et révision concurrente. Les routes de gestion existantes ne sont pas exposées par le proxy du portail. La rotation du secret invalide tous les liens ; aucune révocation individuelle ni expiration automatique n’est promise.
+
+**Sans connexion personnelle**, toute personne possédant le lien peut consulter les données de cette équipe et modifier la note de n’importe lequel de ses membres. Ne pas publier le lien ni y placer de données sensibles. Ce partage ne sécurise pas les autres routes du site maître : celui-ci reste un outil collaboratif sans authentification et doit être diffusé conformément à ce modèle de confiance. Aucun lien réel ni secret n’a été généré ou publié par l’implémentation. Le [guide du portail](apps/participants/README.md) détaille son déploiement distinct depuis le même dépôt et les en-têtes de confidentialité.
+
 - **`/teams`** : écran de démarrage avec recherche des équipes, ouverture, accès à la gestion et création. La racine `/` redirige vers cette route.
 - L’écran Gérer l’équipe propose **Supprimer l’équipe** avec recopie du nom exact. La suppression est définitive et partagée : participants (y compris identités archivées), présences, humeurs, baromètres propres à l’équipe, bilans, passages, retours et questions personnalisées sont supprimés dans une transaction. Les autres équipes, espaces techniques et le catalogue global sont conservés. Les anciennes références de sélection sont libérées. Les dépendances restrictives sont supprimées avant la ligne équipe, puis les clés étrangères terminent la cascade ; toute erreur annule l’ensemble. Aucun changement de schéma n’est nécessaire. Après suppression de la dernière équipe, la liste reste vide, même après rechargement, jusqu’à une création explicite. Les sauvegardes en attente bloquent la suppression ; une réponse non confirmée bloque les modifications jusqu’à une nouvelle lecture Neon.
 - **`/manage-team`** : ajouter, rechercher, renommer et retirer les membres, individuellement ou par sélection avec confirmation. Une nouvelle équipe ouvre cet écran.
@@ -39,7 +78,6 @@ Après le redémarrage, rechargez la page (Ctrl+F5 si nécessaire). Les données
 - **`/timer`** : ordre mélangé contenant uniquement les présents, minuteur par personne, pause, réinitialisation, ajout de 30 secondes, préalerte et fin sonore facultative. Le passage suivant reste manuel.
 
 Uniquement depuis Participants, **Continuer vers les humeurs** ouvre une fenêtre de préparation : toutes les personnes présentes, y compris celles en attente, apparaissent en cartes et se mélangent pendant **trois secondes** avec de longs déplacements fluides, sans partition réservée aux reports ; les absents sont exclus. Après la révélation et une pause de lecture, les cartes s’effacent doucement et la page des humeurs apparaît. La fermeture automatique ou **Aller aux humeurs** conserve cet ordre transitoire en mémoire React pendant les votes, puis **Continuer vers le minuteur** le reprend sans nouvelle fenêtre ni nouveau mélange et sans démarrer le décompte. Aucune session n’est créée avant cette dernière action. **Annuler** ou Échap reste sur Participants sans appliquer le nouvel ordre. Il n’existe plus de commande de mélange sur le minuteur ni de tirage ultérieur : pour préparer un autre ordre, revenir aux participants. L’ordre n’est jamais persisté et un rechargement efface sa préparation. En mouvement réduit, l’ordre final apparaît sans mélange animé. Les grandes équipes défilent dans la fenêtre, sans déplacer ses commandes. Le test [lineup_reveal_smoke](tests/lineup_reveal_smoke.py) couvre les déplacements réels, la durée du mélange, cinq formats d’écran dans les deux modes de mouvement, la conservation de l’ordre à travers les votes jusqu’au minuteur, les reports/absences, l’annulation, Échap, le passage immédiat et la réouverture depuis Participants avec des API simulées.
-- **`/statistics`** : les 5 derniers jours civils UTC, aujourd’hui inclus, graphique léger, passages, temps moyen, respect du temps et détails des tours terminés. Pas de bibliothèque graphique lourde. Les baromètres utilisés portent « Déjà utilisé », restent sélectionnables, mais sont exclus du choix automatique ; le baromètre original est un choix manuel.
 - **`/help`** : guide illustré en français (lien « Guide » dans le bandeau), accessible même pendant une panne Neon ou après le point du jour. Les quatre illustrations originales sont conservées dans `docs/guide` et publiées par `npm run assets`, jamais modifiées directement dans `public`.
 
 Le bouton **Détail du score** de chaque participant ouvre son temps actif, le pourcentage du budget et le calcul des points. Le bilan transitoire peut détailler les relances connues. Les bilans enregistrés et les points récents affichent le score conservé, le calcul selon le barème actuel et leur écart : les archives ne stockent ni le nombre de relances ni la version du barème, donc aucune cause n’est inventée pour cet écart et aucun ancien total n’est réécrit.
@@ -50,7 +88,7 @@ Le bilan développé sépare deux colonnes : **points et explications** à gauch
 
 **Démarrer** ouvre le mode de parole : bandeau précédent / personne active centrée / personne suivante, minuteur agrandi et réglages verrouillés (y compris en pause). **Modifier** suspend le décompte et ouvre une fenêtre de réglages ; fermer cette fenêtre garde le minuteur en pause, sans quitter le mode de parole. **Suivant** termine le passage actuel et démarre immédiatement le minuteur de la prochaine personne ; à zéro, le passage reste manuel, sans changement automatique. Le dernier passage termine le tour et arrête le minuteur. Le rechargement revient au mode de préparation.
 
-Après le dernier passage, un classement et le bilan du tour apparaissent. Le score de gestion du temps est visible en direct dans l’anneau : **orange avant 25 %** du budget initial (progression linéaire de 0 à 1 000), **vert entre 25 % et 100 % inclus** (1 000 points, sans inciter à remplir tout le temps), **rouge au-delà de 100 %** (perte linéaire de 100 points par 10 % de dépassement, jusqu’à 0 à 200 %). Les couleurs sont accompagnées d’un libellé. À zéro, le chronomètre continue en dépassement positif et le score décroît jusqu’à Pause ou Suivant, sans changer automatiquement de personne ; l’alerte sonore et la notification ne se déclenchent qu’une fois. Le score final utilise exactement le même calcul que l’aperçu. Une relance après réinitialisation retire 100 points (maximum 200) ; pause/reprise, y compris en dépassement, ne pénalise pas et exclut le temps de pause. Le budget initial et le temps actif cumulé sont conservés lors des réglages et relances. Un passage terminé de moins d’une seconde reste non mesuré. Ce jeu n’évalue ni la qualité de la contribution, ni la productivité, ni les humeurs ; les égalités partagent le rang. Le bilan présente le temps actif, la moyenne, les passages dans le temps et les dépassements, ainsi que la répartition des repères d’humeur. Chaque choix d’humeur conserve son baromètre et sa diapositive : les images et les personnes associées figurent dans le bilan, avec lecture GIF facultative. Les mêmes nombres sur différents baromètres n’ont pas forcément le même sens. Le bilan détaillé courant reste en mémoire ; à la fin du tour, une copie compacte des noms, catégories, titres des baromètres, durées et scores rejoint l’historique des 5 derniers jours, sans images ni progression active. Les scores déjà archivés conservent leur ancien barème ; seuls les nouveaux tours utilisent le nouveau calcul.
+Après le dernier passage, un classement et le bilan du tour apparaissent. Le score de gestion du temps se consulte **uniquement en fin de tour et dans l’historique, pas en direct sur le minuteur**. Le barème compare le temps actif cumulé au budget initial : progression linéaire de 0 à **1 000 points à 50 %**, puis **plateau de 50 % à 85 % inclus** ; dans les **15 % finaux**, perte proportionnelle de **100 points par 10 % du budget total**, soit **850 points à 100 %**. Au-delà du budget, la perte part de 850 points et passe à **200 points par 10 % du budget total**, soit une pente deux fois plus forte, avec un plancher de **0 à 142,5 %**. Pour un budget de 120 s, cela donne 30 s = 500 pts, 60 à 102 s = 1 000 pts, 120 s = 850 pts, 132 s = 650 pts et 171 s ou plus = 0 pt, hors pénalités de relance. À zéro, le chronomètre continue en dépassement positif jusqu’à Pause ou Suivant, sans changer automatiquement de personne ; l’alerte sonore et la notification ne se déclenchent qu’une fois. Une relance après réinitialisation retire toujours 100 points (maximum 200) ; pause/reprise, y compris en dépassement, ne pénalise pas et exclut le temps de pause. Le score final reste au minimum à zéro et est arrondi au point entier. Le budget initial et le temps actif cumulé sont conservés lors des réglages et relances. Un passage terminé de moins d’une seconde reste non mesuré. Ce jeu n’évalue ni la qualité de la contribution, ni la productivité, ni les humeurs ; les égalités partagent le rang. Le bilan présente le temps actif, la moyenne, les passages dans le temps et les dépassements, ainsi que la répartition des repères d’humeur. Chaque choix d’humeur conserve son baromètre et sa diapositive : les images et les personnes associées figurent dans le bilan, avec lecture GIF facultative. Les mêmes nombres sur différents baromètres n’ont pas forcément le même sens. Le bilan détaillé courant reste en mémoire ; à la fin du tour, une copie compacte des noms, catégories, titres des baromètres, durées et scores rejoint l’historique des 5 derniers jours, sans images ni progression active. Les scores déjà archivés restent inchangés, sans recalcul rétroactif.
 
 Chaque page indique son étape et l’action suivante. Les présences et les états prêts/terminés sont verts ; les absences et le temps écoulé sont rouges ; les informations incomplètes et les avertissements sont orange. Le minuteur passe à l’orange au seuil configuré, puis au rouge dans les dernières secondes (10 secondes maximum, ou la moitié du seuil). Les halos pulsent doucement uniquement pendant le décompte, jamais en pause ni avec la réduction des mouvements. Désactiver la préalerte désactive ces étapes avant zéro. À zéro, une notification urgente et un message persistant demandent de conclure et de passer la parole ; aucun passage automatique n’a lieu.
 
@@ -60,9 +98,25 @@ Préserver les contrôles accessibles, le focus visible, les notifications en fr
 
 ## Architecture
 
+### Package partagé et frontière serveur
+
+[packages/scrum-shared](packages/scrum-shared) centralise les **schémas de validation à l’exécution, contrats, types, helpers de dates et statistiques, et UI réutilisable**. Les exports `@infomil/scrum-shared/contracts`, `/types`, `/daily-hints` et `/statistics` restent distincts de l’export client **`@infomil/scrum-shared/ui`** : importer l’UI n’entraîne aucune dépendance serveur ou base de données. Les deux applications consomment ces sources TypeScript/TSX via les workspaces ; Next.js transpile le package et Tailwind analyse ses sources UI.
+
+Les schémas de validation partagés ne sont **pas** le schéma de stockage : [src/db/schema.ts](src/db/schema.ts), [drizzle](drizzle), les adaptateurs Neon, les secrets et les services serveur du maître restent canoniques à la racine uniquement. Le proxy et ses secrets restent côté serveur du portail ; aucun de ces modules n’entre dans les exports UI partagés.
+
+### Notes quotidiennes de préparation
+
+La préparation, la recherche et l’édition des notes (600 caractères maximum, membres absents inclus) appartiennent exclusivement à l’onglet **Notes du portail participants**, accessible par **Gérer l’équipe → Lien participants**. Il n’existe plus de page autonome de notes sur le maître. Les notes restent partagées avec l’équipe, sans authentification personnelle ; elles ne sont pas privées. Les services, contrats, stockage et API du maître restent en place pour le portail et le minuteur.
+
+Les notes suivent le jour civil **à Maurice (`Indian/Mauritius`, UTC+4)**. Les anciennes notes disparaissent de l’interface au changement de jour ; leur suppression physique en base s’effectue à la prochaine lecture ou écriture du service, pour toutes les équipes. Il s’agit d’un nettoyage à la demande, **pas d’une tâche planifiée à minuit**. La clé équipe–participant garantit une seule note par personne, et une révision optimiste refuse les modifications concurrentes plutôt que d’écraser une note. Le brouillon reste dans la fenêtre en cas de conflit et doit être confirmé après lecture de la version enregistrée ; aucune sauvegarde n’est rejouée automatiquement.
+
+Le minuteur affiche un aperçu de la note de la **personne active uniquement** et le bouton **Pense-bête** ouvre son texte complet. Le changement de personne recharge les notes du jour. Lire ou fermer ce dialogue ne suspend ni ne réinitialise le décompte. Les notes ne sont ni incluses dans les scores ni archivées avec les bilans, et aucun stockage navigateur n’est ajouté.
+
+**Avant de déployer cette fonctionnalité, appliquer la migration [0005](drizzle/0005_tired_black_bird.sql)** avec le journal Drizzle existant, puis vérifier la base avec `npm run db:verify`. Elle ajoute la table relationnelle `participant_daily_hints`, avec suppression en cascade des identités/équipes supprimées ; aucune table n’est créée par les requêtes de l’application. Les [tests de notes](tests/daily-hints.test.ts) couvrent validation, migrations, isolation, révisions et expiration dans PGlite. Le [smoke du minuteur](tests/timer_turn_smoke.py) conserve la lecture du pense-bête, le rendu texte, le changement de personne et l’absence de pause lors de la lecture. Le [smoke du portail](apps/participants/tests/portal_smoke.py) couvre l’édition, les conflits et les erreurs avec API simulées. Les anciennes suites [daily_notes_smoke](tests/daily_notes_smoke.py) et [statistics_design_smoke](tests/statistics_design_smoke.py) sont obsolètes et ne doivent plus être utilisées pour valider les vues complètes ; leur suppression reste à finaliser (les tentatives de suppression n’ont pas été confirmées par la recherche de fichiers).
+
 ### Tableaux de bord adaptés à l’écran
 
-Le bilan du jour et les statistiques utilisent une composition bornée par la hauteur disponible, notamment sur les écrans **16:9 (1024×576, 1366×768 et 1920×1080)** : hiérarchie compacte, indicateurs toujours visibles, surfaces légères et listes paginées plutôt qu’une longue page. Le bilan conserve ses deux colonnes points/humeurs sur grand écran et ses onglets sur mobile. Les statistiques proposent deux panneaux sur ordinateur : **Activité / Classement** et **Humeurs / Points récents**. En dessous de 1024 px, une navigation unique donne accès aux quatre vues. Les explications, détails d’un participant et bilans historiques s’ouvrent dans des dialogues ; aucune information n’est supprimée pour tenir à l’écran. Les règles de score, les données enregistrées et la rétention ne changent pas.
+Le résumé du jour du maître conserve une composition bornée par la hauteur disponible, notamment sur les écrans **16:9 (1024×576, 1366×768 et 1920×1080)** : hiérarchie compacte, indicateurs, surfaces légères et listes paginées. Ses deux colonnes points/humeurs sur grand écran et ses onglets sur mobile restent disponibles via `DailyRound` / `DailyDashboard` ; le bilan transitoire `SessionResults` reste également conservé. Les vues complètes de statistiques et de bilan appartiennent au portail participants, avec recherche et pagination. Le retrait des pages autonomes maître ne change ni le barème, ni les données enregistrées, ni la rétention, ni les API de notes/historique/partage.
 
 ### Chargement et consommation de ressources
 
@@ -72,7 +126,7 @@ Les lectures identiques partagent désormais un **cache serveur en mémoire** : 
 
 Ce cache est borné (256 entrées métier, 64 publiques) et partagé entre les requêtes **d’une même instance serveur**, pas entre plusieurs instances Vercel/processus. Une modification depuis une autre instance ou directement en base peut donc rester invisible jusqu’à 5 secondes (60 secondes pour les métadonnées publiques). Aucun service de cache distribué ni migration supplémentaire n’est requis ; Neon reste la source durable de vérité.
 
-Les chargements de route, de l’équipe, des statistiques, des questions et du baromètre affichent des **squelettes statiques** adaptés à la page : pas de shimmer, animation infinie ou temporisation artificielle. Les erreurs Neon gardent leurs messages et boutons de nouvelle tentative ; un squelette ne remplace jamais une panne ni les gardes de validation.
+Les chargements de route, de l’équipe, des questions et du baromètre affichent des **squelettes statiques** adaptés à la page : pas de shimmer, animation infinie ou temporisation artificielle. Les erreurs Neon gardent leurs messages et boutons de nouvelle tentative ; un squelette ne remplace jamais une panne ni les gardes de validation.
 
 Les lectures indépendantes équipe/historique et catalogue/baromètre quotidien démarrent en parallèle. Le minuteur n’installe aucun intervalle en préparation ou en pause ; pendant la parole, quatre rafraîchissements par seconde remplacent les dix précédents. Les échéances restent la source du temps, et chaque action mesure exactement le temps écoulé avant de modifier le décompte. L’observation des animations est limitée aux attributs utiles et aux listes, sans observer les mutations de texte du compte à rebours.
 
@@ -80,13 +134,13 @@ Les métadonnées publiques des baromètres ont un cache **en mémoire seulement
 
 Le test [loading_performance_smoke](tests/loading_performance_smoke.py) retarde volontairement les réponses pour vérifier les squelettes, les erreurs/reprises, les lectures parallèles et le nombre réel de mises à jour du minuteur. Ces mesures locales ne constituent pas une promesse de latence en production : Neon, le proxy, Google, Redis et le réseau des utilisateurs restent des dépendances externes.
 
-### Direct, présentation, questions et retours
+### Direct, présentation et questions
 
 - Sur le minuteur, **Diffusion** ouvre les commandes : **Diffuser en direct**, **Lien spectateur** et **Présentation**. La diffusion est volontaire ; le lien `/spectator?team=…` ouvre une vue sans commandes de réunion ni navigation d’édition. Elle affiche la personne active, la suivante, le temps et les passages terminés, jamais les humeurs. Ce n’est pas une autorisation d’accès : le déploiement reste partagé sans authentification.
 - Le facilitateur reste seul maître de son minuteur. Une possession temporaire empêche deux diffuseurs de remplacer simultanément le direct de la même équipe. Les vues interrogent le direct toutes les deux secondes et calculent le décompte depuis une échéance alignée sur le serveur ; pause et dépassement sont conservés. Une perte de connexion masque le compte à rebours plutôt que de prétendre rester synchronisé.
 - **Présentation** agrandit le minuteur dans un écran épuré et demande le plein écran du navigateur. **Quitter** ou Échap revient à la mise en page normale, sans réinitialiser le temps. Si le navigateur refuse le plein écran, la présentation reste disponible dans la fenêtre. La vue spectateur propose également ce mode.
 - **Questions → Modifier** permet d’enregistrer 1 à 5 questions par équipe, de 160 caractères chacune, ou de rétablir les trois questions initiales. Les changements concurrents sont refusés avec une invitation à recharger ; ces réglages sont enregistrés dans Neon.
-- Après le tour, **Utilité du point · facultatif** ouvre trois réponses : Utile, Mitigé, Pas utile. Aucune réponse n’est obligatoire et aucun commentaire libre n’est demandé. Le participant du bilan doit être choisi explicitement ; sans authentification, son identité n’est pas vérifiée et les réponses ne sont pas anonymes. Une nouvelle réponse remplace la précédente pour ce participant et ce bilan. Les retours sont supprimés avec le bilan et suivent sa rétention de cinq jours.
+- Le bilan ne propose plus de questionnaire d’utilité ni de bouton « Avis ». Le classement, les scores, les statistiques et la réinitialisation restent disponibles. Les anciennes données de retours et leur schéma sont conservés pour éviter toute suppression ou migration destructive ; aucune collecte n’est déclenchée par l’interface.
 
 **Déploiement du direct :** sans configuration supplémentaire, le canal temporaire utilise la mémoire du processus Next.js, adaptée à un serveur local/une instance unique. Pour Vercel ou plusieurs instances, configurer côté serveur `UPSTASH_REDIS_REST_URL` (HTTPS) et `UPSTASH_REDIS_REST_TOKEN`. Ne jamais exposer le jeton via une variable `NEXT_PUBLIC_*`. Les écritures Redis sont atomiques, avec un TTL de 15 secondes renouvelé pendant la diffusion ; quitter la page ou arrêter le direct libère le canal. Redis ne sert ni d’archive ni de reprise de session : le facilitateur ne restaure jamais un compte à rebours depuis ce canal. Choisir un service Redis sans sauvegarde durable pour conserver cette garantie de données éphémères. L’interface signale explicitement la portée « serveur local uniquement » sans Redis partagé.
 
@@ -166,7 +220,7 @@ La migration [0002](drizzle/0002_workspace_daily_meters.sql) ajoute `workspaces`
 
 La variable serveur `DATABASE_URL` se place dans le fichier d’environnement racine **.env**, ignoré par Git. Ne jamais y committer des identifiants ; si le mot de passe a été partagé dans une conversation, le renouveler dans Neon et remplacer la valeur locale. L’ancienne variable `COOKIE_SECURE` n’est plus utilisée.
 
-Le classement historique sur `/statistics` regroupe les participants par identifiant stable sur les 5 jours civils UTC, aujourd’hui inclus. Le rang dépend du **score moyen / 1 000** des passages mesurés, pas du nombre de participations ; les égalités partagent le rang et les passages non mesurés restent sans score. Noms récents, nombre de passages et durée moyenne sont affichés dans une liste compacte paginée par huit. Le classement du tour courant reste disponible à la fin du minuteur. Les humeurs ne modifient aucun score.
+Le classement historique de l’onglet **Statistiques du portail participants** regroupe les participants par identifiant stable sur les 5 jours civils UTC, aujourd’hui inclus. Le rang dépend du **score moyen / 1 000** des passages mesurés, pas du nombre de participations ; les égalités partagent le rang et les passages non mesurés restent sans score. Noms récents, nombre de passages et durée moyenne sont affichés dans une liste compacte paginée par huit. Le classement du tour courant reste disponible à la fin du minuteur maître. Les humeurs ne modifient aucun score.
 
 Dans **Neon → Connect**, sélectionner l’endpoint **ep-little-cloud-aojwgz1g**, puis copier sa **chaîne de connexion PostgreSQL complète avec pooler et TLS**. Le nom d’endpoint seul ne contient ni la région, ni le rôle, ni le mot de passe : il ne suffit pas pour se connecter. Ajouter cette chaîne comme variable serveur **`DATABASE_URL`** dans la configuration locale ignorée par Git et dans les variables de l’hébergeur, puis redémarrer/redéployer. Ne jamais la préfixer par `NEXT_PUBLIC_`, la publier ou la transmettre dans le chat.
 
@@ -202,6 +256,16 @@ Le fournisseur attend une **lecture Neon réussie** avant de débloquer le parco
 Après le chargement initial, les requêtes de sauvegarde non envoyées ou en échec restent **uniquement en mémoire** et sont retentées ; cet état provisoire n’est ni une sauvegarde ni un mode hors ligne. Tant que des écritures sont en attente, un avertissement `beforeunload` signale le risque de perte en quittant ou rechargeant la page. Une fermeture ou un rechargement peut perdre ces modifications et les tours non encore enregistrés : seuls les enregistrements confirmés par Neon sont durables. Effacer les données du navigateur ne supprime aucune donnée Neon.
 
 ## Validation
+
+### Périmètre actuel : validations exécutées
+
+Le [contrat source du maître](tests/master-scope.test.ts) vérifie l’absence des anciennes entrées de route et de leurs références dans le bandeau, la conservation du pense-bête du minuteur, des interfaces de résumé `DailyRound` / `SessionResults` et des exports API. Il ne remplace pas un rendu navigateur et ne prouve pas l’identité de tous les octets des modules. Le [smoke de partage](tests/participant_link_smoke.py) vérifie les réponses **HTTP 404** des deux anciennes routes et l’absence de liens obsolètes, tout en conservant le partage et le roster simulé de 100 personnes. Les smokes de minuteur, guide, navigation, Material UI, responsive, chargement et persistance ciblent désormais le périmètre maître conservé.
+
+Après retrait des pages : **lint, TypeScript, 85 tests racine et 10 tests portail réussis**, ainsi que le build de production du maître. Les types de routes Next obsolètes ont été régénérés/nettoyés après suppression des pages. Sur le maître reconstruit, le smoke de partage/404 passe à 320/1366px, le minuteur vérifie les notes non interrompantes à six tailles, le dashboard final passe à six tailles dans les deux préférences de mouvement, et le guide passe à six tailles. Le portail conserve ses **16 cas navigateur réussis**. Toutes les API métier de ces tests navigateur sont simulées ; aucun changement de données Neon, migration ou déploiement. Les autres smokes adaptés n’ont pas tous été relancés.
+
+### Résultats antérieurs au retrait des pages autonomes maître
+
+Avant ce retrait, les vérifications du monorepo avaient réussi : lint, TypeScript et **81 tests à la racine**, ainsi que lint, TypeScript et **10 tests pour le portail**. Les deux builds de production (`npm run build` et `npm run build:participants`) avaient réussi. Les tests navigateur du portail déplacé avaient passé **16 cas**, et le maître avait passé le partage et l’ancienne consultation en lecture seule à 320/1366px, avec API métier simulées. Ces résultats historiques ne valident ni le nouveau périmètre ni les deux déploiements Vercel et leur liaison réelle.
 
 ### Personnes présentes mais pas encore arrivées
 

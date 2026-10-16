@@ -2,6 +2,7 @@ import type { NextConfig } from 'next';
 
 const config: NextConfig = {
   reactStrictMode: true,
+  transpilePackages: ['@infomil/scrum-shared'],
   outputFileTracingIncludes: {
     '/api/mood-meters/decks/*': ['./scripts/fetch-google-slide.ps1'],
     '/mood-meters/slides/*/*': ['./scripts/fetch-google-slide.ps1'],

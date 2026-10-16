@@ -75,6 +75,8 @@ class MockMeeting:
                 payload = {'day': self.day, 'meter': self.meter}
             elif path == '/api/mood-meters/catalog' and method == 'GET':
                 payload = []
+            elif path == '/api/daily-hints' and method == 'GET':
+                payload = {'day': self.day, 'hints': []}
             elif path == '/api/meeting-settings' and method in ('GET', 'PUT'):
                 if self.settings_failure:
                     status = self.settings_failure
@@ -168,7 +170,7 @@ class MockMeeting:
 def prompts_panel(page, width):
     if width <= 800:
         page.get_by_role('button', name='Questions', exact=True).click()
-    return page.get_by_role('region', name='Pour guider le point')
+    return page.get_by_role('region', name='Le fil du point')
 
 
 def geometry(page, width, height, phase):
@@ -369,40 +371,21 @@ def feedback_case(browser, mock, width, height):
     page.locator('#start-button').click()
     page.locator('#next-button').click()
     page.locator('#next-button').click()
-    button = page.get_by_role('button', name='Utilité du point · facultatif', exact=True)
-    expect(button).to_be_visible(timeout=15000)
+    view = page.get_by_role('button', name='Voir le bilan du jour', exact=True)
+    expect(view).to_be_visible(timeout=15000)
     assert len(mock.rounds) == 1
     assert {p['id'] for p in mock.rounds[0]['people']} == {'alice', 'bob'}
-    button.click()
-    dialog = page.get_by_role('dialog', name='Ce point a-t-il été utile ?')
-    expect(dialog.locator('#feedback-participant')).to_be_enabled()
-    expect(dialog.get_by_role('button', name='Enregistrer', exact=True)).to_be_disabled()
-    expect(dialog.get_by_role('button', name='Utile', exact=True)).to_be_disabled()
-    dialog.get_by_role('button', name='Fermer sans répondre', exact=True).click()
-    expect(dialog).not_to_be_visible()
-    assert mock.count('PUT', '/api/round-feedback') == 0
-    button.click()
-    dialog.locator('#feedback-participant').select_option('alice')
-    dialog.get_by_role('button', name='Utile', exact=True).click()
-    dialog.get_by_role('button', name='Enregistrer', exact=True).click()
-    expect(dialog.get_by_role('status')).to_contain_text('Retour enregistré')
-    aggregate = dialog.locator('[aria-label="Retours enregistrés"]')
-    expect(aggregate.locator('strong')).to_have_text(['1', '0', '0'])
-    dialog.get_by_role('button', name='Mitigé', exact=True).click()
-    dialog.get_by_role('button', name='Mettre à jour', exact=True).click()
-    expect(aggregate.locator('strong')).to_have_text(['0', '1', '0'])
-    dialog.get_by_role('button', name='Mettre à jour', exact=True).click()
-    expect(dialog.get_by_role('status')).to_contain_text('Retour enregistré')
-    assert mock.count('PUT', '/api/round-feedback') == 3
-    assert mock.feedback == {'alice': 'mitige'}, 'one identity must not duplicate'
-    dialog.get_by_role('button', name='Fermer sans répondre', exact=True).click()
+    expect(page.get_by_role('button', name='Utilité du point · facultatif', exact=True)).to_have_count(0)
+    expect(page.get_by_role('button', name='Avis', exact=True)).to_have_count(0)
+    view.click()
+    expect(page.get_by_role('heading', name='Bilan enregistré · Classement')).to_be_visible()
+    expect(page.get_by_role('button', name='Réinitialiser aujourd’hui', exact=True)).to_be_visible()
     page.reload()
-    expect(button).to_be_visible(timeout=15000)
-    button.click()
-    expect(aggregate.locator('strong')).to_have_text(['0', '1', '0'])
-    dialog.locator('#feedback-participant').select_option('alice')
-    expect(dialog.get_by_role('button', name='Mitigé', exact=True)).to_have_attribute('aria-pressed', 'true')
-    expect(dialog.get_by_role('button', name='Mettre à jour', exact=True)).to_be_enabled()
+    expect(view).to_be_visible(timeout=15000)
+    expect(page.get_by_role('button', name='Utilité du point · facultatif', exact=True)).to_have_count(0)
+    expect(page.get_by_role('button', name='Avis', exact=True)).to_have_count(0)
+    assert mock.count('GET', '/api/round-feedback') == 0
+    assert mock.count('PUT', '/api/round-feedback') == 0
     assert len(mock.rounds) == 1
 
 

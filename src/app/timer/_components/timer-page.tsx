@@ -8,8 +8,7 @@ import { useTeam } from '@/providers/team-provider';
 import { useLiveBroadcast } from '@/hooks/use-live-broadcast';
 import { usePresentation } from '@/hooks/use-presentation';
 import { ScreenTabs } from '@/components/ui/screen-tabs';
-import { WorkflowHeading } from '@/components/ui/workflow-heading';
-import { routeStage, segmentedTabs } from '@/components/ui/styles';
+import { segmentedTabs } from '@/components/ui/styles';
 import { useStandupTimer } from '@/hooks/use-standup-timer';
 import { useStepGuard } from '@/hooks/use-step-guard';
 import { DailyPrompts } from './daily-prompts';
@@ -17,6 +16,7 @@ import { TeamLineup } from './team-lineup';
 import { TimerPanel } from './timer-panel';
 import { SessionResults } from './session-results';
 import { TimerManagementDialog } from './timer-management-dialog';
+import { useViewMotion } from '@/hooks/use-view-motion';
 
 export type StandupTimer = ReturnType<typeof useStandupTimer>;
 
@@ -26,6 +26,7 @@ export function TimerPage() {
   const timer = useStandupTimer();
   const [view, setView] = useState<'timer' | 'team' | 'prompts'>('timer');
   const [sharing, setSharing] = useState(false);
+  const panels = useViewMotion(`${view}-${timer.focusMode}-${timer.activeId}`);
   const { activeTeamId, activeTeamName } = useTeam();
   const target = useRef<HTMLDivElement>(null);
   const presentation = usePresentation(target);
@@ -45,7 +46,7 @@ export function TimerPage() {
     : `${timer.duration / 60} min`;
 
   return (
-    <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .65, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`${routeStage} ${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh max-w-none! bg-white p-3 sm:p-6' : 'mx-auto w-full max-w-6xl'} overflow-hidden max-[650px]:[&>section:first-child_.MuiAvatar-root]:hidden max-[650px]:[&_h1]:text-lg`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
+    <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-1 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh max-w-none! bg-white p-3 sm:p-6' : 'mx-auto w-full max-w-6xl'} overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
       <Dialog open={sharing} onClose={() => setSharing(false)} aria-labelledby="sharing-title" fullWidth maxWidth="xs">
         <DialogTitle id="sharing-title">Diffusion et présentation</DialogTitle>
         <DialogContent><div className="flex flex-col items-start gap-2" aria-label="Diffusion et présentation">
@@ -55,9 +56,12 @@ export function TimerPage() {
         <span role="status" className="text-[10px] text-muted">{broadcast.enabled ? broadcast.status : presentation.notice}</span>
         </div></DialogContent><DialogActions><Button onClick={() => setSharing(false)}>Fermer</Button></DialogActions>
       </Dialog>
-      <WorkflowHeading step={3} title={timer.focusMode ? 'On vous écoute' : 'À chacun son tour'} description={<span id="overview-people" className="[@media(max-height:650px)]:hidden">{timer.focusMode ? `${timer.people.filter(person => person.done).length} / ${timer.people.length} passages terminés · Suivant démarre le prochain.` : `${timer.people.length} personnes · ${perPerson} chacun · Réglez, puis démarrez.`}</span>} action={<Button onClick={() => presentation.presenting ? void presentation.toggle() : setSharing(true)} sx={{ minHeight: 44, minWidth: 0, fontSize: 10 }}>{presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'}</Button>} />
+      <header className="flex shrink-0 items-center justify-between gap-3 px-1">
+        <div className="min-w-0"><p className="mb-1 flex items-center gap-2 text-xs font-semibold text-brand"><span aria-hidden="true" className={`size-2 rounded-full ${timer.running ? 'bg-success' : 'bg-accent'}`} />Étape 3 sur 3 · Le point quotidien</p><h1 className="text-3xl font-bold tracking-tight text-ink max-[650px]:text-xl [@media(max-height:650px)]:text-xl">{timer.focusMode ? 'On vous écoute' : 'À chacun son tour'}</h1><p id="overview-people" className="mt-1 text-sm text-muted max-[650px]:text-xs [@media(max-height:650px)]:hidden">{timer.focusMode ? `${timer.people.filter(person => person.done).length} / ${timer.people.length} passages terminés · Une voix à la fois.` : `${timer.people.length} personnes · ${perPerson} chacun · Réglez, puis démarrez.`}</p></div>
+        <button type="button" onClick={() => presentation.presenting ? void presentation.toggle() : setSharing(true)} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand hover:border-brand/30 hover:bg-blue-50">{broadcast.enabled && <span aria-hidden="true" className="size-1.5 rounded-full bg-success" />}{presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'}</button>
+      </header>
       {!timer.focusMode && !presentation.presenting && <ScreenTabs
-        className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11`}
+        className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 [@media(max-height:650px)]:h-11 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0`}
         label="Panneau du minuteur"
         value={view}
         onChange={setView}
@@ -67,7 +71,7 @@ export function TimerPage() {
           { value: 'prompts', label: 'Questions' },
         ]}
       />}
-      <div className={`workspace grid min-h-0 min-w-0 flex-1 items-stretch gap-3 overflow-hidden ${presentation.presenting ? 'grid-cols-1' : timer.focusMode ? 'grid-cols-[minmax(0,1fr)_210px] max-[800px]:grid-cols-1' : 'grid-cols-[200px_minmax(0,1fr)_190px] min-[1100px]:grid-cols-[240px_minmax(0,1fr)_210px] max-[800px]:grid-cols-[minmax(0,1fr)]'}`} data-view={timer.focusMode || presentation.presenting ? 'timer' : view}>
+      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 items-stretch gap-4 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'grid-cols-1' : timer.focusMode ? 'grid-cols-[minmax(0,1fr)_240px] max-[800px]:grid-cols-1' : 'grid-cols-[200px_minmax(0,1fr)_190px] min-[1100px]:grid-cols-[230px_minmax(0,1fr)_230px] max-[800px]:grid-cols-[minmax(0,1fr)]'}`} data-view={timer.focusMode || presentation.presenting ? 'timer' : view}>
         {!timer.focusMode && !presentation.presenting && <TeamLineup timer={timer} className={view !== 'team' ? 'max-[800px]:hidden' : ''} />}
         <TimerPanel timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={!timer.focusMode && !presentation.presenting && view !== 'timer' ? 'max-[800px]:hidden' : ''} />
         {!presentation.presenting && <DailyPrompts className={timer.focusMode || view !== 'prompts' ? 'max-[800px]:hidden' : ''} />}

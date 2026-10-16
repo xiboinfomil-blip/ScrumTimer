@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { card } from '@/components/ui/styles';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { useTeam } from '@/providers/team-provider';
 import { DEFAULT_DISCUSSION_PROMPTS, validateDiscussionPrompts, validateMeetingSettings, type MeetingSettings } from '@/lib/meeting-settings';
@@ -68,23 +67,24 @@ function TeamPrompts({ teamId, className }: { teamId: string | null; className: 
   };
   const standard = settings.prompts.length === 3 && settings.prompts.every((prompt, index) => prompt === DEFAULT_DISCUSSION_PROMPTS[index]);
   return (
-    <Paper component="section" elevation={0} className={`daily-prompts ${card} flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden rounded-2xl border-slate-200/80 p-3 ${className}`} aria-labelledby="prompts-title">
+    <Paper component="section" elevation={0} className={`daily-prompts flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden rounded-2xl border border-line bg-white p-3 ${className}`} aria-labelledby="prompts-title">
       <div className="flex shrink-0 items-center justify-between gap-1 border-b border-line">
-        <h2 id="prompts-title" className="text-sm font-semibold">Pour guider le point</h2>
-        <Button size="small" disabled={!loaded || saving} onClick={() => { setDraft([...settings.prompts]); setEditing(true); setError(''); setNotice(''); }} aria-label="Modifier les questions de l’équipe">Modifier</Button>
+        <h2 id="prompts-title" className="text-sm font-bold">Le fil du point</h2>
+        <Button size="small" sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 11, textTransform: 'none' }} disabled={!loaded || saving} onClick={() => { setDraft([...settings.prompts]); setEditing(true); setError(''); setNotice(''); }} aria-label="Modifier les questions de l’équipe">Modifier</Button>
       </div>
       {!loaded && !error && <PageSkeleton variant="timer" scope="section" label="Chargement des questions de l’équipe…" />}
       {error && !editing && <div role="alert" className="text-[11px] text-danger">{error} {!loaded && 'Questions par défaut affichées.'} <Button size="small" onClick={retry}>Réessayer</Button></div>}
       {notice && <p role="status" className="text-[11px] text-success">{notice}</p>}
       {(loaded || error) && <div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
         {settings.prompts.map((prompt, index) => (
-          <article className="min-w-0 shrink-0 rounded-xl border border-line bg-slate-50/60 p-2.5" key={index}>
-            <span className="border-l-2 border-accent pl-1.5 text-[9px] font-semibold tracking-wide text-brand">{String(index + 1).padStart(2, '0')}{standard ? ` / ${defaultHeadings[index]}` : ' / ÉQUIPE'}</span>
+          <article className="min-w-0 shrink-0 rounded-xl border border-transparent bg-slate-50/70 p-3" key={index}>
+            <span className="flex items-center gap-2 text-[10px] font-semibold tracking-wide text-brand"><span className="grid size-6 shrink-0 place-items-center rounded-lg bg-white text-xs font-bold text-brand">{String(index + 1).padStart(2, '0')}</span>{standard ? defaultHeadings[index] : 'ÉQUIPE'}</span>
             <h3 className="mt-1 break-words text-sm font-semibold leading-snug">{prompt}</h3>
             {standard && <p className="mt-1 text-[11px] leading-relaxed text-muted min-[801px]:max-[1100px]:hidden">{descriptions[index]}</p>}
           </article>
         ))}
       </div>}
+      <p className="mt-auto shrink-0 border-t border-line pt-3 text-xs leading-relaxed text-muted [@media(max-height:650px)]:hidden">L’essentiel, simplement. Un sujet à approfondir ? Gardez-le pour après le tour.</p>
       <Dialog open={editing} onClose={() => { if (!saving) setEditing(false); }} aria-labelledby="edit-prompts-title" fullWidth maxWidth="sm">
         <DialogTitle id="edit-prompts-title">Questions de l’équipe</DialogTitle>
         <DialogContent>

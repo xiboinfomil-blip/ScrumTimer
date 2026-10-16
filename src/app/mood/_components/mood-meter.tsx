@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, IconButton, NativeSelect, Paper } from '@mui/material';
-import { card } from '@/components/ui/styles';
 import {
   chooseUnusedDeck, displayTitle, groupMoodMeters, moodMeterId, isAnimatedImage, overlayCropStyle,
   overlayMatrix, type MoodMeterDeck, type MoodMeterSlide,
@@ -130,7 +129,7 @@ function OrderedMeterSlides({ deck, title, retry }: { deck: MoodMeterDeck; title
   </div>;
 }
 
-export function MoodMeter({ className = '', mobileVisible = true }: { className?: string; mobileVisible?: boolean }) {
+export function MoodMeter({ className = '', mobileVisible = true, onShowPeople }: { className?: string; mobileVisible?: boolean; onShowPeople?: () => void }) {
   const { state, updateTeam, activeTeamId, setDailyReady, cloudStatus } = useTeam();
   const notify = useNotify();
   const [savingMeter, setSavingMeter] = useState(false);
@@ -285,8 +284,8 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
   const playing = !paused && (wide || mobileVisible);
 
   return (
-    <Paper component="section" elevation={0} ref={panelRef} className={`${card} flex min-h-0 min-w-0 flex-1 flex-col gap-2 rounded-2xl border-slate-200/80 p-3 max-[650px]:p-2.5 ${className}`} aria-labelledby="meter-title">
-      <h2 id="meter-title" className="sr-only">Le baromètre d’humeur</h2>
+    <Paper component="section" elevation={0} ref={panelRef} className={`flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden rounded-2xl border border-line bg-white p-4 shadow-sm shadow-brand/3 max-[650px]:p-2.5 [@media(max-height:650px)]:gap-1 ${className}`} aria-labelledby="meter-title">
+      <div className="flex shrink-0 items-center justify-between gap-2 max-[800px]:sr-only"><h2 id="meter-title" className="text-sm font-bold">Le baromètre d’humeur</h2><span className="text-xs text-muted">Observez, puis choisissez 1 à 4</span></div>
       <div className="flex min-w-0 shrink-0 items-center gap-2">
         <label className="sr-only" htmlFor="meter-catalogue-select">Catalogue · {catalog.length} baromètres</label>
         <NativeSelect disableUnderline inputProps={{ id: 'meter-catalogue-select', 'aria-describedby': 'daily-meter-note' }} sx={{ height: 44, minWidth: 0, fontSize: 12, '& select': { boxSizing: 'border-box', height: 44, pl: 1.5, pr: 4 } }} className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50/70 text-xs font-semibold text-brand focus-within:border-brand/40 focus-within:ring-2 focus-within:ring-brand/10 disabled:opacity-75" disabled={!canChange} value={String(selection.deck)} onChange={event => void selectDeck(Number(event.target.value))}>
@@ -300,7 +299,7 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
           title="Choisir un autre baromètre avant le premier vote" disabled={!canChange}
           onClick={() => void selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}><MoodIcon name="shuffle" className="size-5" /></IconButton>
       </div>
-      <p id="daily-meter-note" role="status" className={`flex shrink-0 items-start gap-2 rounded-lg px-2.5 py-2 text-[10px] leading-relaxed [@media(max-height:650px)]:py-1 [@media(max-height:650px)]:leading-snug ${status === 'error' ? 'bg-danger-soft text-danger' : savingMeter || !daily ? 'bg-amber-50 text-amber-800' : 'bg-blue-50/70 text-brand'}`}><MoodIcon name={hasVotes ? 'lock' : 'meter'} className="mt-0.5 size-3.5 shrink-0" /><span>{savingMeter ? 'Enregistrement du baromètre partagé…' : daily ? `Baromètre du ${daily.day} · Commun à toute l’équipe · ${hasVotes ? 'Verrouillé après le premier vote.' : 'Choisissez dans la liste avant le premier vote.'}` : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</span></p>
+      <p id="daily-meter-note" role="status" className={`flex shrink-0 items-start gap-2 rounded-lg px-2 py-1 text-xs leading-snug ${status === 'error' ? 'bg-danger-soft text-danger' : savingMeter || !daily ? 'text-amber-800' : 'text-muted'}`}><MoodIcon name={hasVotes ? 'lock' : 'meter'} className="mt-0.5 size-3.5 shrink-0" /><span>{savingMeter ? 'Enregistrement du baromètre partagé…' : daily ? hasVotes ? 'Verrouillé après le premier vote. Le même repère pour toute l’équipe.' : 'Commun à l’équipe · Modifiable avant le premier vote.' : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</span></p>
       {stacked ? <OrderedMeterSlides key={`${deck.remoteId}:${retry}`} deck={deck} title={title} retry={retry} /> : showSlide ? <MeterSlide key={`${selection.deck}:${selection.slide}:${retry}`} slide={slide}
         title={`${title} — diapositive ${selection.slide + 1}`} paused={!playing} /> : (
         <div key={`${selection.deck}:${pending}`} className={`${meterStage} motion-safe:animate-page-reveal`}>
@@ -323,13 +322,14 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
       {deck?.remoteId && (!slide || conversion !== 'idle') && <div role="status" className="shrink-0 text-[11px] text-muted">
         {conversion === 'error' ? <>Présentation indisponible. Choisissez un autre baromètre ou <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" className="min-h-11 px-2 text-brand underline" onClick={() => { setConversion('loading'); setRetry(value => value + 1); }}>Réessayer</Button></> : 'Chargement des diapositives SVG depuis Google…'}
       </div>}
-      <p id="meter-source-note" className={deck && !deck.remoteId ? 'sr-only' : 'shrink-0 text-[10px] text-muted'} role="status">{deck?.remoteId
+      <p id="meter-source-note" className={deck && !deck.remoteId ? 'sr-only' : `shrink-0 text-[10px] text-muted ${status === 'ready' ? '[@media(max-height:650px)]:sr-only' : ''}`} role="status">{deck?.remoteId
         ? `${stacked ? `${deck.slides.length} diapositives affichées ensemble. ` : ''}SVG statiques fournis par Google ; GIF non animés.` : deck
         ? 'Les GIF jouent en boucle à l’ouverture de chaque diapositive. Stop fige les animations ; les flèches changent la diapositive.'
         : status === 'loading' ? 'Chargement du catalogue…'
         : status === 'error' ? loadError || 'Catalogue indisponible. Réessayez le chargement.'
         : selection.deck === -2 ? 'Baromètre original choisi manuellement.' : 'Sélection automatique parmi les baromètres non utilisés uniquement.'}</p>
       {status === 'error' && <Button type="button" variant="outlined" sx={{ minHeight: 44, flexShrink: 0 }} onClick={() => setCatalogRetry(value => value + 1)}>Réessayer le catalogue</Button>}
+      {onShowPeople && <button type="button" onClick={onShowPeople} className="group hidden min-h-11 shrink-0 items-center justify-center gap-3 rounded-xl bg-brand px-3 text-sm font-semibold text-white hover:bg-brand-dark max-[800px]:inline-flex [@media(max-height:650px)]:hidden">Renseigner les humeurs<MoodIcon name="arrow" className="size-4 shrink-0 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" /></button>}
     </Paper>
   );
 }

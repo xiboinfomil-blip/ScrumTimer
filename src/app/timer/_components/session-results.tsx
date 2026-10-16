@@ -11,9 +11,11 @@ import { sessionLeaderboard, sessionStatistics } from '@/lib/session-results';
 import type { StandupTimer } from './timer-page';
 import { MoodSlideSummary } from './mood-slide-summary';
 import { ScoreBreakdown } from '@/components/ui/score-breakdown';
+import { useViewMotion } from '@/hooks/use-view-motion';
 
 export function SessionResults({ timer }: { timer: StandupTimer }) {
   const [view, setView] = useState<'ranking' | 'stats'>('ranking');
+  const panels = useViewMotion(view);
   const ranked = sessionLeaderboard(timer.people);
   const stats = sessionStatistics(timer.people);
   const winners = ranked.filter(person => person.rank === 1);
@@ -21,7 +23,7 @@ export function SessionResults({ timer }: { timer: StandupTimer }) {
   return <div id="timer-page" data-mode="results" className={`${routeStage} mx-auto w-full max-w-6xl overflow-hidden`}>
     <WorkflowHeading step={3} title="Bilan du tour" description={`${date} · ${timer.people.length} participants`} action={<Button disableElevation size="small" variant="contained" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 12 }} id="new-round-button" type="button" className={primaryButton} onClick={timer.newRound}>Nouveau tour</Button>} />
     <ScreenTabs className={segmentedTabs} label="Bilan du point quotidien" value={view} onChange={setView} tabs={[{ value: 'ranking', label: 'Classement' }, { value: 'stats', label: 'Statistiques' }]} />
-    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.3fr)_minmax(280px,1fr)] gap-3 max-[800px]:grid-cols-1">
+    <div ref={panels} className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.3fr)_minmax(280px,1fr)] gap-3 max-[800px]:grid-cols-1">
       <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} id="session-leaderboard" aria-labelledby="leaderboard-title" className={`${card} flex min-h-0 min-w-0 flex-col gap-2 p-3 [&>.list-pagination]:h-11 [&>.list-pagination>button]:size-11 ${view !== 'ranking' ? 'max-[800px]:hidden' : ''}`}>
         <div className="flex shrink-0 items-center justify-between border-b border-line pb-2"><h2 id="leaderboard-title" className="text-sm font-semibold">Classement · Maîtrise du temps</h2><span className="text-[10px] text-muted">/ 1 000 pts</span></div>
         <div className="shrink-0 rounded-lg border border-orange-200 bg-linear-to-r from-orange-50 to-white px-3 py-2 motion-safe:animate-enter">
@@ -34,7 +36,7 @@ export function SessionResults({ timer }: { timer: StandupTimer }) {
           <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium" title={person.name}>{person.name}</p><p className="text-[10px] text-muted">{person.score === null ? 'Passage non mesuré' : `${formatTime(person.speakingSeconds)} · ${person.attempts} passage(s) · ${person.timeUp ? 'Signal atteint' : 'Avant le signal'}`}</p></div>
           <div className="flex shrink-0 flex-col items-end"><strong className={`text-sm tabular-nums ${person.score === null ? 'text-muted' : 'text-brand'}`}>{person.score ?? '—'}<span className="ml-1 text-[9px] font-normal">pts</span></strong><ScoreBreakdown person={person} /></div>
         </li>} />
-        <p className="shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">Score progressif avant 25 % ; 1 000 pts entre 25 et 100 % ; −100 pts par 10 % de dépassement, minimum 0.<span className="max-[650px]:hidden"> −100 par relance après réinitialisation (max. 200). Pause sans pénalité.</span> Gestion du temps uniquement, ni qualité ni humeur.</p>
+        <p className="shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">Score au bilan et dans l’historique uniquement, pas en direct. Progression jusqu’à 1 000 pts à 50 % ; plateau de 50 à 85 % inclus ; sur les 15 % finaux, −100 pts par 10 % du budget total, soit 850 pts à 100 %. Ensuite, depuis 850 pts, −200 pts par 10 % du budget total (pente doublée), plancher 0 à 142,5 %. −100 par relance après réinitialisation (max. 200). Pause sans pénalité. Gestion du temps uniquement, ni qualité ni humeur.</p>
       </Paper>
       <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} id="session-statistics" aria-labelledby="statistics-title" className={`${card} flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto p-3 ${view !== 'stats' ? 'max-[800px]:hidden' : ''}`}>
         <h2 id="statistics-title" className="shrink-0 border-b border-line pb-2 text-sm font-semibold">Le bilan d’aujourd’hui</h2>

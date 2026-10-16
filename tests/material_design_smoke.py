@@ -1,4 +1,4 @@
-"""Material timeline and responsive route transitions; isolated APIs only."""
+"""Accessible workflow navigation and responsive route transitions; isolated APIs only."""
 import os
 import tempfile
 from copy import deepcopy
@@ -39,8 +39,8 @@ with sync_playwright() as p:
         page.goto(BASE + '/participants')
         expect(page.get_by_text('Alice', exact=True)).to_be_visible()
         timeline = page.get_by_role('list', name='Progression du point quotidien')
-        expect(timeline.locator('.MuiStep-root')).to_have_count(3)
-        expect(timeline.locator('.MuiStepConnector-line')).to_have_count(2)
+        expect(timeline.get_by_role('listitem')).to_have_count(3)
+        expect(timeline.get_by_role('button', name='Minuteur', exact=False)).to_be_disabled()
         expect(timeline.get_by_role('link', name='Participants', exact=True)).to_have_attribute('aria-current', 'page')
         for width, height in SIZES:
             page.set_viewport_size({'width': width, 'height': height})
@@ -59,15 +59,14 @@ with sync_playwright() as p:
         page.get_by_role('link', name='Humeurs', exact=True).click()
         expect(page.get_by_role('link', name='Humeurs', exact=True)).to_have_attribute('aria-current', 'page')
         expect(page.locator('[data-route-transition]')).to_be_visible()
-        expect(timeline.locator('.Mui-completed')).not_to_have_count(0)
+        expect(timeline.locator('[data-step-complete="true"]')).to_have_count(1)
         expect(page.locator('#meter-catalogue-select')).to_have_value('-2')
-        page.get_by_role('link', name='Statistiques', exact=True).click()
-        expect(page.locator('#daily-heading')).to_have_text('Activité · 5 derniers jours')
+        expect(page.locator('.site-header a[href^="/statistics"], .site-header a[href^="/daily-notes"]')).to_have_count(0)
         page.get_by_role('link', name='Participants', exact=True).click()
         expect(page.get_by_text('Alice', exact=True)).to_be_visible()
         if preference == 'reduce':
             assert page.evaluate("document.getAnimations().filter(a => a.playState === 'running').length") == 0
         assert not errors, errors
         context.close()
-        print(f'PASS Material timeline / route transitions / six viewports / {preference}')
+        print(f'PASS accessible workflow navigation / guarded timer / route transitions / six viewports / {preference}')
     browser.close()
