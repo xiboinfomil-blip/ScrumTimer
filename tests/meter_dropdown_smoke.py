@@ -71,7 +71,7 @@ with sync_playwright() as p:
             page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-mood-design-meter-{width}.png'))
         if width <= 800:
             page.get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
-        expect(page.get_by_role('group', name='Humeur de Alice : choisissez de 1 à 4').get_by_role('button')).to_have_text(['1', '4', '2', '3'])
+        expect(page.get_by_role('group', name='Humeur de Alice : choisissez de 1 à 4').get_by_role('button')).to_have_text(['1', '2', '3', '4'])
         for button in page.get_by_role('group', name='Humeur de Alice : choisissez de 1 à 4').get_by_role('button').all():
             box = button.bounding_box()
             assert box['width'] >= 44 and box['height'] >= 44
@@ -84,6 +84,9 @@ with sync_playwright() as p:
         page.reload()
         expect(select).to_be_disabled()
         expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé après le premier vote')
+        if width <= 800:
+            page.get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
+        expect(page.get_by_role('group', name='Humeur de Alice : choisissez de 1 à 4').get_by_role('button')).to_have_text(['1', '2', '3', '4'])
         assert db['patches'] == 4
         assert not errors, errors
         context.close()
