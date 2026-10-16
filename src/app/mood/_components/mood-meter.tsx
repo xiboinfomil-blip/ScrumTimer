@@ -13,6 +13,7 @@ import { useTeam } from '@/providers/team-provider';
 import { DefaultMoodMeter, MoodMeterLoading } from './default-mood-meter';
 import { useNotify } from '@/providers/notification-provider';
 import { MoodIcon } from './mood-icon';
+import { MOOD_RETRY_DELAYS } from '@/lib/mood-retry';
 
 const slideError = 'Diapositive indisponible. Le baromètre par défaut est affiché.';
 const meterStage = 'meter-stage relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden rounded-[14px] border border-line bg-slate-50';
@@ -20,11 +21,12 @@ const backgroundImage = 'block h-full w-full object-contain';
 
 // Slide-local state is isolated by a key so old image events cannot affect a
 // newly selected deck/slide, even if the same URL occurs more than once.
-export function MeterSlide({ slide, title, paused, idPrefix = 'meter' }: {
+export function MeterSlide({ slide, title, paused, idPrefix = 'meter', onSettled }: {
   slide: MoodMeterSlide;
   title: string;
   paused: boolean;
   idPrefix?: string;
+  onSettled?: () => void;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [ratio, setRatio] = useState(slide.aspectRatio ?? 16 / 9);
@@ -33,13 +35,28 @@ export function MeterSlide({ slide, title, paused, idPrefix = 'meter' }: {
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState<Set<number>>(() => new Set());
   const [snapshotWarning, setSnapshotWarning] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [waitingRetry, setWaitingRetry] = useState(false);
+  const settled = useRef(onSettled);
+  useEffect(() => { settled.current = onSettled; }, [onSettled]);
   const backgroundAnimated = isAnimatedImage(slide.image);
 
+  const backgroundError = useCallback(() => {
+    if (attempt < MOOD_RETRY_DELAYS.length) setWaitingRetry(true);
+    else { setFailed(true); settled.current?.(); }
+  }, [attempt]);
+
   useEffect(() => {
-    if (!loading || failed) return;
-    const timeout = setTimeout(() => setFailed(true), 45000);
+    if (!waitingRetry) return;
+    const timer = setTimeout(() => { setWaitingRetry(false); setAttempt(value => value + 1); }, MOOD_RETRY_DELAYS[attempt]);
+    return () => clearTimeout(timer);
+  }, [waitingRetry, attempt]);
+
+  useEffect(() => {
+    if (!loading || failed || waitingRetry) return;
+    const timeout = setTimeout(backgroundError, 45000);
     return () => clearTimeout(timeout);
-  }, [loading, failed]);
+  }, [loading, failed, waitingRetry, backgroundError]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -66,20 +83,20 @@ export function MeterSlide({ slide, title, paused, idPrefix = 'meter' }: {
 
   const loaded = useCallback((image: HTMLImageElement) => {
     setLoading(false);
+    settled.current?.();
     if (slide.aspectRatio === undefined && image.naturalHeight > 0) {
       setRatio(image.naturalWidth / image.naturalHeight || 16 / 9);
     }
   }, [slide.aspectRatio]);
-  const backgroundError = useCallback(() => setFailed(true), []);
   const snapshotError = useCallback(() => setSnapshotWarning(true), []);
 
   return (
     <div className={meterStage} ref={stageRef}>
       {failed ? <DefaultMoodMeter /> : loading ? <MoodMeterLoading /> : null}
       <div id={`${idPrefix}-slide-wrapper`} className="relative max-h-full max-w-full shrink-0 overflow-hidden" hidden={failed} style={{ width: size.width, height: size.height }}>
-        <AnimatedImage id={`${idPrefix}-slide`} className={backgroundImage} src={slide.image} alt={title} paused={paused}
-          animated={backgroundAnimated} onLoad={loaded} onError={backgroundError}
-          onSnapshotError={snapshotError} />
+        {!waitingRetry && <AnimatedImage key={attempt} id={`${idPrefix}-slide`} className={backgroundImage} src={attempt ? `${slide.image}${slide.image.includes('?') ? '&' : '?'}retry=${attempt}` : slide.image} alt={title} paused={paused}
+          animated={backgroundAnimated} fetchPriority="high" onLoad={loaded} onError={backgroundError}
+          onSnapshotError={snapshotError} />}
         <div id={`${idPrefix}-overlays`} className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
           {slide.overlays.map((overlay, index) => missing.has(index) ? null : (
             <div className="absolute inset-0 origin-top-left overflow-hidden" key={index} style={{
@@ -101,6 +118,16 @@ export function MeterSlide({ slide, title, paused, idPrefix = 'meter' }: {
       </p>
     </div>
   );
+}
+
+function OrderedMeterSlides({ deck, title, retry }: { deck: MoodMeterDeck; title: string; retry: number }) {
+  const [readyThrough, setReadyThrough] = useState(0);
+  return <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(140px,1fr)] gap-2 overflow-y-auto rounded-xl" aria-label="Toutes les diapositives du baromètre">
+    {deck.slides.map((item, index) => <div key={`${index}:${retry}`} className="relative flex min-h-0 flex-col overflow-hidden rounded-[14px] motion-safe:animate-page-reveal">
+      {index <= readyThrough ? <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`}
+        onSettled={() => setReadyThrough(value => Math.max(value, index + 1))} /> : <div className={meterStage}><MoodMeterLoading /></div>}
+    </div>)}
+  </div>;
 }
 
 export function MoodMeter({ className = '', mobileVisible = true }: { className?: string; mobileVisible?: boolean }) {
@@ -274,11 +301,7 @@ export function MoodMeter({ className = '', mobileVisible = true }: { className?
           onClick={() => void selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}><MoodIcon name="shuffle" className="size-5" /></IconButton>
       </div>
       <p id="daily-meter-note" role="status" className={`flex shrink-0 items-start gap-2 rounded-lg px-2.5 py-2 text-[10px] leading-relaxed [@media(max-height:650px)]:py-1 [@media(max-height:650px)]:leading-snug ${status === 'error' ? 'bg-danger-soft text-danger' : savingMeter || !daily ? 'bg-amber-50 text-amber-800' : 'bg-blue-50/70 text-brand'}`}><MoodIcon name={hasVotes ? 'lock' : 'meter'} className="mt-0.5 size-3.5 shrink-0" /><span>{savingMeter ? 'Enregistrement du baromètre partagé…' : daily ? `Baromètre du ${daily.day} · Commun à toute l’équipe · ${hasVotes ? 'Verrouillé après le premier vote.' : 'Choisissez dans la liste avant le premier vote.'}` : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</span></p>
-      {stacked ? <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(140px,1fr)] gap-2 overflow-y-auto rounded-xl" aria-label="Toutes les diapositives du baromètre">
-        {deck.slides.map((item, index) => <div key={`${selection.deck}:${index}:${retry}`} className="relative flex min-h-0 flex-col overflow-hidden rounded-[14px] motion-safe:animate-page-reveal">
-          <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`} />
-        </div>)}
-      </div> : showSlide ? <MeterSlide key={`${selection.deck}:${selection.slide}:${retry}`} slide={slide}
+      {stacked ? <OrderedMeterSlides key={`${deck.remoteId}:${retry}`} deck={deck} title={title} retry={retry} /> : showSlide ? <MeterSlide key={`${selection.deck}:${selection.slide}:${retry}`} slide={slide}
         title={`${title} — diapositive ${selection.slide + 1}`} paused={!playing} /> : (
         <div key={`${selection.deck}:${pending}`} className={`${meterStage} motion-safe:animate-page-reveal`}>
           {pending ? <MoodMeterLoading /> : selection.deck === -2 ? <DefaultMoodMeter /> : <p className="p-4 text-center text-xs text-muted">Choisissez un baromètre dans la liste. Les baromètres déjà utilisés restent disponibles.</p>}

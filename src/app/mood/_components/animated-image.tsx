@@ -13,13 +13,14 @@ interface AnimatedImageProps {
   onLoad?: (image: HTMLImageElement) => void;
   onError?: () => void;
   onSnapshotError?: () => void;
+  fetchPriority?: 'high' | 'low' | 'auto';
 }
 
 // Canvas is a sibling: background utilities and inline crop geometry must
 // apply identically to the live image and its frozen frame.
 export function AnimatedImage({
   src, alt, paused, animated = true, id, className, style,
-  onLoad, onError, onSnapshotError,
+  onLoad, onError, onSnapshotError, fetchPriority = 'auto',
 }: AnimatedImageProps) {
   const imageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -81,7 +82,7 @@ export function AnimatedImage({
   return (
     <>
       {/* Native images are needed for GIF frames and canvas snapshots. */}
-      <img key={`image:${src}`} ref={imageRef} id={id} src={src} alt={alt} decoding="async" className={className} style={style}
+      <img key={`image:${src}`} ref={imageRef} id={id} src={src} alt={alt} decoding="async" fetchPriority={fetchPriority} className={className} style={style}
         hidden={animated && paused} />
       {animated && <canvas key={`canvas:${src}`} ref={canvasRef} hidden aria-hidden={alt ? undefined : true}
         role={alt ? 'img' : 'presentation'} aria-label={alt || undefined}
