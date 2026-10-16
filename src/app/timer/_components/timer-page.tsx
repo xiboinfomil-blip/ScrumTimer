@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
 import { Button, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
@@ -20,6 +21,7 @@ import { TimerManagementDialog } from './timer-management-dialog';
 export type StandupTimer = ReturnType<typeof useStandupTimer>;
 
 export function TimerPage() {
+  const reduced = useReducedMotion();
   const allowed = useStepGuard('timer');
   const timer = useStandupTimer();
   const [view, setView] = useState<'timer' | 'team' | 'prompts'>('timer');
@@ -43,7 +45,7 @@ export function TimerPage() {
     : `${timer.duration / 60} min`;
 
   return (
-    <div ref={target} id="timer-page" className={`${routeStage} ${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh max-w-none! bg-white p-3 sm:p-6' : 'mx-auto w-full max-w-6xl'} overflow-hidden max-[650px]:[&>section:first-child_.MuiAvatar-root]:hidden max-[650px]:[&_h1]:text-lg`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
+    <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .65, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`${routeStage} ${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh max-w-none! bg-white p-3 sm:p-6' : 'mx-auto w-full max-w-6xl'} overflow-hidden max-[650px]:[&>section:first-child_.MuiAvatar-root]:hidden max-[650px]:[&_h1]:text-lg`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
       <Dialog open={sharing} onClose={() => setSharing(false)} aria-labelledby="sharing-title" fullWidth maxWidth="xs">
         <DialogTitle id="sharing-title">Diffusion et présentation</DialogTitle>
         <DialogContent><div className="flex flex-col items-start gap-2" aria-label="Diffusion et présentation">
@@ -71,6 +73,6 @@ export function TimerPage() {
         {!presentation.presenting && <DailyPrompts className={timer.focusMode || view !== 'prompts' ? 'max-[800px]:hidden' : ''} />}
       </div>
       <TimerManagementDialog timer={timer} />
-    </div>
+    </motion.div>
   );
 }

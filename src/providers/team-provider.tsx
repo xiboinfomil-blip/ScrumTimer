@@ -30,6 +30,8 @@ function readTeamList(value: unknown): TeamList {
 }
 
 interface TeamContextValue {
+  participantOrder: string[];
+  setParticipantOrder: (order: string[]) => void;
   teams: TeamSummary[];
   activeTeamId: string | null;
   activeTeamName: string;
@@ -52,6 +54,7 @@ interface TeamContextValue {
 const TeamContext = createContext<TeamContextValue | null>(null);
 
 export function TeamProvider({ children }: { children: ReactNode }) {
+  const [participantOrder, setParticipantOrder] = useState<string[]>([]);
   const notify = useNotify();
   const pathname = usePathname();
   const [state, setState] = useState(defaultTeam);
@@ -151,6 +154,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     setTodayRound(normalizeHistory(history.rounds).find(round => new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(round.completedAt)) === day) ?? null);
     revision.current = saved.revision;
     latest.current = normalizeTeam(saved.team);
+    setParticipantOrder([]);
     setState(latest.current);
     const memberCount = latest.current.roster.length;
     setTeams(current => current.map(team => team.id === teamId ? { ...team, memberCount } : team));
@@ -387,7 +391,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     } finally { clearTimeout(timeout); busy.current = false; setTeamBusy(false); }
   }, [todayRound, hydrateTeam, notify]);
   const activeTeamName = teams.find(team => team.id === activeTeamId)?.name ?? '';
-  return <TeamContext.Provider value={{ teams, activeTeamId, activeTeamName, teamBusy, dailyReady, todayRound, resetToday, setDailyReady, switchTeam, createTeam, deleteTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;
+  return <TeamContext.Provider value={{ participantOrder, setParticipantOrder, teams, activeTeamId, activeTeamName, teamBusy, dailyReady, todayRound, resetToday, setDailyReady, switchTeam, createTeam, deleteTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;
 }
 
 export function useTeam() {

@@ -1,7 +1,5 @@
 import Link from 'next/link';
 import { Button, IconButton, Paper } from '@mui/material';
-import { useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
 import { PaginatedList } from '@/components/ui/paginated-list';
 import { card, countPill, textButton } from '@/components/ui/styles';
 import type { StandupTimer } from './timer-page';
@@ -9,18 +7,9 @@ import { PostponedPeople } from './postponed-people';
 import { TimerIcon } from './timer-icon';
 
 export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; className?: string }) {
-  const [shuffleCount, setShuffleCount] = useState(0);
-  const [shuffling, setShuffling] = useState(false);
-  const reduced = useReducedMotion();
-  const { people, activeId, turnStarted } = timer;
+  const { people, activeId } = timer;
   const done = people.filter(person => person.done).length;
   const left = people.length - done;
-  const candidates = people.filter(person => !person.done && !person.postponed && (!turnStarted || person.id !== activeId));
-  const shuffleTitle = candidates.length < 2
-    ? 'Au moins deux personnes disponibles sont nécessaires pour mélanger'
-    : turnStarted
-      ? 'Mélanger les prochains passages sans interrompre la personne qui parle'
-      : 'Mélanger les personnes qui n’ont pas encore parlé, y compris le prochain intervenant';
 
   return (
     <Paper component="aside" elevation={0} className={`team-panel ${card} flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border-slate-200/80 p-3 [&_.person-list]:gap-1.5 ${className}`} aria-labelledby="team-title">
@@ -28,7 +17,6 @@ export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; cla
         <div className="min-w-0">
           <h2 id="team-title" className="flex items-center gap-2 text-sm font-semibold">Équipe <span className={countPill} id="team-count">{people.length}</span></h2>
         </div>
-        <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" className={`${textButton} min-h-11 gap-1.5 rounded-xl px-2 hover:bg-blue-50`} id="shuffle-button" title={shuffleTitle} aria-busy={shuffling} disabled={candidates.length < 2 || shuffling} onClick={() => { timer.shuffleWaiting(); setShuffleCount(value => value + 1); setShuffling(!reduced); }}><motion.span className="inline-block" key={shuffleCount} aria-hidden="true" initial={{ rotate: 0, scale: 1 }} animate={shuffleCount && !reduced ? { rotate: [0, -25, 380, 360], scale: [1, 1.2, 1] } : { rotate: 0, scale: 1 }} transition={{ duration: .7, ease: [.22, 1, .36, 1] }} onAnimationComplete={() => setShuffling(false)}><TimerIcon name="shuffle" /></motion.span> {shuffling ? 'Mélange…' : 'Mélanger'}</Button>
       </div>
       <Button component={Link} href="/mood" disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, justifyContent: 'flex-start', textTransform: 'none', fontSize: 11 }} className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl text-[11px] text-muted hover:bg-slate-50 hover:text-brand"><TimerIcon name="back" />Humeurs</Button>
       <div className="flex shrink-0 justify-between gap-2 border-t border-line pt-2 text-[10px] text-muted">

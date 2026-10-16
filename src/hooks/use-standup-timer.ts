@@ -4,8 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
 import { TimerAudio } from '@/lib/audio';
-import { timerFrame, shuffleEligible } from '@/lib/timer';
-import { shuffle } from '@/lib/shuffle';
+import { timerFrame } from '@/lib/timer';
 import type { SessionSpeaker } from '@/lib/session-results';
 import type { Mood } from '@/types/team';
 import { completedRound } from '@/lib/history';
@@ -111,19 +110,6 @@ export function useStandupTimer() {
     commit(cleared({ ...current, focusMode: false, managing: false, previousId: null, people: current.people.map(p => ({ ...p, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0 })), activeId: current.people.find(p => !p.postponed)?.id ?? null }));
     notify('Un nouveau tour commence. Faisons le point.');
   }, [cleared, commit, notify]);
-  const shuffleWaiting = useCallback(() => {
-    const current = latest.current;
-    if (current.focusMode) return;
-    const candidates = shuffleEligible(current.people.filter(p => !p.postponed), current.activeId, current.turnStarted);
-    if (candidates.length < 2) return;
-    const ids = new Set(candidates.map(p => p.id));
-    const shuffled = shuffle(candidates, true);
-    let index = 0;
-    const people = current.people.map(p => ids.has(p.id) ? shuffled[index++] : p);
-    commit({ ...current, people, activeId: current.turnStarted ? current.activeId : people.find(p => !p.done && !p.postponed)?.id ?? null });
-    updateTeam(value => ({ ...value, session: people.map(p => p.id) }));
-    notify(current.turnStarted ? 'Les prochains passages ont été mélangés. La personne qui parle reste en place.' : 'Nouvel ordre de passage ! Le premier participant est prêt.');
-  }, [commit, notify, updateTeam]);
   const addTime = useCallback(() => {
     if (latest.current.focusMode && !latest.current.managing) return;
     const current = tick();
@@ -183,5 +169,5 @@ export function useStandupTimer() {
     return () => document.removeEventListener('keydown', onKey);
   }, [toggle, next, reset]);
 
-  return { ...timer, person: timer.people.find(p => p.id === timer.activeId), duration: team.duration, warning: team.warning, toggle, reset, next, select, shuffleWaiting, newRound, addTime, setDuration, setWarning, manage, closeManage, postpone, rejoin };
+  return { ...timer, person: timer.people.find(p => p.id === timer.activeId), duration: team.duration, warning: team.warning, toggle, reset, next, select, newRound, addTime, setDuration, setWarning, manage, closeManage, postpone, rejoin };
 }

@@ -7,24 +7,22 @@ import { card, primaryButton } from '@/components/ui/styles';
 import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
 import { canStartSession } from '@/lib/team-storage';
-import { shuffle } from '@/lib/shuffle';
 import type { Mood } from '@/types/team';
 import { MoodIcon } from './mood-icon';
 
 export function MoodCheckin({ className = '' }: { className?: string }) {
-  const { state, updateTeam, dailyReady } = useTeam();
+  const { state, updateTeam, dailyReady, participantOrder } = useTeam();
   const router = useRouter();
   const notify = useNotify();
-  const present = state.roster.filter(person => person.present);
+  const present = state.roster.filter(person => person.present).sort((a, b) => {
+    const rank = (id: string) => participantOrder.includes(id) ? participantOrder.indexOf(id) : participantOrder.length;
+    return rank(a.id) - rank(b.id);
+  });
   const checked = present.filter(person => person.mood).length;
   const postponed = present.filter(person => state.postponed?.includes(person.id)).length;
   function start() {
     if (!dailyReady || !canStartSession(state)) return;
-    const ids = present.map(person => person.id);
-    const same = state.session.length === ids.length && ids.every(id => state.session.includes(id));
-    const session = shuffle(same ? state.session : ids, true);
-    if (!updateTeam(current => ({ ...current, session }))) return;
-    router.push('/timer');
+    if (updateTeam(current => ({ ...current, session: present.map(person => person.id) }))) router.push('/timer');
   }
   return (
     <Paper component="section" elevation={0} className={`${card} flex min-h-0 min-w-0 flex-1 flex-col gap-2 rounded-2xl border-slate-200/80 p-3 max-[650px]:p-2.5 ${className}`} aria-labelledby="mood-team-title">
