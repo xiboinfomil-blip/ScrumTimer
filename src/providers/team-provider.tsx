@@ -8,7 +8,9 @@ import { validateHistoryInput, validateTeamInput } from '@/lib/team-validation';
 import { useNotify } from '@/providers/notification-provider';
 import { usePathname } from 'next/navigation';
 import { resolveTeamContext, teamContextUrl } from '@/lib/team-context';
-import { clearCheckpoint, readCheckpoint } from '@/lib/timer-checkpoint';
+import { clearCheckpoint, readCheckpoint, parseCheckpoint, writeCheckpoint, checkpointContext, checkpointDay, type TimerCheckpoint, type TimerState } from '@/lib/timer-checkpoint';
+import { rejoinCheckpoint } from '@/lib/timer-completion';
+import type { Mood } from '@/types/team';
 import { CloudRequestError, cloudFetch, cloudRetryDelay, isTransientCloudError, sameCloudTeam } from '@/lib/cloud-retry';
 
 export interface TeamSummary {
@@ -32,6 +34,9 @@ function readTeamList(value: unknown): TeamList {
 }
 
 interface TeamContextValue {
+  getTimerCheckpoint: () => TimerCheckpoint | null;
+  storeTimerCheckpoint: (timer: TimerState, roundId: string | null) => boolean;
+  rejoinLateParticipant: (id: string, mood: Mood) => boolean;
   participantOrder: string[];
   setParticipantOrder: (order: string[]) => void;
   teams: TeamSummary[];
@@ -87,6 +92,20 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   const resumeRetry = useRef<() => void>(() => {});
   const loadNotice = useRef(false);
   const submittedTeam = useRef<TeamState | null>(null);
+  const timerMemory = useRef<{ teamId: string; checkpoint: TimerCheckpoint } | null>(null);
+  const getTimerCheckpoint = useCallback(() => {
+    const id = selectedId.current;
+    if (!id) return null;
+    const memory = timerMemory.current;
+    return (memory?.teamId === id ? parseCheckpoint(JSON.stringify(memory.checkpoint), latest.current) : null) ?? readCheckpoint(id, latest.current);
+  }, []);
+  const storeTimerCheckpoint = useCallback((timer: TimerState, roundId: string | null) => {
+    const id = selectedId.current;
+    if (!id) return false;
+    const team = latest.current;
+    timerMemory.current = { teamId: id, checkpoint: { version: 1, day: checkpointDay(), context: checkpointContext(team), session: team.session, postponed: team.postponed ?? [], timer, roundId } };
+    return writeCheckpoint(id, team, timer, roundId);
+  }, []);
 
   const clearRetry = useCallback(() => {
     if (retryTimer.current !== null) clearTimeout(retryTimer.current);
@@ -164,6 +183,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
             const winner = normalizeHistory(history.rounds).find(item => new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(item.completedAt)) === history.day);
             if (!winner) throw new Error('daily result unavailable');
             clearCheckpoint(teamId);
+            timerMemory.current = null;
             setTodayRound(winner);
             pendingRounds.current = pendingRounds.current.filter(item => item.id !== round.id);
             if (winner.id !== round.id) notify('Ce point quotidien a déjà été terminé sur un autre appareil. Le bilan enregistré est affiché.', 'warning');
@@ -172,6 +192,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
           if (!response.ok) throw new CloudRequestError(response);
           if (generation.current !== currentGeneration || controller.signal.aborted) return;
           clearCheckpoint(teamId);
+          timerMemory.current = null;
           setTodayRound(round);
           pendingRounds.current = pendingRounds.current.filter(item => item.id !== round.id);
         }
@@ -203,6 +224,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     const day = history.day ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date());
     const today = normalizeHistory(history.rounds).find(round => new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(round.completedAt)) === day) ?? null;
     setTodayRound(today);
+    timerMemory.current = null;
     revision.current = saved.revision;
     latest.current = normalizeTeam(saved.team);
     if (today) clearCheckpoint(teamId);
@@ -449,6 +471,14 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     pendingRounds.current = normalizeHistory([round, ...pendingRounds.current]);
     void flush();
   }, [flush, notify]);
+  const rejoinLateParticipant = useCallback((id: string, mood: Mood) => {
+    const checkpoint = getTimerCheckpoint();
+    if (!checkpoint) return false;
+    const resumed = rejoinCheckpoint(checkpoint, latest.current, id, mood);
+    if (!resumed || !updateTeam(() => resumed.team)) return false;
+    storeTimerCheckpoint(resumed.timer, checkpoint.roundId);
+    return true;
+  }, [getTimerCheckpoint, updateTeam, storeTimerCheckpoint]);
   const retryCloud = useCallback(() => {
     if (busy.current || uploading.current) return;
     if (conflict.current) {
@@ -487,7 +517,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     } finally { clearTimeout(timeout); busy.current = false; setTeamBusy(false); }
   }, [todayRound, hydrateTeam, notify, scheduleRetry]);
   const activeTeamName = teams.find(team => team.id === activeTeamId)?.name ?? '';
-  return <TeamContext.Provider value={{ participantOrder, setParticipantOrder, teams, activeTeamId, activeTeamName, teamBusy, dailyReady, todayRound, resetToday, setDailyReady, switchTeam, createTeam, deleteTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;
+  return <TeamContext.Provider value={{ getTimerCheckpoint, storeTimerCheckpoint, rejoinLateParticipant, participantOrder, setParticipantOrder, teams, activeTeamId, activeTeamName, teamBusy, dailyReady, todayRound, resetToday, setDailyReady, switchTeam, createTeam, deleteTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;
 }
 
 export function useTeam() {

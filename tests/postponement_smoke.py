@@ -27,7 +27,9 @@ Date.now = () => window.__smokeNow;
 
 
 class WorkspaceMock:
-    def __init__(self):
+    def __init__(self, remote=False):
+        self.remote = remote
+        self.meter = {'meterId': 'deck-1234567890abcdef1234', 'title': 'Même baromètre'} if remote else ORIGINAL
         self.team = {
             'roster': [{'id': name.lower(), 'name': name, 'present': True,
                         'mood': None, 'moodUpdatedAt': None, 'moodSlide': None}
@@ -55,12 +57,15 @@ class WorkspaceMock:
                    '/api/daily-meter': {'GET', 'POST'},
                    '/api/daily-hints': {'GET'}, '/api/meeting-settings': {'GET'},
                    '/api/mood-meters/catalog': {'GET'}}
+        if path == '/api/mood-meters/decks/deck-1234567890abcdef1234' and method == 'GET':
+            route.fulfill(json={'title': 'Même baromètre', 'slides': ['mood-meters/slides/test/page.svg']})
+            return
         if method not in allowed.get(path, set()):
             self.unexpected.append((method, path))
             route.fulfill(status=501, json={'error': 'Unmocked API blocked'})
             return
         if path == '/api/mood-meters/catalog':
-            route.fulfill(json=[])
+            route.fulfill(json=[{'title': 'Même baromètre', 'remoteId': self.meter['meterId'], 'slides': []}] if self.remote else [])
             return
         if path == '/api/teams':
             route.fulfill(json={'teams': [{'id': TEAM_ID, 'name': 'Mon équipe',
@@ -87,7 +92,7 @@ class WorkspaceMock:
         elif path == '/api/daily-meter':
             if method == 'POST':
                 candidate = deepcopy(request.post_data_json)
-                assert candidate == ORIGINAL, candidate
+                assert candidate == self.meter, candidate
                 self.daily_posts.append(candidate)
                 if self.daily is None:
                     self.daily = candidate
@@ -146,13 +151,15 @@ def no_archive(page, db):
     expect(page.get_by_role('region', name='Point quotidien du jour', exact=True)).to_have_count(0)
 
 
-def run_case(browser, width, height):
+def run_case(browser, width, height, skip=False, late_at_end=False, remote=False):
     context = browser.new_context(viewport={'width': width, 'height': height},
                                   reduced_motion='reduce', service_workers='block')
     context.add_init_script(INIT)
-    db = WorkspaceMock()
+    db = WorkspaceMock(remote)
+    meter_value = '0' if remote else '-2'
     context.route('**/api/**', db.api)
     context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
+    context.route('**/mood-meters/slides/**/*.svg', lambda route: route.fulfill(content_type='image/svg+xml', body='<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"/>'))
     page = context.new_page()
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
@@ -162,11 +169,11 @@ def run_case(browser, width, height):
         expect(page.get_by_text('Alice', exact=True)).to_be_visible()
         assert all(person['present'] and person['mood'] is None for person in db.team['roster'])
         page.get_by_role('link', name='Humeurs', exact=True).click()
-        expect(page.locator('#meter-catalogue-select')).to_have_value('-2')
+        expect(page.locator('#meter-catalogue-select')).to_have_value(meter_value)
         expect(page.locator('#meter-catalogue-select')).to_be_enabled()
         expect(page.locator('#random-meter-button')).to_be_enabled()
         expect(page.locator('#daily-meter-note')).to_contain_text('Modifiable avant le premier vote')
-        assert db.daily == ORIGINAL and db.daily_posts == [ORIGINAL]
+        assert db.daily == db.meter and db.daily_posts == [db.meter]
         if width <= 800:
             page.get_by_role('group', name='Panneau du bilan', exact=True).get_by_role(
                 'button', name='Humeurs de l’équipe', exact=True).click()
@@ -201,27 +208,64 @@ def run_case(browser, width, height):
         geometry(page, width, height, [page.locator('#start-button'),
                                       page.locator('#next-button'), page.locator('#manage-timer-button')])
 
+        if late_at_end:
+            advance(page, 115)
+            expect(page.locator('#status-pill')).to_have_attribute('data-status', 'Temps écoulé')
+            expect(page.get_by_role('dialog', name='Faire passer les personnes reportées ?', exact=True)).not_to_be_visible()
+            no_archive(page, db)
+            page.locator('#next-button').click()
+            choice = page.get_by_role('dialog', name='Faire passer les personnes reportées ?', exact=True)
+            expect(choice).to_be_visible()
+            choice.get_by_role('button', name='Retour au baromètre', exact=True).click()
+            expect(page.locator('#meter-catalogue-select')).to_have_value(meter_value)
+            expect(page.locator('#meter-catalogue-select')).to_be_disabled()
+            if width <= 800:
+                page.get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
+            expect(page.get_by_role('button', name='Humeur 2 pour Alice', exact=True)).to_have_count(0)
+            late_vote = page.get_by_role('button', name='Humeur 4 pour Bob', exact=True)
+            geometry(page, width, height, [late_vote])
+            late_vote.click()
+            saved(page)
+            page.get_by_role('button', name='Reprendre le tour en cours', exact=True).click()
+            expect(choice).not_to_be_visible()
+            expect(page.locator('#speaker-name')).to_have_text('Bob')
+            expect(page.locator('#status-pill')).to_have_attribute('data-status', 'Prêt à démarrer')
+            no_archive(page, db)
+            page.get_by_role('button', name='Démarrer', exact=True).click()
+            advance(page, 6)
+            page.locator('#next-button').click()
+            expect(page.get_by_role('region', name='Point quotidien du jour', exact=True)).to_be_visible()
+            saved(page)
+            assert len(db.history_posts) == 1
+            assert {person['id']: person['mood'] for person in db.rounds[0]['people']} == {'alice': 2, 'bob': 4}
+            assert db.daily_posts == [db.meter], 'return must not assign a different meter'
+            if remote:
+                assert all(person['meterTitle'] == 'Même baromètre' for person in db.rounds[0]['people'])
+            assert not db.unexpected and not errors, (db.unexpected, errors)
+            print(f'PASS: {width}x{height} no automatic advance at expiry, late mood and present from final choice')
+            return
+
         # Speaking mode hides the sidebar: late votes must remain reachable in Modifier.
         page.locator('#manage-timer-button').click()
         dialog = page.get_by_role('dialog', name='Modifier le minuteur', exact=True)
         expect(dialog).to_be_visible()
         expect(page.locator('#status-pill')).to_have_attribute('data-status', 'En pause')
-        late_vote = dialog.get_by_role('button', name='Humeur 3 et rejoindre pour Bob', exact=True)
-        expect(dialog.get_by_role('group', name='Humeur différée de Bob', exact=True).get_by_role('button')).to_have_count(4)
-        expect(late_vote).to_be_enabled()
-        late_vote.scroll_into_view_if_needed()
+        dialog.get_by_role('button', name='Retour au baromètre', exact=True).click()
+        expect(page.locator('#meter-catalogue-select')).to_have_value(meter_value)
+        expect(page.locator('#meter-catalogue-select')).to_be_disabled()
+        if width <= 800:
+            page.get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
+        late_vote = page.get_by_role('button', name='Humeur 3 pour Bob', exact=True)
         geometry(page, width, height, [late_vote])
         advance(page, 15)
-        expect(page.locator('#timer-display')).to_have_text('01:55')
         late_vote.click()
         saved(page)
-        expect(dialog.get_by_role('region', name='Personnes en attente', exact=True)).to_have_count(0)
+        page.get_by_role('button', name='Reprendre le tour en cours', exact=True).click()
         expect(page.locator('#speaker-name')).to_have_text('Alice')
         expect(page.locator('#upcoming-speaker')).to_have_text('Bob')
         expect(page.locator('#timer-display')).to_have_text('01:55')
         bob = next(person for person in db.team['roster'] if person['id'] == 'bob')
         assert bob['present'] and bob['mood'] == 3 and bob['moodUpdatedAt'] and not db.team['postponed']
-        dialog.get_by_role('button', name='Fermer les réglages', exact=True).click()
         expect(dialog).not_to_be_visible()
         expect(page.get_by_role('button', name='Reprendre', exact=True)).to_be_enabled()
         advance(page, 10)
@@ -244,23 +288,39 @@ def run_case(browser, width, height):
         expect(page.locator('#start-button')).to_be_disabled()
         expect(page.locator('#next-button')).to_be_disabled()
         no_archive(page, db)
+        choice = page.get_by_role('dialog', name='Faire passer les personnes reportées ?', exact=True)
+        expect(choice).to_be_visible()
+        finish = choice.get_by_role('button', name='Terminer sans les personnes en attente', exact=True)
+        geometry(page, width, height, [finish])
+        if skip:
+            finish.click()
+            daily_round = page.get_by_role('region', name='Point quotidien du jour', exact=True)
+            expect(daily_round).to_be_visible()
+            saved(page)
+            assert len(db.history_posts) == len(db.rounds) == 1
+            assert [person['id'] for person in db.rounds[0]['people']] == ['alice']
+            assert db.rounds[0]['people'][0]['speakingSeconds'] == 8
+            assert next(person for person in db.team['roster'] if person['id'] == 'bob')['present']
+            page.locator('#main-content').focus()
+            page.keyboard.press('n')
+            advance(page, 30)
+            assert len(db.history_posts) == 1
+            assert not db.unexpected and not errors, (db.unexpected, errors)
+            print(f'PASS: {width}x{height} explicit finish without postponed Bob, only Alice archived once')
+            return
         advance(page, 20)
-        team_view(page, width)
-        expect(page.locator('#done-count')).to_have_text('1 / 2 passage terminé')
-        expect(page.get_by_role('progressbar', name='Passages terminés', exact=True)).to_have_attribute('aria-valuenow', '1')
-        expect(page.locator('[data-person-id="alice"]')).to_have_class(re.compile(r'\bdone\b'))
-        expect(page.locator('[data-person-id="bob"]')).to_have_count(0)
-        pending = page.get_by_role('region', name='Personnes en attente', exact=True)
-        expect(pending.get_by_text('Bob', exact=True)).to_be_visible()
-        rejoin = pending.get_by_role('button', name='Reprendre le passage de Bob', exact=True)
+        rejoin = choice.get_by_role('button', name='Retour au baromètre', exact=True)
         expect(rejoin).to_be_enabled()
         geometry(page, width, height, [rejoin])
         no_archive(page, db)
         rejoin.click()
+        expect(page.locator('#meter-catalogue-select')).to_have_value(meter_value)
+        if width <= 800:
+            page.get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
+        page.get_by_role('button', name='Humeur 3 pour Bob', exact=True).click()
         saved(page)
-        expect(pending).to_have_count(0)
-        expect(page.locator('#done-count')).to_have_text('1 / 2 passage terminé')
-        timer_view(page, width)
+        page.get_by_role('button', name='Reprendre le tour en cours', exact=True).click()
+        expect(choice).not_to_be_visible()
         expect(page.locator('#speaker-name')).to_have_text('Bob')
         expect(page.locator('#status-pill')).to_have_attribute('data-status', 'Prêt à démarrer')
         expect(page.locator('#timer-display')).to_have_text('02:00')
@@ -315,5 +375,8 @@ if __name__ == '__main__':
         try:
             for width, height in SIZES:
                 run_case(browser, width, height)
+                run_case(browser, width, height, skip=True)
+                run_case(browser, width, height, late_at_end=True)
+                run_case(browser, width, height, late_at_end=True, remote=True)
         finally:
             browser.close()

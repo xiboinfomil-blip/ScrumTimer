@@ -18,6 +18,7 @@ import { SessionResults } from './session-results';
 import { TimerManagementDialog } from './timer-management-dialog';
 import { useViewMotion } from '@/hooks/use-view-motion';
 import { useDailyHints } from '@/hooks/use-daily-hints';
+import { roundSpeakers } from '@/lib/timer-completion';
 
 export type StandupTimer = ReturnType<typeof useStandupTimer>;
 
@@ -44,7 +45,7 @@ export function TimerPage() {
   });
 
   if (!allowed) return null;
-  if (timer.people.length > 0 && !timer.activeId && timer.people.every(person => person.done)) return <SessionResults timer={timer} />;
+  if (timer.people.length > 0 && !timer.activeId && timer.people.every(person => person.done)) return <SessionResults timer={{ ...timer, people: roundSpeakers(timer.people) }} />;
 
   const perPerson = timer.duration % 60
     ? `${Math.floor(timer.duration / 60)} min ${timer.duration % 60} s`
@@ -52,6 +53,14 @@ export function TimerPage() {
 
   return (
     <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-1 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh max-w-none! bg-white p-3 sm:p-6' : 'mx-auto w-full max-w-6xl'} overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
+      <Dialog open={!timer.activeId && timer.people.some(person => person.postponed && !person.done)} aria-labelledby="postponed-choice-title" aria-describedby="postponed-choice-description" fullWidth maxWidth="xs" sx={{ zIndex: 1500 }}>
+        <DialogTitle id="postponed-choice-title">Faire passer les personnes reportées ?</DialogTitle>
+        <DialogContent>
+          <p id="postponed-choice-description" className="mb-3 text-sm text-muted">Les passages disponibles sont terminés. Retournez au même baromètre pour recueillir les humeurs des personnes reportées, puis reprenez ce tour. Sinon, terminez sans elles : elles ne figureront pas au bilan.</p>
+          {!timer.people.some(person => person.done && !person.postponed) && <p className="mt-2 text-xs text-muted">Au moins un passage doit être terminé pour enregistrer un bilan.</p>}
+        </DialogContent>
+        <DialogActions className="flex-wrap gap-1"><Button onClick={timer.openLateCheckin} sx={{ minHeight: 44 }}>Retour au baromètre</Button><Button onClick={timer.finishWithoutPostponed} disabled={!timer.people.some(person => person.done && !person.postponed)} sx={{ minHeight: 44 }}>Terminer sans les personnes en attente</Button></DialogActions>
+      </Dialog>
       <Dialog open={sharing} onClose={() => setSharing(false)} aria-labelledby="sharing-title" fullWidth maxWidth="xs">
         <DialogTitle id="sharing-title">Diffusion et présentation</DialogTitle>
         <DialogContent><div className="flex flex-col items-start gap-2" aria-label="Diffusion et présentation">

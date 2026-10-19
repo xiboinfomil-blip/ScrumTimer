@@ -1,18 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
 import { TimerAudio } from '@/lib/audio';
 import { timerFrame } from '@/lib/timer';
 import type { Mood } from '@/types/team';
 import { completedRound } from '@/lib/history';
+import { finishWaitingRound, roundSpeakers } from '@/lib/timer-completion';
 import { createId } from '@/lib/team-storage';
-import { readCheckpoint, recoverTimer, writeCheckpoint, type TimerState } from '@/lib/timer-checkpoint';
+import { recoverTimer, type TimerState } from '@/lib/timer-checkpoint';
 
 export function useStandupTimer() {
-  const { state: team, activeTeamId, updateTeam, saveRound } = useTeam();
-  const [checkpoint] = useState(() => activeTeamId ? readCheckpoint(activeTeamId, team) : null);
+  const { state: team, activeTeamId, updateTeam, saveRound, getTimerCheckpoint, storeTimerCheckpoint } = useTeam();
+  const router = useRouter();
+  const [checkpoint] = useState(getTimerCheckpoint);
   const roundId = useRef<string | null>(checkpoint?.roundId ?? null);
   const notify = useNotify();
   const audio = useRef<TimerAudio | null>(null);
@@ -30,14 +33,14 @@ export function useStandupTimer() {
   const storageNotice = useRef(false);
   useEffect(() => {
     if (!activeTeamId || !team.session.length) return;
-    if (!writeCheckpoint(activeTeamId, team, timer, roundId.current) && !storageNotice.current) {
+    if (!storeTimerCheckpoint(timer, roundId.current) && !storageNotice.current) {
       storageNotice.current = true;
       notify('La reprise après actualisation est indisponible dans cet onglet : le stockage de session est bloqué. Le minuteur continue tant que la page reste ouverte.', 'warning');
     }
-  }, [activeTeamId, team, timer, notify]);
+  }, [activeTeamId, team, timer, notify, storeTimerCheckpoint]);
   useEffect(() => {
     if (roundId.current && timer.people.length && timer.people.every(person => person.done)) {
-      saveRound(completedRound(roundId.current, timer.people));
+      saveRound(completedRound(roundId.current, roundSpeakers(timer.people)));
     }
     // Recover a completed but unacknowledged round once on mount. Its stable ID
     // makes replay safe if the server committed before the previous page closed.
@@ -47,9 +50,9 @@ export function useStandupTimer() {
   // Event and interval handlers share one current snapshot, avoiding stale deadlines.
   const commit = useCallback((next: TimerState) => {
     latest.current = next;
-    if (activeTeamId) writeCheckpoint(activeTeamId, preferences.current, next, roundId.current);
+    storeTimerCheckpoint(next, roundId.current);
     setTimer(next);
-  }, [activeTeamId]);
+  }, [storeTimerCheckpoint]);
   const cleared = useCallback((current: TimerState, duration = preferences.current.duration): TimerState => ({ ...current, remaining: duration, turnTotal: duration, running: false, turnStarted: false, ended: false, warned: false, deadline: 0 }), []);
   const tick = useCallback(() => {
     const current = latest.current;
@@ -96,14 +99,22 @@ export function useStandupTimer() {
     const person = [...people.slice(index + 1), ...people.slice(0, index)].find(p => !p.done && !p.postponed);
     if (!person && people.every(p => p.done)) {
       roundId.current ??= createId();
-      saveRound(completedRound(roundId.current, people));
+      saveRound(completedRound(roundId.current, roundSpeakers(people)));
     }
     const prepared = cleared({ ...current, people, previousId: current.activeId, activeId: person?.id ?? null });
     prepared.people = prepared.people.map(candidate => candidate.id === person?.id ? { ...candidate, started: true, attempts: candidate.attempts + 1, budgetSeconds: candidate.started ? candidate.budgetSeconds : prepared.turnTotal } : candidate);
     if (person && preferences.current.sound) { audio.current ??= new TimerAudio(); audio.current.prepare(); }
     commit({ ...prepared, focusMode: Boolean(person), running: Boolean(person), turnStarted: Boolean(person), deadline: person ? Date.now() + prepared.remaining * 1000 : 0 });
-    notify(person ? `${person.name}, à vous la parole !` : people.some(p => p.postponed) ? 'Les passages disponibles sont terminés. Les personnes reportées restent en attente.' : 'Point quotidien terminé. Bonne journée à toute l’équipe !');
+    notify(person ? `${person.name}, à vous la parole !` : people.some(p => p.postponed) ? 'Les passages disponibles sont terminés. Faites rejoindre les personnes reportées ou terminez sans elles.' : 'Point quotidien terminé. Bonne journée à toute l’équipe !');
   }, [cleared, commit, notify, tick, saveRound]);
+  const finishWithoutPostponed = useCallback(() => {
+    const finished = finishWaitingRound(latest.current);
+    if (!finished) return;
+    roundId.current ??= createId();
+    commit(finished);
+    saveRound(completedRound(roundId.current, roundSpeakers(finished.people)));
+    notify('Point quotidien terminé sans les personnes encore reportées. Leurs passages ne figurent pas au bilan.');
+  }, [commit, saveRound, notify]);
   const select = useCallback((id: string) => {
     if (latest.current.focusMode) return;
     if (id === latest.current.activeId || !latest.current.people.some(p => p.id === id && !p.postponed)) return;
@@ -141,6 +152,11 @@ export function useStandupTimer() {
     notify('Minuteur en pause. Vous pouvez modifier les réglages.');
   }, [tick, commit, notify]);
   const closeManage = useCallback(() => commit({ ...latest.current, managing: false }), [commit]);
+  const openLateCheckin = useCallback(() => {
+    const current = tick();
+    commit({ ...current, running: false, managing: false });
+    router.push(`/mood?resume=timer&team=${encodeURIComponent(activeTeamId ?? '')}`);
+  }, [tick, commit, router, activeTeamId]);
   const postpone = useCallback((id: string) => {
     const current = tick();
     const target = current.people.find(p => p.id === id);
@@ -175,5 +191,5 @@ export function useStandupTimer() {
     return () => document.removeEventListener('keydown', onKey);
   }, [toggle, next, reset]);
 
-  return { ...timer, person: timer.people.find(p => p.id === timer.activeId), duration: team.duration, warning: team.warning, toggle, reset, next, select, newRound, addTime, setDuration, setWarning, manage, closeManage, postpone, rejoin };
+  return { ...timer, person: timer.people.find(p => p.id === timer.activeId), duration: team.duration, warning: team.warning, toggle, reset, next, select, newRound, addTime, setDuration, setWarning, manage, closeManage, postpone, rejoin, finishWithoutPostponed, openLateCheckin };
 }

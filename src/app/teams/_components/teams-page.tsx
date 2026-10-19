@@ -63,7 +63,7 @@ export function TeamsPage() {
         <h1 id="teams-heading" className="text-3xl font-bold tracking-tight text-ink sm:text-4xl">Vos équipes<span className="text-accent">.</span></h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">Un espace pour se retrouver. Un moment pour chacun.</p>
       </div>
-      <dl className="flex gap-5 text-sm sm:gap-6" aria-label="Vue d’ensemble des équipes">
+      <dl className="flex gap-5 text-sm sm:gap-6" aria-label="Résumé des équipes">
         <div><dt className="text-xs text-muted">Équipes</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-ink">{ready ? teams.length : '—'}</dd></div>
         <div className="border-l border-line pl-5 sm:pl-6"><dt className="text-xs text-muted">Membres au total</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-ink">{ready ? totalMembers : '—'}</dd></div>
       </dl>

@@ -137,6 +137,7 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople }
   useEffect(() => () => changeController.current?.abort(), []);
   const initialUsed = useRef(state.usedMoodMeters ?? []);
   const initialHasVotes = useRef(state.roster.some(person => person.mood !== null));
+  const initialSlide = useRef(state.currentMoodSlide);
   const panelRef = useRef<HTMLElement>(null);
   // GIF playback is explicitly requested; Stop remains available at all times.
   const [paused, setPaused] = useState(false);
@@ -199,7 +200,7 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople }
         if (selected === -1) throw new Error('daily meter unavailable');
         setDaily(assigned);
         setCatalog(decks);
-        setSelection({ deck: selected, slide: 0 });
+        setSelection({ deck: selected, slide: initialSlide.current?.meterId === assigned.meter.meterId ? Math.max(0, (initialSlide.current?.slideNumber ?? 1) - 1) : 0 });
         if (decks[selected]?.remoteId) setConversion('loading');
         setStatus('ready');
       } catch (error) {

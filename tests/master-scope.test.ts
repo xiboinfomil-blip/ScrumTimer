@@ -47,7 +47,7 @@ test('master keeps DailyRound and SessionResults summary interfaces and wiring',
   assert.match(daily, /<DailyDashboard round=\{round\} expanded=\{view\}\s*\/>/);
   assert.match(daily, /await resetToday\(\)/);
   const timer = source('src/app/timer/_components/timer-page.tsx');
-  assert.match(timer, /people\.every\(person => person\.done\)\) return <SessionResults timer=\{timer\}\s*\/>/);
+  assert.match(timer, /people\.every\(person => person\.done\)\) return <SessionResults timer=\{\{ \.\.\.timer, people: roundSpeakers\(timer\.people\) \}\}\s*\/>/);
   const results = source('src/app/timer/_components/session-results.tsx');
   assert.match(results, /export function SessionResults\(\{ timer \}: \{ timer: StandupTimer \}\)/);
   assert.match(results, /sessionLeaderboard\(timer\.people\)/);
@@ -69,4 +69,11 @@ test('removing master full views preserves notes, history and participant bridge
       assert.match(route, new RegExp(`export async function ${method}\\(request: Request\\)`));
     }
   }
+});
+
+test('shared paginated lists retain navigation without an overview feature', () => {
+  const list = source('src/components/ui/paginated-list.tsx');
+  assert.match(list, /Page précédente/);
+  assert.match(list, /Page suivante/);
+  assert.doesNotMatch(list, /Vue d’ensemble|overviewOpen|<Dialog|Aller à une personne/);
 });
