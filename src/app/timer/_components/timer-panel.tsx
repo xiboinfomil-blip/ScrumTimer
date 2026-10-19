@@ -1,6 +1,11 @@
 'use client';
 
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper } from '@mui/material';
+import CheckIcon from '@mui/icons-material/Check';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
+import NorthEastIcon from '@mui/icons-material/NorthEast';
 import { useState } from 'react';
 import type { useDailyHints } from '@/hooks/use-daily-hints';
 import { primaryButton, secondaryButton } from '@/components/ui/styles';
@@ -33,12 +38,13 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
   const feedbackColor = complete ? 'text-success' : ended || critical ? 'font-semibold text-danger' : nearly ? 'text-amber-800' : 'text-muted';
   const panelColor = ended || critical ? 'border-red-200! bg-red-50/30' : nearly ? 'border-orange-200! bg-orange-50/30' : complete ? 'border-green-200! bg-success-soft' : running ? 'border-brand/40! bg-white' : 'border-slate-200/80';
   const pulse = running && critical ? 'motion-safe:animate-critical-glow' : running && nearly ? 'motion-safe:animate-warning-glow' : '';
+  const FeedbackIcon = complete ? CheckIcon : ended ? ErrorOutlineIcon : nearly ? AccessTimeIcon : running ? RadioButtonCheckedIcon : NorthEastIcon;
 
   return (
     <Paper component="section" elevation={0} className={`timer-panel relative isolate grid min-h-0 min-w-0 grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-2 overflow-hidden rounded-[28px] border border-line bg-white p-5 text-center shadow-sm shadow-brand/3 max-[650px]:gap-1 max-[650px]:rounded-2xl max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-3 ${panelColor} ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
       <div className="col-span-full flex min-w-0 items-center justify-between gap-2 self-start">
         <span className="text-left text-xs font-semibold tabular-nums text-muted">{person ? `Passage ${people.findIndex(candidate => candidate.id === person.id) + 1} / ${people.length}` : 'Terminé'}</span>
-        {person && <Button onClick={() => setReadingNote(true)} aria-label={`Lire la note de ${person.name}`} sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 10 }}><span aria-hidden="true" className="mr-1">✎</span>Pense-bête</Button>}
+        {person && <Button onClick={() => setReadingNote(true)} aria-label={`Lire la note de ${person.name}`} sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 10 }}><TimerIcon name="edit" className="mr-1 size-3.5" />Pense-bête</Button>}
         <span className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1.5 text-[9px] font-semibold max-[650px]:px-1.5 max-[650px]:py-1 max-[650px]:text-[8px] ${statusColor}`} id="status-pill" data-status={status} role="status"><span className={`size-1.5 shrink-0 rounded-full bg-current ${running ? 'motion-safe:animate-pulse' : ''} motion-reduce:animate-none`} aria-hidden="true" />{status}</span>
       </div>
       <div className="min-w-0 overflow-hidden">
@@ -71,7 +77,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
         <Button disableElevation size="small" variant={ended ? 'contained' : 'outlined'} sx={{ minHeight: 44, minWidth: 0, px: 1, textTransform: 'none', fontSize: 11 }} type="button" id="next-button" className={`${ended ? primaryButton : secondaryButton} min-h-11 rounded-xl max-[650px]:px-2 max-[650px]:text-[11px]`} disabled={!person} onClick={timer.next} aria-keyshortcuts="N">Suivant <TimerIcon name="next" className="size-3.5 shrink-0" /></Button>
       </div>
       <div id="timer-feedback" className={`sr-only ${feedbackColor}`}>
-        <span id="feedback-icon" className={`shrink-0 ${complete ? 'text-success' : ended ? 'text-danger' : nearly ? 'text-amber-700' : 'text-brand'}`} aria-hidden="true">{complete ? '✓' : ended ? '!' : nearly ? '◷' : running ? '◎' : '↗'}</span>
+        <FeedbackIcon id="feedback-icon" className={`size-4 shrink-0 ${complete ? 'text-success' : ended ? 'text-danger' : nearly ? 'text-amber-700' : 'text-brand'}`} fontSize="inherit" aria-hidden="true" />
         <span id="feedback-text">{feedback}</span>
       </div>
       <div className="flex min-h-11 items-center justify-between gap-2 border-t border-line text-[11px] text-muted"><span className="flex items-center gap-1.5"><TimerIcon name={timer.focusMode ? 'lock' : 'timer'} className="size-3.5" />{timer.focusMode ? 'Réglages verrouillés' : `${Math.floor(timer.duration / 60)} min ${timer.duration % 60 ? `${timer.duration % 60} s` : ''} par personne`}</span><Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} id="manage-timer-button" type="button" className="min-h-11 rounded-xl text-brand" onClick={timer.manage}><TimerIcon name="edit" />{timer.focusMode ? 'Modifier' : 'Réglages'}</Button></div>

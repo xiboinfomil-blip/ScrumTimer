@@ -1,5 +1,8 @@
 import Link from 'next/link';
 import { Button, IconButton, Paper } from '@mui/material';
+import CheckIcon from '@mui/icons-material/Check';
+import NorthEastIcon from '@mui/icons-material/NorthEast';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { PaginatedList } from '@/components/ui/paginated-list';
 import { countPill, textButton } from '@/components/ui/styles';
 import type { StandupTimer } from './timer-page';
@@ -33,11 +36,11 @@ export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; cla
             const active = person.id === activeId;
             return (
               <li key={person.id} className={`person-row flex h-14 min-w-0 shrink-0 items-center gap-2 rounded-xl border px-1 motion-safe:animate-enter ${active ? timer.ended ? 'active border-red-200 bg-danger-soft' : 'active border-brand/25 bg-blue-50 ring-1 ring-inset ring-brand/10' : person.done ? 'border-transparent bg-success-soft/40' : 'border-transparent bg-white hover:border-line hover:bg-slate-50'} ${person.done ? 'done' : ''}`} data-person-id={person.id}>
-                <span className={`grid size-5 shrink-0 place-items-center rounded-md text-[9px] font-semibold ${person.done ? 'bg-success-soft text-success' : active ? 'bg-brand text-white' : 'bg-slate-100 text-muted'}`} aria-hidden="true">{person.done ? '✓' : String(index + 1).padStart(2, '0')}</span>
+                <span className={`grid size-5 shrink-0 place-items-center rounded-md text-[9px] font-semibold ${person.done ? 'bg-success-soft text-success' : active ? 'bg-brand text-white' : 'bg-slate-100 text-muted'}`} aria-hidden="true">{person.done ? <CheckIcon className="size-3.5" fontSize="inherit" aria-hidden="true" /> : String(index + 1).padStart(2, '0')}</span>
                 <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, p: 0, justifyContent: 'flex-start', textTransform: 'none', color: 'inherit' }} type="button" className="flex min-h-11 min-w-0 flex-1 items-center gap-2 bg-transparent text-left" aria-label={`Donner la parole à ${person.name}${person.done ? ' (a déjà parlé)' : ''}`} aria-pressed={active} onClick={() => timer.select(person.id)}>
                   <span className="grid min-w-0 gap-1">
                     <span className="person-name truncate text-xs font-bold" title={person.name}>{person.name}</span>
-                    <span className={`text-[9px] leading-snug ${active && timer.ended ? 'text-danger' : person.done ? 'text-success' : active ? 'text-brand' : 'text-muted'}`}>{active ? timer.ended ? 'Temps écoulé · conclure' : timer.running ? 'Parle maintenant' : 'Prêt à parler' : person.done ? '✓ Passage terminé' : 'À venir'} · Humeur {person.mood}</span>
+                    <span className={`text-[9px] leading-snug ${active && timer.ended ? 'text-danger' : person.done ? 'text-success' : active ? 'text-brand' : 'text-muted'}`}>{active ? timer.ended ? 'Temps écoulé · conclure' : timer.running ? 'Parle maintenant' : 'Prêt à parler' : person.done ? <><CheckIcon className="inline-block size-3" fontSize="inherit" aria-hidden="true" /> Passage terminé</> : 'À venir'} · Humeur {person.mood}</span>
                   </span>
                 </Button>
                 {!person.done && <IconButton size="small" sx={{ width: 44, height: 44 }} type="button" className="grid size-11 shrink-0 place-items-center rounded-xl text-muted hover:bg-amber-50 hover:text-amber-800" aria-label={`Reporter le passage de ${person.name}`} onClick={() => timer.postpone(person.id)}><TimerIcon name="later" /></IconButton>}
@@ -48,7 +51,7 @@ export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; cla
       </div>
       <PostponedPeople timer={timer} />
       <div className="py-4 text-center text-xs text-muted" id="empty-team" hidden={people.length > 0}>
-        <span className="block text-2xl text-accent" aria-hidden="true">↗</span>
+        <NorthEastIcon className="size-6 text-accent" fontSize="inherit" aria-hidden="true" />
         <strong className="mt-2 block text-ink">On commence le point quotidien ?</strong>
         <p className="mt-2 leading-relaxed">Complétez le bilan d’humeur.<br />Chaque personne présente aura la parole.</p>
       </div>
@@ -57,7 +60,7 @@ export function TeamLineup({ timer, className = '' }: { timer: StandupTimer; cla
           <span id="team-progress-fill" className="block h-full rounded-full bg-success transition-[width] motion-reduce:transition-none" style={{ width: `${people.length ? done / people.length * 100 : 0}%` }} />
         </div>
         <div className="mt-1 flex items-center justify-between gap-2 text-[9px] text-muted">
-          <span id="team-progress-label">{done === people.length && people.length > 0 ? 'Tout le monde a eu la parole ✨' : done ? `${left} ${left === 1 ? 'passage restant' : 'passages restants'}` : 'À vous de commencer'}</span>
+          <span id="team-progress-label">{done === people.length && people.length > 0 ? <>Tout le monde a eu la parole <AutoAwesomeIcon className="inline-block size-3" fontSize="inherit" aria-hidden="true" /></> : done ? `${left} ${left === 1 ? 'passage restant' : 'passages restants'}` : 'À vous de commencer'}</span>
           <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" id="new-round-button" className={`${textButton} min-h-11`} disabled={!people.length} onClick={timer.newRound}>Nouveau tour</Button>
         </div>
       </div>

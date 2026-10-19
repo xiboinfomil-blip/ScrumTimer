@@ -2,6 +2,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button, Dialog } from '@mui/material';
+import CheckIcon from '@mui/icons-material/Check';
+import ShuffleIcon from '@mui/icons-material/Shuffle';
 import { motion, useReducedMotion } from 'framer-motion';
 import { shuffle } from '@/lib/shuffle';
 
@@ -87,7 +89,7 @@ export function LineupRevealDialog({ people, order, onCancel, onComplete }: {
           <motion.span aria-hidden="true" className={`grid size-12 shrink-0 place-items-center rounded-2xl ${ready ? 'bg-success-soft text-success' : 'bg-brand text-white'}`}
             animate={!reduced && phase === 'mixing' ? { rotate: [0, 180, 360] } : { rotate: 0 }}
             transition={phase === 'mixing' ? { duration: 1.2, repeat: Infinity, ease: 'linear' } : { duration: 0 }}>
-            {ready ? <span className="text-2xl">✓</span> : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-6"><path d="m16 3 4 4-4 4M4 7h3c5 0 5 10 10 10h3m-4-4 4 4-4 4M4 17h3c2 0 3-2 4-4m3-4c1-1 2-2 3-2h3" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+            {ready ? <CheckIcon aria-hidden="true" sx={{ fontSize: 24 }} /> : <ShuffleIcon aria-hidden="true" sx={{ fontSize: 24 }} />}
           </motion.span>
           <div className="min-w-0">
             <p className="mb-1 text-[10px] font-bold uppercase tracking-[.18em] text-brand">À chacun son moment</p>

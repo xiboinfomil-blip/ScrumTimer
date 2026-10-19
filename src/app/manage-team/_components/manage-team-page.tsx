@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Checkbox, IconButton } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -42,10 +44,10 @@ export function ManageTeamPage() {
   return <div className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-4 overflow-y-auto pb-3" aria-labelledby="manage-team-heading">
     <header className="flex shrink-0 flex-wrap items-end justify-between gap-3 px-1">
       <div className="min-w-0 flex-1 basis-64">
-        <Link href={`/teams?team=${activeTeamId}`} className="mb-1 inline-flex min-h-11 items-center gap-2 rounded-lg text-xs font-semibold text-brand hover:text-brand-dark"><span aria-hidden="true">←</span>Toutes les équipes</Link>
+        <Link href={`/teams?team=${activeTeamId}`} className="mb-1 inline-flex min-h-11 items-center gap-2 rounded-lg text-xs font-semibold text-brand hover:text-brand-dark"><ArrowBackIcon className="size-4" fontSize="inherit" aria-hidden="true" />Toutes les équipes</Link>
         <h1 id="manage-team-heading" className="text-xl font-bold tracking-tight wrap-anywhere text-ink">{activeTeamName}</h1>
       </div>
-      <Link href={`/participants?team=${activeTeamId}`} className="group inline-flex min-h-11 items-center justify-center gap-3 rounded-xl bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-dark max-sm:w-full">Confirmer les présences<span aria-hidden="true" className="motion-safe:transition-transform motion-safe:group-hover:translate-x-1">→</span></Link>
+      <Link href={`/participants?team=${activeTeamId}`} className="group inline-flex min-h-11 items-center justify-center gap-3 rounded-xl bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-dark max-sm:w-full">Confirmer les présences<ArrowForwardIcon aria-hidden="true" fontSize="inherit" className="size-4 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" /></Link>
     </header>
     <div className="grid min-h-120 shrink-0 gap-4 lg:min-h-125 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_300px]">
       <section aria-label="Gérer les membres" className="flex h-136 min-h-120 min-w-0 flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm shadow-brand/3 lg:h-auto lg:min-h-0">
@@ -80,7 +82,7 @@ export function ManageTeamPage() {
             <span aria-hidden="true" className="mb-1 grid size-11 place-items-center rounded-2xl bg-blue-50 text-brand"><NavIcon name={query ? 'search' : 'people'} /></span>
             <p className="text-sm font-semibold text-ink">{query ? 'Aucun membre trouvé.' : 'Votre équipe prend forme ici.'}</p>
             <p className="max-w-64 text-xs leading-relaxed text-muted">{query ? 'Essayez un autre nom ou effacez la recherche.' : 'Ajoutez votre premier membre pour préparer le point.'}</p>
-            <button type="button" onClick={() => { if (query) setQuery(''); else document.getElementById('checkin-name')?.focus(); }} className="mt-1 min-h-11 rounded-xl px-3 text-sm font-semibold text-brand hover:bg-blue-50">{query ? 'Effacer la recherche' : 'Ajouter le premier membre'}<span aria-hidden="true" className="ml-2">→</span></button>
+            <button type="button" onClick={() => { if (query) setQuery(''); else document.getElementById('checkin-name')?.focus(); }} className="mt-1 min-h-11 rounded-xl px-3 text-sm font-semibold text-brand hover:bg-blue-50">{query ? 'Effacer la recherche' : 'Ajouter le premier membre'}<ArrowForwardIcon aria-hidden="true" fontSize="inherit" className="ml-2 size-4" /></button>
           </div>}
         </div>
         <p className="shrink-0 border-t border-line px-5 py-3 text-xs leading-relaxed text-muted">Retirer un membre conserve ses bilans déjà archivés.</p>

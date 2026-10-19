@@ -3,6 +3,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { animate } from 'framer-motion';
 import { IconButton } from '@mui/material';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 
 // Measure actual rendered rows so the meeting stage stays within the viewport.
 export function PaginatedList<T extends { id: string; name?: string; present?: boolean; mood?: number | null; postponed?: boolean; done?: boolean }>({ items, renderItem, className = 'checkin-list', ordered = false, activeId }: { items: T[]; renderItem: (item: T, index: number) => ReactNode; className?: string; ordered?: boolean; activeId?: string | null }) {
@@ -69,9 +71,9 @@ export function PaginatedList<T extends { id: string; name?: string; present?: b
   return <div className="paginated-list @container relative flex min-h-0 min-w-0 flex-1 gap-1 overflow-hidden">
     <Tag ref={ref} className={`relative mt-2 flex min-h-0 min-w-0 flex-1 list-none flex-col gap-2 overflow-hidden p-1 ${className}`}>{items.slice(current * capacity, (current + 1) * capacity).map((item, index) => renderItem(item, current * capacity + index))}</Tag>
     {pages > 1 && <nav className="list-pagination flex w-11 shrink-0 flex-col items-center justify-center gap-2 text-[10px] text-muted" aria-label="Pages de la liste">
-      <IconButton type="button" color="primary" sx={pageButtonSx} aria-label="Page précédente" disabled={current === 0} onClick={() => { direction.current = -1; setPage(current - 1); }}><svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 14 6-6 6 6" /></svg></IconButton>
+      <IconButton type="button" color="primary" sx={pageButtonSx} aria-label="Page précédente" disabled={current === 0} onClick={() => { direction.current = -1; setPage(current - 1); }}><KeyboardArrowUpIcon aria-hidden="true" sx={{ fontSize: 20 }} /></IconButton>
       <span className="text-center tabular-nums" role="status" aria-live="polite">{current + 1}<span className="block text-[9px]">sur {pages}</span></span>
-      <IconButton type="button" color="primary" sx={pageButtonSx} aria-label="Page suivante" disabled={current >= pages - 1} onClick={() => { direction.current = 1; setPage(current + 1); }}><svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 10 6 6 6-6" /></svg></IconButton>
+      <IconButton type="button" color="primary" sx={pageButtonSx} aria-label="Page suivante" disabled={current >= pages - 1} onClick={() => { direction.current = 1; setPage(current + 1); }}><KeyboardArrowDownIcon aria-hidden="true" sx={{ fontSize: 20 }} /></IconButton>
     </nav>}
   </div>;
 }

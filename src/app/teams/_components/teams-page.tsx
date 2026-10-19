@@ -3,6 +3,9 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert } from '@mui/material';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useTeam } from '@/providers/team-provider';
 import { NavIcon } from '@/components/layout/nav-icon';
@@ -113,7 +116,7 @@ export function TeamsPage() {
               <div className="flex items-center gap-2 max-sm:pl-14">
                 <button type="button" disabled={disabled} onClick={() => void choose(team.id, true)} aria-label={`Gérer l’équipe ${team.name}`} className="min-h-11 rounded-xl px-3 text-sm font-semibold text-muted hover:bg-white hover:text-brand disabled:cursor-not-allowed disabled:opacity-50">Gérer</button>
                 <button type="button" disabled={disabled} onClick={() => void choose(team.id, false)} aria-label={`Ouvrir l’équipe ${team.name}`} className={`${active ? primaryButton : secondaryButton} group/open max-sm:flex-1`}>
-                  {openingId === team.id ? 'Ouverture…' : 'Ouvrir'}<span aria-hidden="true" className="motion-safe:transition-transform motion-safe:group-hover/open:translate-x-1">→</span>
+                  {openingId === team.id ? 'Ouverture…' : 'Ouvrir'}<span aria-hidden="true" className="motion-safe:transition-transform motion-safe:group-hover/open:translate-x-1"><ArrowForwardIcon aria-hidden="true" sx={{ fontSize: 20 }} /></span>
                 </button>
               </div>
             </li>;
@@ -121,9 +124,9 @@ export function TeamsPage() {
         </motion.ul>}
         </div>
         {results.length > pageSize && <nav aria-label="Pagination des équipes" className="flex w-14 shrink-0 flex-col items-center justify-center gap-2 border-l border-line px-1 py-3">
-          <button type="button" className={`${secondaryButton} size-11 shrink-0 px-0`} disabled={currentPage === 0} onClick={() => changePage(currentPage - 1)} aria-label="Page précédente des équipes"><svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 14 6-6 6 6" /></svg></button>
+          <button type="button" className={`${secondaryButton} size-11 shrink-0 px-0`} disabled={currentPage === 0} onClick={() => changePage(currentPage - 1)} aria-label="Page précédente des équipes"><KeyboardArrowUpIcon aria-hidden="true" sx={{ fontSize: 20 }} /></button>
           <p role="status" aria-live="polite" aria-atomic="true" className="text-center text-xs tabular-nums text-muted"><span className="sr-only">Page </span>{currentPage + 1}<span className="block text-[10px]">sur {pageCount}</span></p>
-          <button type="button" className={`${secondaryButton} size-11 shrink-0 px-0`} disabled={currentPage === pageCount - 1} onClick={() => changePage(currentPage + 1)} aria-label="Page suivante des équipes"><svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 10 6 6 6-6" /></svg></button>
+          <button type="button" className={`${secondaryButton} size-11 shrink-0 px-0`} disabled={currentPage === pageCount - 1} onClick={() => changePage(currentPage + 1)} aria-label="Page suivante des équipes"><KeyboardArrowDownIcon aria-hidden="true" sx={{ fontSize: 20 }} /></button>
         </nav>}
         </div>
         {ready && teams.length > 0 && <p className="border-t border-line px-5 py-3 text-xs leading-relaxed text-muted">Ouvrir pour préparer le point · Gérer pour modifier les membres et les réglages.</p>}

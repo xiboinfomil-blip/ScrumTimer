@@ -110,6 +110,12 @@ with sync_playwright() as p:
         page.goto(BASE + '/mood')
         select = page.locator('#meter-catalogue-select')
         expect(select).to_be_enabled()
+        expand = page.locator('#expand-meter-button')
+        expect(expand).to_have_text('')
+        expect(expand.locator('.MuiSvgIcon-root')).to_have_count(1)
+        random_box = page.locator('#random-meter-button').bounding_box()
+        expand_box = expand.bounding_box()
+        assert expand_box and random_box and abs(expand_box['y'] - random_box['y']) <= 1 and expand_box['x'] >= random_box['x'] + random_box['width'], ('meter toolbar actions must be adjacent', random_box, expand_box)
         expect(select.locator('optgroup')).to_have_attribute('label', 'Animaux et créatures (1)')
         expect(select).to_have_value('0')
         assert db['patches'] == 1, 'load randomizes an unlocked original meter'

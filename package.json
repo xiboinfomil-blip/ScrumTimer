@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/participants", "packages/*"],
+  "workspaces": [
+    "apps/participants",
+    "packages/*"
+  ],
   "scripts": {
     "mood:catalog": "powershell.exe -NoProfile -File scripts/create-remote-catalog.ps1",
     "assets": "node scripts/prepare-assets.mjs",
@@ -27,10 +30,11 @@
     "db:verify": "tsx scripts/check-database.ts"
   },
   "dependencies": {
-    "@infomil/scrum-shared": "1.0.0",
     "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@infomil/scrum-shared": "1.0.0",
+    "@mui/icons-material": "^9.0.0-alpha.0",
     "@mui/material": "^9.4.0",
     "@mui/material-nextjs": "^9.5.0",
     "@neondatabase/serverless": "^1.1.0",

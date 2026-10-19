@@ -13,6 +13,8 @@ import { DefaultMoodMeter, MoodMeterLoading } from './default-mood-meter';
 import { useNotify } from '@/providers/notification-provider';
 import { MoodIcon } from './mood-icon';
 import { MOOD_RETRY_DELAYS } from '@/lib/mood-retry';
+import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
+import PauseRounded from '@mui/icons-material/PauseRounded';
 
 const slideError = 'Diapositive indisponible. Le baromètre par défaut est affiché.';
 const meterStage = 'meter-stage relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden rounded-[14px] border border-line bg-slate-50';
@@ -298,7 +300,8 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
         </DialogContent>
       </Dialog>
       <h2 id="meter-title" className="shrink-0 text-lg font-bold tracking-tight max-[800px]:sr-only">Baromètre du jour</h2>
-      <div className={`flex min-w-0 shrink-0 items-center gap-2 ${locked ? 'max-[800px]:sr-only' : ''}`}>
+      <div className="flex min-w-0 shrink-0 items-center gap-2">
+        <div className={`flex min-w-0 flex-1 items-center gap-2 ${locked ? 'max-[800px]:sr-only' : ''}`}>
         <label className="sr-only" htmlFor="meter-catalogue-select">Catalogue · {catalog.length} baromètres</label>
         <NativeSelect disableUnderline inputProps={{ id: 'meter-catalogue-select', 'aria-describedby': 'daily-meter-note' }} sx={{ height: 44, minWidth: 0, fontSize: 12, '& select': { boxSizing: 'border-box', height: 44, pl: 1.5, pr: 4 } }} className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50/70 text-xs font-semibold text-brand focus-within:border-brand/40 focus-within:ring-2 focus-within:ring-brand/10 disabled:opacity-75" disabled={!canChange} value={String(selection.deck)} onChange={event => void selectDeck(Number(event.target.value))}>
           <option value="-1" disabled>{status === 'loading' ? 'Chargement…' : 'Choisissez un baromètre'}</option>
@@ -310,8 +313,9 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
         <IconButton size="small" sx={{ width: 44, height: 44 }} id="random-meter-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-brand hover:border-brand/30 hover:bg-blue-50" aria-label="Afficher un autre baromètre au hasard"
           title="Choisir un autre baromètre avant le premier vote" disabled={!canChange}
           onClick={() => void selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}><MoodIcon name="shuffle" className="size-5" /></IconButton>
+        </div>
+        <IconButton id="expand-meter-button" onClick={() => { setExpandedSlide(selection.slide); setExpanded(true); }} disabled={pending || status !== 'ready' || conversion === 'error'} aria-label="Afficher le baromètre en plein écran" title="Agrandir le baromètre" sx={{ width: 44, height: 44, flexShrink: 0 }} className="rounded-xl border border-slate-200 bg-white text-brand"><MoodIcon name="expand" className="size-5" /></IconButton>
       </div>
-      <Button variant="outlined" size="small" onClick={() => { setExpandedSlide(selection.slide); setExpanded(true); }} disabled={pending || status !== 'ready' || conversion === 'error'} aria-label="Afficher le baromètre en plein écran" sx={{ minHeight: 44, flexShrink: 0, alignSelf: 'flex-end', fontSize: 11 }}><span aria-hidden="true" className="mr-2 text-lg">⛶</span>Agrandir le baromètre</Button>
       <p id="daily-meter-note" role="status" className={`flex shrink-0 items-start gap-2 rounded-lg px-2 py-1 text-xs leading-snug ${locked && status === 'ready' ? 'max-[800px]:sr-only' : ''} ${status === 'error' ? 'bg-danger-soft text-danger' : savingMeter || !daily ? 'text-amber-800' : 'text-muted'}`}><MoodIcon name={hasVotes ? 'lock' : 'meter'} className="mt-0.5 size-3.5 shrink-0" /><span>{savingMeter ? 'Enregistrement du baromètre partagé…' : daily ? hasVotes ? 'Verrouillé après le premier vote. Le même repère pour toute l’équipe.' : 'Commun à l’équipe · Modifiable avant le premier vote.' : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</span></p>
       {stacked ? <OrderedMeterSlides key={`${deck.remoteId}:${retry}`} deck={deck} title={title} retry={retry} /> : showSlide ? <MeterSlide key={`${selection.deck}:${selection.slide}:${retry}`} slide={slide}
         title={`${title} — diapositive ${selection.slide + 1}`} paused={!playing} /> : (
@@ -330,7 +334,7 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
           className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg border border-line px-3 text-xs font-semibold text-brand hover:bg-blue-50 disabled:opacity-50" hidden={Boolean(deck?.remoteId)}
           aria-pressed={paused} aria-label={paused ? 'Lire les animations' : 'Mettre les animations en pause'}
           onClick={() => setPaused(value => !value)}>
-          {paused ? '▶ Reprendre' : 'Ⅱ Stop'}</Button>
+          {paused ? <PlayArrowRounded className="size-4" /> : <PauseRounded className="size-4" />}{paused ? 'Reprendre' : 'Stop'}</Button>
       </div>}
       {deck?.remoteId && (!slide || conversion !== 'idle') && <div role="status" className="shrink-0 text-[11px] text-muted">
         {conversion === 'error' ? <>Présentation indisponible. Choisissez un autre baromètre ou <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" className="min-h-11 px-2 text-brand underline" onClick={() => { setConversion('loading'); setRetry(value => value + 1); }}>Réessayer</Button></> : 'Chargement des diapositives SVG depuis Google…'}

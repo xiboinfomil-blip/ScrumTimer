@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { Button, NativeSelect, InputBase, Dialog, DialogTitle, DialogContent, DialogActions, useMediaQuery } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useTeam } from '@/providers/team-provider';
 import { groupDailyMoods } from '@/lib/daily-moods';
 import type { HistoryRound } from '@/lib/history';
@@ -32,7 +34,7 @@ export function DailyMoodPanel({ round }: { round: HistoryRound }) {
     <div className="flex shrink-0 flex-col overflow-hidden" key={`${group.key}-${choice}`}>
       <ul className="daily-mood-list" aria-label="Choix individuels">{people.slice(current * capacity, (current + 1) * capacity).map(person => <li key={person.id} className="flex h-6 shrink-0 items-center gap-2 px-1 text-xs"><span className={`grid size-5 shrink-0 place-items-center rounded-md text-[11px] font-semibold ${person.mood ? moodColors[person.mood - 1] : 'bg-slate-100 text-muted'}`}>{person.mood ?? '—'}</span><span className="truncate font-medium" title={person.name}>{person.name}</span></li>)}</ul>
       {!people.length && <p className="text-[11px] text-muted">Aucun choix pour ce repère.</p>}
-      <nav className="flex h-11 items-center justify-between" aria-label="Pages des choix"><Button disabled={current === 0} sx={{ minHeight: 44, minWidth: 44, borderRadius: '12px' }} aria-label="Choix précédents" onClick={() => setPage(current - 1)}>←</Button><span className="text-[11px] tabular-nums text-muted" aria-live="polite">{choice === null ? 'Tous' : `Repère ${choice}`} · {current + 1}/{pages}</span><Button disabled={current === pages - 1} sx={{ minHeight: 44, minWidth: 44, borderRadius: '12px' }} aria-label="Choix suivants" onClick={() => setPage(current + 1)}>→</Button></nav>
+      <nav className="flex h-11 items-center justify-between" aria-label="Pages des choix"><Button disabled={current === 0} sx={{ minHeight: 44, minWidth: 44, borderRadius: '12px' }} aria-label="Choix précédents" onClick={() => setPage(current - 1)}><ArrowBackIcon aria-hidden="true" sx={{ fontSize: 20 }} /></Button><span className="text-[11px] tabular-nums text-muted" aria-live="polite">{choice === null ? 'Tous' : `Repère ${choice}`} · {current + 1}/{pages}</span><Button disabled={current === pages - 1} sx={{ minHeight: 44, minWidth: 44, borderRadius: '12px' }} aria-label="Choix suivants" onClick={() => setPage(current + 1)}><ArrowForwardIcon aria-hidden="true" sx={{ fontSize: 20 }} /></Button></nav>
     </div>
     <p className="shrink-0 text-[11px] leading-tight text-muted [@media(max-height:650px)]:hidden">Couleurs = repères, pas des notes. L’humeur ne change pas les points.</p>
     <Dialog open={preview} onClose={() => setPreview(false)} fullWidth maxWidth="md" aria-labelledby="daily-image-title"><DialogTitle id="daily-image-title">{group.title}</DialogTitle><DialogContent>{group.context && <MoodSlidePreview context={group.context} idPrefix="daily-meter-dialog" />}</DialogContent><DialogActions><Button sx={{ minHeight: 44 }} onClick={() => setPreview(false)}>Fermer l’image</Button></DialogActions></Dialog>

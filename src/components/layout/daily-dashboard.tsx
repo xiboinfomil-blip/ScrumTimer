@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import NorthEastIcon from '@mui/icons-material/NorthEast';
 import { dailyRoundStatistics, type HistoryRound } from '@/lib/history';
 import { formatTime } from '@/lib/timer';
 import { ScoreBreakdown } from '@/components/ui/score-breakdown';
@@ -43,7 +44,7 @@ export function DailyDashboard({ round, expanded }: { round: HistoryRound; expan
         <dl className="mt-5 grid grid-cols-2 gap-2 [@media(max-height:650px)]:mt-2" aria-label="Répartition des temps">{zones.filter(zone => zone.count > 0).map(zone => <div key={zone.key} className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 ${colors[zone.key]}`}><dt className="text-xs">{zone.label}</dt><dd className="font-bold tabular-nums">{zone.count}</dd></div>)}</dl>
       </article>
       <article className="flex min-w-0 flex-col justify-center rounded-2xl border border-brand/10 bg-blue-50/50 p-6 max-[650px]:p-4 [@media(max-height:650px)]:p-3">
-        <span aria-hidden="true" className="mb-4 grid size-11 place-items-center rounded-xl bg-white text-xl text-brand [@media(max-height:650px)]:hidden">↗</span>
+        <span aria-hidden="true" className="mb-4 grid size-11 place-items-center rounded-xl bg-white text-xl text-brand [@media(max-height:650px)]:hidden"><NorthEastIcon className="size-5" fontSize="inherit" aria-hidden="true" /></span>
         <h2 className="text-xl font-bold tracking-tight text-brand max-[650px]:text-lg">Un repère, pas un jugement.</h2>
         <p className="mt-2 text-sm leading-relaxed text-muted">Les points décrivent la gestion du temps, pas la qualité des échanges. Les humeurs restent indépendantes des scores.</p>
         <p className="mt-4 text-xs font-semibold text-brand [@media(max-height:650px)]:hidden">Explorez le bilan pour retrouver les détails et les choix de l’équipe.</p>
