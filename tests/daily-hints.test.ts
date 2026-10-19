@@ -6,6 +6,8 @@ import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
 import { participantDailyHints, participants } from '../src/db/schema.ts';
 import { validateDailyHint } from '../src/lib/daily-hints.ts';
 import { readDailyHints, saveDailyHint } from '../src/lib/daily-hints-store.ts';
+import { readHistory, writeHistory } from '../src/lib/relational-store.ts';
+import { mauritiusDay } from '../src/lib/workspace-store.ts';
 
 const input = { participantId: 'p1', hint: 'Un indice', day: '2026-10-16', revision: 0 };
 test('daily hint validation: exact payload, trimmed Unicode text, strict LF, dates and CAS bounds', () => {
@@ -156,11 +158,39 @@ test('PGlite: all migrations, daily hint CAS/isolation/roster rewrite/expiry and
     await saveDailyHint(client, a, { ...today, revision: 1 }, midnight);
     assert.deepEqual(await readDailyHints(client, b, midnight), { day: today.day, hints: [] });
     await saveDailyHint(client, b, today, midnight);
+    // Full-round completion clears all this team's notes, including absent
+    // members, only if both the result and deletion commit successfully.
+    const completedAt = new Date();
+    const completionDay = mauritiusDay(completedAt);
+    await engine.query('DELETE FROM participant_daily_hints');
+    for (const owner of [a, b]) {
+      for (const participantId of ['p1', 'p2']) {
+        await saveDailyHint(client, owner, { ...input, participantId, day: completionDay }, completedAt);
+      }
+    }
+    const round = { id: 'completed-round', completedAt: completedAt.toISOString(), people: [{ id: 'p1', name: 'Participant', mood: 2, speakingSeconds: 120, budgetSeconds: 120, timeUp: false, score: 1000, meterTitle: null }] };
+    const beforeCompletion = await readDailyHints(client, a, completedAt);
+    await engine.exec(`CREATE FUNCTION reject_note_cleanup() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'cleanup failed'; END $$;
+      CREATE TRIGGER reject_note_cleanup BEFORE DELETE ON participant_daily_hints FOR EACH ROW EXECUTE FUNCTION reject_note_cleanup();`);
+    await assert.rejects(writeHistory(client, a, round), /cleanup failed/);
+    assert.deepEqual(await readHistory(client, a), [], 'cleanup failure rolls back the completed round too');
+    assert.deepEqual(await readDailyHints(client, a, completedAt), beforeCompletion, 'failed completion preserves all notes');
+    await engine.exec('DROP TRIGGER reject_note_cleanup ON participant_daily_hints; DROP FUNCTION reject_note_cleanup();');
+    assert.equal(await writeHistory(client, a, round), true);
+    assert.deepEqual(await readDailyHints(client, a, completedAt), { day: completionDay, hints: [] });
+    assert.equal((await readDailyHints(client, b, completedAt)).hints.length, 2, 'other teams keep every note');
+    assert.deepEqual(await readHistory(client, a), [round], 'the completed summary is retained');
+    await saveDailyHint(client, a, { ...input, day: completionDay, hint: '**Prochain tour**' }, completedAt);
+    assert.equal(await writeHistory(client, a, round), true, 'replayed completion remains idempotent');
+    assert.equal(await writeHistory(client, a, { ...round, id: 'conflicting-round' }), false);
+    assert.equal((await readDailyHints(client, a, completedAt)).hints[0].hint, '**Prochain tour**', 'replays and rejected rounds cannot erase newer notes');
+    // As in the team deletion store, remove history before participant identities.
+    await engine.query('DELETE FROM standup_sessions WHERE team_id=$1', [a]);
     await engine.query('DELETE FROM teams WHERE id=$1', [a]);
     assert.equal((await engine.query('SELECT count(*)::int AS n FROM participant_daily_hints WHERE team_id=$1', [a])).rows[0].n, 0);
-    assert.equal((await readDailyHints(client, b, midnight)).hints.length, 1, 'team deletion preserves other team');
+    assert.equal((await readDailyHints(client, b, completedAt)).hints.length, 2, 'team deletion preserves other team');
     await engine.query("DELETE FROM participants WHERE team_id=$1 AND id='p1'", [b]);
-    assert.equal((await readDailyHints(client, b, midnight)).hints.length, 0, 'identity deletion cascades');
+    assert.deepEqual((await readDailyHints(client, b, completedAt)).hints.map(hint => hint.participantId), ['p2'], 'identity deletion cascades only its own note');
   } finally { await engine.close(); }
 });
 

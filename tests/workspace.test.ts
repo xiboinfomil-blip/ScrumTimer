@@ -86,6 +86,8 @@ test('PGlite: shared teams across devices, independent selection, daily singleto
       }),
     } as unknown as Parameters<typeof writeTeam>[0];
     await engine.exec(migration('0003_remote_mood_cache'));
+    await engine.exec(migration('0004_slim_emma_frost'));
+    await engine.exec(migration('0005_tired_black_bird'));
     await readMoodFetchCache(client, catalog, clock);
     const first = await listTeams(client);
     assert.deepEqual(first, { teams: [{ id: workspace, name: 'Mon équipe', memberCount: 1 }], activeTeamId: workspace });

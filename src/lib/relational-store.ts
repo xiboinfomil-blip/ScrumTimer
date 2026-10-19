@@ -44,6 +44,9 @@ export function historyWriteStatements(id: string, round: HistoryRound, now = ne
     sql`INSERT INTO mood_meters(team_id,id,title) SELECT DISTINCT ${id},p."meterTitle",p."meterTitle" FROM ${people} ${fields} WHERE ${gate} AND p."meterTitle" IS NOT NULL ON CONFLICT DO NOTHING`,
     sql`INSERT INTO speaking_turns(team_id,session_id,participant_id,position,name_snapshot,mood,speaking_seconds,budget_seconds,time_up,score,meter_id) SELECT ${id},${round.id},p.id,p.position,p.name,p.mood,p."speakingSeconds",p."budgetSeconds",p."timeUp",p.score,p."meterTitle" FROM ${people} ${fields} WHERE ${gate}`,
     sql`DELETE FROM standup_sessions WHERE team_id=${id} AND completed_at < ${historyCutoff(now).toISOString()}::timestamptz`,
+    // Clear every team note only for the newly committed completed round.
+    // Replays/conflicting rounds cannot erase notes prepared afterwards.
+    sql`DELETE FROM participant_daily_hints WHERE team_id=${id} AND ${gate}`,
   ];
 }
 async function batch(db: Database, statements: SQL[]) {

@@ -57,6 +57,9 @@ test('history writes serialize on the private team and idempotently gate all chi
   }
   assert.match(statements[5].sql, /WHERE team_id=\$\d+ AND completed_at/);
   assert.ok(statements[5].params.includes('2026-10-10T00:00:00.000Z'));
+  assert.match(statements[6].sql, /DELETE FROM participant_daily_hints WHERE team_id=\$\d+ AND EXISTS/);
+  assert.match(statements[6].sql, /write_transaction=txid_current\(\)/);
+  assert.ok(statements[6].params.includes('round-1'));
 });
 test('strict team validation accepts exact contracts and rejects malformed input without normalization', () => {
   assert.deepEqual(validateTeamInput(team).roster, team.roster);
@@ -109,6 +112,9 @@ test('PostgreSQL: legacy backfill, CAS isolation, atomic rollback, scoped reads 
   await engine.query("UPDATE standup_spaces SET team=jsonb_set(team,'{warning}','30')");
   await engine.transaction(async (tx: typeof engine) => { await tx.exec(migration); });
   await engine.transaction(async (tx: typeof engine) => { await tx.exec(readFileSync(new URL('../drizzle/0002_workspace_daily_meters.sql', import.meta.url), 'utf8')); });
+  for (const name of ['0004_slim_emma_frost', '0005_tired_black_bird']) {
+    await engine.exec(readFileSync(new URL(`../drizzle/${name}.sql`, import.meta.url), 'utf8'));
+  }
   assert.equal((await engine.query('SELECT count(*)::int AS n FROM standup_sessions')).rows[0].n, 1, 'old history converted before retention');
   assert.equal((await engine.query("SELECT to_regclass('standup_spaces') AS table")).rows[0].table, null);
   assert.equal((await engine.query("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema='public' AND data_type IN ('json','jsonb')")).rows[0].n, 0);
