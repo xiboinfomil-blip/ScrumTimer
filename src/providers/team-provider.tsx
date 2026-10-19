@@ -8,6 +8,8 @@ import { validateHistoryInput, validateTeamInput } from '@/lib/team-validation';
 import { useNotify } from '@/providers/notification-provider';
 import { usePathname } from 'next/navigation';
 import { resolveTeamContext, teamContextUrl } from '@/lib/team-context';
+import { clearCheckpoint, readCheckpoint } from '@/lib/timer-checkpoint';
+import { CloudRequestError, cloudFetch, cloudRetryDelay, isTransientCloudError, sameCloudTeam } from '@/lib/cloud-retry';
 
 export interface TeamSummary {
   id: string;
@@ -78,6 +80,32 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   const uploading = useRef(false);
   const conflict = useRef(false);
   const pendingRounds = useRef<HistoryRound[]>([]);
+  const mounted = useRef(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryAttempt = useRef(0);
+  const retryKind = useRef<'load' | 'write' | null>(null);
+  const resumeRetry = useRef<() => void>(() => {});
+  const loadNotice = useRef(false);
+  const submittedTeam = useRef<TeamState | null>(null);
+
+  const clearRetry = useCallback(() => {
+    if (retryTimer.current !== null) clearTimeout(retryTimer.current);
+    retryTimer.current = null;
+    retryKind.current = null;
+    retryAttempt.current = 0;
+  }, []);
+
+  const scheduleRetry = useCallback((kind: 'load' | 'write', error: unknown) => {
+    if (!mounted.current) return false;
+    if (!isTransientCloudError(error) || conflict.current) { clearRetry(); return false; }
+    retryKind.current = kind;
+    if (retryTimer.current !== null) clearTimeout(retryTimer.current);
+    retryTimer.current = setTimeout(() => {
+      retryTimer.current = null;
+      resumeRetry.current();
+    }, cloudRetryDelay(retryAttempt.current++, error instanceof CloudRequestError ? error.retryAfter : null));
+    return true;
+  }, [clearRetry]);
 
   useEffect(() => {
     if (!activeTeamId) return;
@@ -89,7 +117,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
 
   const flush = useCallback(async () => {
     const teamId = selectedId.current;
-    if (!teamId || busy.current || !hydrated.current || uploading.current || conflict.current) return;
+    if (!mounted.current || !teamId || busy.current || !hydrated.current || uploading.current || conflict.current || retryTimer.current !== null) return;
     const currentGeneration = generation.current;
     const controller = new AbortController();
     writeController.current = controller;
@@ -100,37 +128,59 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       while (dirty.current || pendingRounds.current.length) {
         if (dirty.current) {
           const snapshot = latest.current;
-          const response = await fetch('/api/team', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId }, body: JSON.stringify({ team: snapshot, revision: revision.current }), signal: controller.signal });
-          if (!response.ok) { conflict.current = response.status === 409; throw new Error('team save'); }
+          const previousSubmitted = submittedTeam.current;
+          submittedTeam.current ??= snapshot;
+          const response = await cloudFetch('/api/team', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId }, body: JSON.stringify({ team: snapshot, revision: revision.current }), signal: controller.signal });
+          if (response.status === 409) {
+            submittedTeam.current = previousSubmitted ?? snapshot;
+            const authoritative = await cloudFetch('/api/team', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal });
+            if (!authoritative.ok) throw new CloudRequestError(authoritative);
+            const saved = await authoritative.json();
+            if (generation.current !== currentGeneration || controller.signal.aborted) return;
+            if (Number.isSafeInteger(saved.revision) && saved.revision >= revision.current
+              && (sameCloudTeam(saved.team, latest.current) || sameCloudTeam(saved.team, snapshot)
+                || (previousSubmitted !== null && sameCloudTeam(saved.team, previousSubmitted)))) {
+              revision.current = saved.revision;
+              dirty.current = !sameCloudTeam(saved.team, latest.current);
+              submittedTeam.current = null;
+              continue;
+            }
+            conflict.current = true;
+            throw new CloudRequestError(response);
+          }
           const saved = await response.json();
           if (generation.current !== currentGeneration || controller.signal.aborted) return;
           revision.current = saved.revision;
           dirty.current = snapshot !== latest.current;
+          submittedTeam.current = null;
         } else {
           const round = pendingRounds.current[0];
-          const response = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId }, body: JSON.stringify(round), signal: controller.signal });
+          const response = await cloudFetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId }, body: JSON.stringify(round), signal: controller.signal });
           if (response.status === 409) {
-            const existing = await fetch('/api/history', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal });
-            if (!existing.ok) throw new Error('history reload');
+            const existing = await cloudFetch('/api/history', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal });
+            if (!existing.ok) throw new CloudRequestError(existing);
             const history = await existing.json();
             if (generation.current !== currentGeneration || controller.signal.aborted) return;
             const winner = normalizeHistory(history.rounds).find(item => new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(item.completedAt)) === history.day);
             if (!winner) throw new Error('daily result unavailable');
+            clearCheckpoint(teamId);
             setTodayRound(winner);
             pendingRounds.current = pendingRounds.current.filter(item => item.id !== round.id);
-            notify('Ce point quotidien a déjà été terminé sur un autre appareil. Le bilan enregistré est affiché.', 'warning');
+            if (winner.id !== round.id) notify('Ce point quotidien a déjà été terminé sur un autre appareil. Le bilan enregistré est affiché.', 'warning');
             continue;
           }
-          if (!response.ok) throw new Error('history save');
+          if (!response.ok) throw new CloudRequestError(response);
           if (generation.current !== currentGeneration || controller.signal.aborted) return;
+          clearCheckpoint(teamId);
           setTodayRound(round);
           pendingRounds.current = pendingRounds.current.filter(item => item.id !== round.id);
         }
       }
-      if (generation.current === currentGeneration) setCloudStatus('saved');
-    } catch {
-      if (generation.current === currentGeneration) {
+      if (generation.current === currentGeneration) { clearRetry(); setCloudStatus('saved'); }
+    } catch (error) {
+      if (mounted.current && generation.current === currentGeneration) {
         setCloudStatus('error');
+        scheduleRetry('write', error);
         if (conflict.current) notify('Conflit de sauvegarde : changement d’équipe bloqué. Vos modifications restent en attente.', 'error');
       }
     } finally {
@@ -138,22 +188,28 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       if (writeController.current === controller) writeController.current = null;
       uploading.current = false;
     }
-  }, [notify]);
+  }, [notify, clearRetry, scheduleRetry]);
 
   const hydrateTeam = useCallback(async (teamId: string, controller: AbortController, token: number) => {
     // Independent reads share the cancellation/generation gate, not a network waterfall.
     const [response, historyResponse] = await Promise.all([
-      fetch('/api/team', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal }),
-      fetch('/api/history', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal }),
+      cloudFetch('/api/team', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal }),
+      cloudFetch('/api/history', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal }),
     ]);
     if (!response.ok) throw new Error('Chargement de l’équipe impossible.');
     if (!historyResponse.ok) throw new Error('Chargement du bilan du jour impossible.');
     const [saved, history] = await Promise.all([response.json(), historyResponse.json()]);
     if (generation.current !== token || controller.signal.aborted) return false;
     const day = history.day ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date());
-    setTodayRound(normalizeHistory(history.rounds).find(round => new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(round.completedAt)) === day) ?? null);
+    const today = normalizeHistory(history.rounds).find(round => new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(round.completedAt)) === day) ?? null;
+    setTodayRound(today);
     revision.current = saved.revision;
     latest.current = normalizeTeam(saved.team);
+    if (today) clearCheckpoint(teamId);
+    else {
+      const checkpoint = readCheckpoint(teamId, latest.current);
+      if (checkpoint) latest.current = { ...latest.current, session: checkpoint.session, postponed: checkpoint.postponed };
+    }
     setParticipantOrder([]);
     setState(latest.current);
     const memberCount = latest.current.roster.length;
@@ -182,6 +238,23 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
+    const resume = () => {
+      if (document.visibilityState === 'visible' || document.visibilityState === undefined) resumeRetry.current();
+    };
+    window.addEventListener('online', resume);
+    document.addEventListener('visibilitychange', resume);
+    return () => {
+      mounted.current = false;
+      clearRetry();
+      window.removeEventListener('online', resume);
+      document.removeEventListener('visibilitychange', resume);
+      loadController.current?.abort();
+      writeController.current?.abort();
+    };
+  }, [clearRetry]);
+
+  useEffect(() => {
     const controller = new AbortController();
     loadController.current = controller;
     const token = ++generation.current;
@@ -189,27 +262,34 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     hydrated.current = false;
     setTeamBusy(true);
     setReady(false);
+    setCloudStatus('loading');
     const timeout = setTimeout(() => controller.abort(), 15000);
     void (async () => {
       try {
-        const response = await fetch('/api/teams', { cache: 'no-store', signal: controller.signal });
+        const response = await cloudFetch('/api/teams', { cache: 'no-store', signal: controller.signal });
         if (!response.ok) throw new Error('Liste des équipes indisponible.');
         const list = readTeamList(await response.json());
         if (generation.current !== token || controller.signal.aborted) return;
         setTeams(list.teams);
-        if (!list.activeTeamId) { clearSelection(); return; }
+        if (!list.activeTeamId) { clearSelection(); clearRetry(); loadNotice.current = false; return; }
         const teamId = resolveTeamContext(list.teams.map(team => team.id), selectedId.current
           ?? new URL(window.location.href).searchParams.get('team'), list.activeTeamId);
         selectedId.current = teamId;
         setActiveTeamId(teamId);
-        await hydrateTeam(teamId, controller, token);
-      } catch {
-        if (generation.current === token) {
+        if (await hydrateTeam(teamId, controller, token)) { clearRetry(); loadNotice.current = false; }
+      } catch (error) {
+        if (mounted.current && generation.current === token) {
           setCloudStatus('error');
-          notify('Impossible de charger les équipes depuis Neon. Réessayez ; aucune équipe de remplacement n’est utilisée.', 'error');
+          const automatic = scheduleRetry('load', error);
+          if (!loadNotice.current) {
+            loadNotice.current = true;
+            notify(automatic ? 'Neon est temporairement indisponible. Nouvelle tentative automatique ; aucune équipe de remplacement n’est utilisée.'
+              : 'Impossible de charger les équipes depuis Neon. Réessayez ; aucune équipe de remplacement n’est utilisée.', 'error');
+          }
         }
       } finally {
         clearTimeout(timeout);
+        controller.abort();
         if (generation.current === token) {
           busy.current = false;
           setTeamBusy(false);
@@ -218,7 +298,17 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       }
     })();
     return () => { if (generation.current === token) generation.current = token + 1; clearTimeout(timeout); controller.abort(); loadController.current?.abort(); writeController.current?.abort(); };
-  }, [retry, flush, hydrateTeam, notify, clearSelection]);
+  }, [retry, flush, hydrateTeam, notify, clearSelection, clearRetry, scheduleRetry]);
+
+  useEffect(() => {
+    resumeRetry.current = () => {
+      if (!mounted.current || busy.current || uploading.current || conflict.current || !retryKind.current) return;
+      if (retryTimer.current !== null) clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+      if (retryKind.current === 'write') void flush();
+      else { busy.current = true; setRetry(value => value + 1); }
+    };
+  }, [flush]);
 
   const changeTeam = useCallback(async (method: 'PATCH' | 'POST', body: { teamId: string } | { name: string }) => {
     if (busy.current || uploading.current || dirty.current || pendingRounds.current.length || conflict.current) {
@@ -241,7 +331,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     const timeout = setTimeout(() => controller.abort(), 15000);
     let selected = false;
     try {
-      const response = await fetch('/api/teams', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
+      const response = await cloudFetch('/api/teams', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
       if (!response.ok) throw new Error('Le changement d’équipe a échoué. Réessayez Neon.');
       const list = readTeamList(await response.json());
       if (generation.current !== token || controller.signal.aborted) return false;
@@ -259,6 +349,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         // A timed-out mutation may have reached the server. Stay blocked until the
         // authoritative list is reloaded; never write using an assumed selection.
         setCloudStatus('error');
+        scheduleRetry('load', error);
         notify(selected ? 'Équipe sélectionnée, mais son chargement a échoué. Réessayez Neon.'
           : error instanceof Error && error.name !== 'AbortError' ? error.message : 'Changement non confirmé. Réessayez Neon avant de continuer.', 'error');
       }
@@ -271,7 +362,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         if (hydrated.current && dirty.current) void flush();
       }
     }
-  }, [flush, hydrateTeam, notify]);
+  }, [flush, hydrateTeam, notify, scheduleRetry]);
 
   const switchTeam = useCallback(async (id: string) => {
     if (!teams.some(team => team.id === id)) { notify('Équipe introuvable.', 'error'); return false; }
@@ -298,7 +389,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     const token = ++generation.current;
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch('/api/teams', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teamId: id, name }), signal: controller.signal });
+      const response = await cloudFetch('/api/teams', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teamId: id, name }), signal: controller.signal });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? 'Suppression non confirmée. Réessayez Neon.');
       const list = readTeamList(body);
@@ -321,11 +412,12 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       if (generation.current === token) {
         // A timeout can follow a committed deletion. Block writes until reloaded.
         hydrated.current = false; setReady(false); setCloudStatus('error');
+        scheduleRetry('load', error);
         notify(error instanceof Error && error.name !== 'AbortError' ? error.message : 'Suppression non confirmée. Réessayez Neon pour recharger les équipes.', 'error');
       }
       return false;
     } finally { clearTimeout(timeout); if (generation.current === token) { busy.current = false; setTeamBusy(false); } }
-  }, [teams, notify, hydrateTeam, clearSelection]);
+  }, [teams, notify, hydrateTeam, clearSelection, scheduleRetry]);
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -361,9 +453,12 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     if (busy.current || uploading.current) return;
     if (conflict.current) {
       notify('Conflit de sauvegarde : vos modifications sont conservées en mémoire. Rechargez la page uniquement si vous acceptez de les abandonner.', 'error');
-    } else if (hydrated.current) void flush();
-    else { setCloudStatus('loading'); setRetry(value => value + 1); }
-  }, [flush, notify]);
+    } else {
+      clearRetry();
+      if (hydrated.current) void flush();
+      else { setCloudStatus('loading'); setRetry(value => value + 1); }
+    }
+  }, [flush, notify, clearRetry]);
   const resetToday = useCallback(async () => {
     const teamId = selectedId.current;
     if (!teamId || !todayRound || busy.current || uploading.current || dirty.current || pendingRounds.current.length || conflict.current) {
@@ -375,21 +470,22 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     loadController.current = controller;
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch('/api/history', { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId }, body: JSON.stringify({ roundId: todayRound.id }), signal: controller.signal });
+      const response = await cloudFetch('/api/history', { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId }, body: JSON.stringify({ roundId: todayRound.id }), signal: controller.signal });
       if (!response.ok) throw new Error();
       setDailyReady(false);
       // Leave the guarded timer route before clearing its completed-result gate.
       window.history.replaceState(null, '', '/participants');
       return await hydrateTeam(teamId, controller, generation.current);
-    } catch {
+    } catch (error) {
       // Reset may have committed before a network failure: require authoritative reload.
       hydrated.current = false;
       setReady(false);
       setCloudStatus('error');
+      scheduleRetry('load', error);
       notify('Réinitialisation non confirmée. Réessayez Neon pour recharger le bilan.', 'error');
       return false;
     } finally { clearTimeout(timeout); busy.current = false; setTeamBusy(false); }
-  }, [todayRound, hydrateTeam, notify]);
+  }, [todayRound, hydrateTeam, notify, scheduleRetry]);
   const activeTeamName = teams.find(team => team.id === activeTeamId)?.name ?? '';
   return <TeamContext.Provider value={{ participantOrder, setParticipantOrder, teams, activeTeamId, activeTeamName, teamBusy, dailyReady, todayRound, resetToday, setDailyReady, switchTeam, createTeam, deleteTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;
 }

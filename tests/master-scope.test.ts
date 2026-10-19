@@ -27,14 +27,14 @@ test('master timer still wires active-speaker notes and the read-only full-note 
   assert.match(panel, /hints\.find\(hint => hint\.participantId === person\?\.id\)/);
   assert.doesNotMatch(panel, /data-speaker-hint/);
   const sidebar = source('src/app/timer/_components/daily-prompts.tsx');
-  assert.match(sidebar, /data-speaker-hint[^>]*>\{note\}/);
+  assert.match(sidebar, /data-speaker-hint[^>]*><ParticipantNote hint=\{note\}/);
   assert.match(sidebar, /key=\{`\$\{speakerId/);
   assert.match(sidebar, /initial=\{reduced \? false : \{ x: '100%' \}\}/);
   assert.match(sidebar, /\{note \? <>/);
   assert.match(panel, /Pense-bête/);
   assert.match(panel, /<Dialog open=\{readingNote\}/);
   assert.match(panel, /Le pense-bête de \{person\?\.name/);
-  assert.match(panel, /\{note\?\.hint \?\?/);
+  assert.match(panel, /<ParticipantNote hint=\{note\?\.hint \?\?/);
   assert.doesNotMatch(panel, /<textarea|contentEditable|dangerouslySetInnerHTML/);
 });
 

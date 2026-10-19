@@ -4,6 +4,7 @@ import { Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, 
 import { useState } from 'react';
 import type { useDailyHints } from '@/hooks/use-daily-hints';
 import { primaryButton, secondaryButton } from '@/components/ui/styles';
+import { ParticipantNote } from '@/components/ui/participant-note';
 import { timerUrgency } from '@/lib/timer';
 import type { StandupTimer } from './timer-page';
 import { TimerSettings } from './timer-settings';
@@ -79,7 +80,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
         <DialogTitle id="speaker-note-title">Le pense-bête de {person?.name ?? 'ce participant'}</DialogTitle>
         <DialogContent dividers>
           <p className="mb-3 text-[11px] text-muted">Note partagée avec l’équipe · aujourd’hui, heure de Maurice. Le minuteur garde son état : ouvrir cette note ne le suspend pas.</p>
-          {notes.loading ? <p role="status">Chargement de la note…</p> : notes.error ? <div role="alert"><p>{notes.error}</p><Button onClick={notes.retry}>Réessayer</Button></div> : <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{note?.hint ?? 'Aucun pense-bête préparé pour aujourd’hui.'}</p>}
+          {notes.loading ? <p role="status">Chargement de la note…</p> : notes.error ? <div role="alert"><p>{notes.error}</p><Button onClick={notes.retry}>Réessayer</Button></div> : <ParticipantNote hint={note?.hint ?? 'Aucun pense-bête préparé pour aujourd’hui.'} />}
         </DialogContent>
         <DialogActions><Button onClick={() => setReadingNote(false)}>Fermer</Button></DialogActions>
       </Dialog>

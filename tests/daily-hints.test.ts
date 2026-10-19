@@ -11,6 +11,9 @@ const input = { participantId: 'p1', hint: 'Un indice', day: '2026-10-16', revis
 test('daily hint validation: exact payload, trimmed Unicode text, strict LF, dates and CAS bounds', () => {
   assert.deepEqual(validateDailyHint({ ...input, hint: ' \n Première ligne\nDeuxième ligne \n' }), { ...input, hint: 'Première ligne\nDeuxième ligne' });
   assert.equal([...validateDailyHint({ ...input, hint: '😀'.repeat(600) }).hint].length, 600);
+  const formattedLimit = `**${'😀'.repeat(596)}**`;
+  assert.equal(validateDailyHint({ ...input, hint: ` \n${formattedLimit}\n ` }).hint, formattedLimit);
+  assert.throws(() => validateDailyHint({ ...input, hint: `**${'😀'.repeat(597)}**` }), 'Markdown markers count toward the limit');
   assert.equal(validateDailyHint({ ...input, day: '2028-02-29', revision: 2147483646 }).revision, 2147483646);
   for (let code = 0; code <= 159; code++) {
     if (code === 10 || (code > 31 && code < 127)) continue;
@@ -105,6 +108,12 @@ test('PGlite: all migrations, daily hint CAS/isolation/roster rewrite/expiry and
     assert.equal(writers.filter(writer => writer.status === 'rejected' && writer.reason.status === 409).length, 1);
     assert.equal((await readDailyHints(client, a, now)).hints[1].revision, 2);
     assert.equal((await readDailyHints(client, b, now)).hints[0].hint, 'Autre équipe');
+    const winner = await readDailyHints(client, a, now);
+    await engine.exec(`CREATE FUNCTION reject_hint_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'simulated database failure'; END $$;
+      CREATE TRIGGER reject_hint_write BEFORE UPDATE ON participant_daily_hints FOR EACH ROW EXECUTE FUNCTION reject_hint_write();`);
+    await assert.rejects(saveDailyHint(client, a, { ...input, hint: '**Non enregistré**', revision: 2 }, now), /simulated database failure/);
+    assert.deepEqual(await readDailyHints(client, a, now), winner, 'a failed database transaction never returns success or changes the winner');
+    await engine.exec('DROP TRIGGER reject_hint_write ON participant_daily_hints; DROP FUNCTION reject_hint_write();');
     assert.equal((await engine.query('SELECT revision FROM teams WHERE id=$1', [a])).rows[0].revision, 1);
     await assert.rejects(saveDailyHint(client, a, { ...input, participantId: 'removed' }, now), { status: 404 });
     await assert.rejects(saveDailyHint(client, a, { ...input, participantId: 'unknown' }, now), { status: 404 });

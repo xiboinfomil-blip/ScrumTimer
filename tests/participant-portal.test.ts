@@ -6,6 +6,9 @@ import type { SQL } from 'drizzle-orm';
 import { readDailyHints, saveDailyHint } from '../src/lib/daily-hints-store.ts';
 import { createParticipantLinkToken, readParticipantLinkToken } from '../src/lib/participant-access.ts';
 import { WorkspaceError } from '../src/lib/workspace-store.ts';
+import { createElement, type ComponentType } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { tsImport } from 'tsx/esm/api';
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const portal = () => read('../src/app/api/participant-portal/route.ts');
@@ -168,8 +171,19 @@ test('PGlite: signed team-A notes use member-only CAS, reject forged scope and p
     await assert.rejects(saveFromLink(`${forgedPayload}.${token.split('.')[1]}`, { ...input, hint: 'Écraser B', revision: 1 }), hasStatus(403));
     assert.equal(batches, batchesBeforeForgery, 'forged scope is rejected before reaching the store');
 
-    const updated = await saveFromLink(token, { ...input, hint: 'Nouvelle note A', revision: 1 });
-    assert.deepEqual(updated, { day: input.day, hints: [{ participantId: input.participantId, hint: 'Nouvelle note A', revision: 2 }] });
+    const markdown = '**Avancement**\n\n- API terminée\n- *Tests* en cours\n\n1. ~~Ancien~~\n2. Suite';
+    const updated = await saveFromLink(token, { ...input, hint: ` \n${markdown}\n `, revision: 1 });
+    assert.deepEqual(updated, { day: input.day, hints: [{ participantId: input.participantId, hint: markdown, revision: 2 }] });
+    assert.equal((await engine.query('SELECT hint FROM participant_daily_hints WHERE team_id=$1', [teamA])).rows[0].hint, markdown, 'database preserves Markdown exactly after outer trimming');
+    const fetched = await readDailyHints(client, teamA, now);
+    assert.deepEqual(fetched, updated, 'GET store returns unchanged Markdown and revisions');
+    const { ParticipantNote } = await tsImport('../src/components/ui/participant-note.tsx', import.meta.url) as { ParticipantNote: ComponentType<{ hint: string }> };
+    const html = renderToStaticMarkup(createElement(ParticipantNote, { hint: fetched.hints[0].hint }));
+    assert.match(html, /<strong>Avancement<\/strong>/);
+    assert.match(html, /<em>Tests<\/em>/);
+    assert.match(html, /<del>Ancien<\/del>/);
+    assert.match(html, /<ul>/);
+    assert.match(html, /<ol>/);
     await assert.rejects(saveFromLink(token, { ...input, hint: 'Brouillon périmé', revision: 1 }), hasStatus(409));
     assert.deepEqual(await readDailyHints(client, teamA, now), updated, 'failed CAS cannot overwrite the winner');
     assert.deepEqual(await readDailyHints(client, teamB, now), otherNotes, 'same participant ID does not allow a cross-team overwrite');

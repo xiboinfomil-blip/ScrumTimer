@@ -5,33 +5,19 @@ import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
 import { TimerAudio } from '@/lib/audio';
 import { timerFrame } from '@/lib/timer';
-import type { SessionSpeaker } from '@/lib/session-results';
 import type { Mood } from '@/types/team';
 import { completedRound } from '@/lib/history';
 import { createId } from '@/lib/team-storage';
-
-type Speaker = SessionSpeaker & { postponed: boolean };
-interface TimerState {
-  people: Speaker[];
-  activeId: string | null;
-  previousId: string | null;
-  remaining: number;
-  turnTotal: number;
-  running: boolean;
-  turnStarted: boolean;
-  focusMode: boolean;
-  managing: boolean;
-  ended: boolean;
-  warned: boolean;
-  deadline: number;
-}
+import { readCheckpoint, recoverTimer, writeCheckpoint, type TimerState } from '@/lib/timer-checkpoint';
 
 export function useStandupTimer() {
-  const { state: team, updateTeam, saveRound } = useTeam();
-  const roundId = useRef<string | null>(null);
+  const { state: team, activeTeamId, updateTeam, saveRound } = useTeam();
+  const [checkpoint] = useState(() => activeTeamId ? readCheckpoint(activeTeamId, team) : null);
+  const roundId = useRef<string | null>(checkpoint?.roundId ?? null);
   const notify = useNotify();
   const audio = useRef<TimerAudio | null>(null);
   const [timer, setTimer] = useState<TimerState>(() => {
+    if (checkpoint) return recoverTimer(checkpoint.timer, Date.now());
     const people = team.session.flatMap(id => {
       const person = team.roster.find(p => p.id === id && p.present && (p.mood || team.postponed?.includes(id)));
       return person ? [{ ...person, postponed: team.postponed?.includes(id) ?? false, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0 }] : [];
@@ -41,9 +27,29 @@ export function useStandupTimer() {
   const latest = useRef(timer);
   const preferences = useRef(team);
   useEffect(() => { preferences.current = team; }, [team]);
+  const storageNotice = useRef(false);
+  useEffect(() => {
+    if (!activeTeamId || !team.session.length) return;
+    if (!writeCheckpoint(activeTeamId, team, timer, roundId.current) && !storageNotice.current) {
+      storageNotice.current = true;
+      notify('La reprise après actualisation est indisponible dans cet onglet : le stockage de session est bloqué. Le minuteur continue tant que la page reste ouverte.', 'warning');
+    }
+  }, [activeTeamId, team, timer, notify]);
+  useEffect(() => {
+    if (roundId.current && timer.people.length && timer.people.every(person => person.done)) {
+      saveRound(completedRound(roundId.current, timer.people));
+    }
+    // Recover a completed but unacknowledged round once on mount. Its stable ID
+    // makes replay safe if the server committed before the previous page closed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Event and interval handlers share one current snapshot, avoiding stale deadlines.
-  const commit = useCallback((next: TimerState) => { latest.current = next; setTimer(next); }, []);
+  const commit = useCallback((next: TimerState) => {
+    latest.current = next;
+    if (activeTeamId) writeCheckpoint(activeTeamId, preferences.current, next, roundId.current);
+    setTimer(next);
+  }, [activeTeamId]);
   const cleared = useCallback((current: TimerState, duration = preferences.current.duration): TimerState => ({ ...current, remaining: duration, turnTotal: duration, running: false, turnStarted: false, ended: false, warned: false, deadline: 0 }), []);
   const tick = useCallback(() => {
     const current = latest.current;

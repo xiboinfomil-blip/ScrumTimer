@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
+import { ParticipantNote } from '@/components/ui/participant-note';
 import { useTeam } from '@/providers/team-provider';
 import { DEFAULT_DISCUSSION_PROMPTS, validateDiscussionPrompts, validateMeetingSettings, type MeetingSettings } from '@/lib/meeting-settings';
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, TextField } from '@mui/material';
@@ -87,7 +88,7 @@ function TeamPrompts({ teamId, className, speakerId, speakerName, note, notesErr
           <p className="mt-1 break-words text-xs text-muted">{speakerName}</p>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border-l-2 border-accent bg-orange-50/70 p-3">
-          <p data-speaker-hint className="whitespace-pre-wrap break-words text-sm leading-relaxed text-ink [overflow-wrap:anywhere]">{note}</p>
+          <div data-speaker-hint className="text-ink"><ParticipantNote hint={note} /></div>
         </div>
         <p className="shrink-0 border-t border-line pt-3 text-[11px] text-muted [@media(max-height:650px)]:hidden">Note partagée avec l’équipe · aujourd’hui, heure de Maurice.</p>
       </> : <>

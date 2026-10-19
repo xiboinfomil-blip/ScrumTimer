@@ -29,7 +29,7 @@ with sync_playwright() as p:
             'team': team, 'revision': 1,
         } if route.request.method == 'GET' else {'revision': 2}))
         context.route('**/api/history', lambda route: route.fulfill(json={'rounds': []}))
-        hints = {person['id']: f"{person['name']} : sujet préparé\n<script>literal</script>"
+        hints = {person['id']: f"**Avancement**\n\n- API terminée\n- *Tests* en cours\n\n1. ~~Ancien~~\n2. Suite\n\n<script>alert(1)</script>\n\n![image](https://evil.invalid/note-image)\n\n[Lien](https://evil.invalid/note-link)"
                  for person in team['roster']}
         def hints_api(route):
             assert route.request.method == 'GET', 'Master timer must not edit notes'
@@ -44,6 +44,8 @@ with sync_playwright() as p:
         context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=[]))
         page = context.new_page()
         errors = []
+        external_notes = []
+        context.route('https://evil.invalid/**', lambda route: (external_notes.append(route.request.url), route.abort()))
         page.on('pageerror', lambda error: errors.append(str(error)))
         for path in ['/participants', '/mood']:
             page.goto(BASE + path)
@@ -97,15 +99,25 @@ with sync_playwright() as p:
         expect(cue).to_contain_text('À TOI DE PARLER !')
         first = page.locator('#speaker-name').inner_text()
         assert first in ['Alice <safe>', 'Bob', 'Charlie']
-        expect(page.locator('[data-speaker-hint]')).to_have_text(hints[first.lower()])
+        note = page.locator('[data-speaker-hint]')
+        expect(note.locator('strong')).to_have_text('Avancement')
+        expect(note.locator('em')).to_have_text('Tests')
+        expect(note.locator('del')).to_have_text('Ancien')
+        expect(note.locator('ul')).to_have_count(1)
+        expect(note.locator('ol')).to_have_count(1)
+        expect(note.locator('script, img, a, iframe, input')).to_have_count(0)
+        assert note.locator('ul').evaluate("el => getComputedStyle(el).listStyleType") == 'disc'
+        assert note.locator('ol').evaluate("el => getComputedStyle(el).listStyleType") == 'decimal'
         expect(page.locator('.timer-panel [data-speaker-hint]')).to_have_count(0)
         expect(page.locator('[data-speaker-sidebar]')).to_contain_text(first)
         expect(page.locator('[data-speaker-sidebar] #prompts-title')).to_have_count(0)
         page.get_by_role('button', name=f'Lire la note de {first}', exact=True).click()
         note_dialog = page.get_by_role('dialog', name=f'Le pense-bête de {first}', exact=True)
         expect(note_dialog).to_be_visible()
-        expect(note_dialog.get_by_text(hints[first.lower()], exact=True)).to_be_visible()
-        expect(note_dialog.locator('script, textarea, input')).to_have_count(0)
+        expect(note_dialog.locator('strong')).to_have_text('Avancement')
+        expect(note_dialog.locator('em')).to_have_text('Tests')
+        expect(note_dialog.locator('del')).to_have_text('Ancien')
+        expect(note_dialog.locator('script, textarea, input, img, a, iframe')).to_have_count(0)
         before = page.locator('#timer-display').inner_text()
         expect(page.locator('#start-button')).to_contain_text('Pause')
         page.wait_for_timeout(1100)
@@ -146,7 +158,7 @@ with sync_playwright() as p:
         page.locator('#next-button').click()
         expect(page.locator('#speaker-name')).not_to_have_text(first)
         next_name = page.locator('#speaker-name').inner_text()
-        expect(page.locator('[data-speaker-hint]')).to_have_text(hints[next_name.lower()])
+        expect(page.locator('[data-speaker-hint] strong')).to_have_text('Avancement')
         expect(cue).to_contain_text('À TOI DE PARLER !')
         expect(page.locator('#start-button')).to_contain_text('Pause')
         # Next speaker without a note restores questions, with slide-only motion.
@@ -167,6 +179,7 @@ with sync_playwright() as p:
         expect(cue).to_contain_text('Merci de passer la parole')
         expect(page.locator('#speaker-name')).to_have_text(current)
         assert not errors, errors
+        assert not external_notes, external_notes
         context.close()
     browser.close()
     print('PASS: page/brand motion and reduced-motion opt-out, speaking banner, start/pause/resume/handoff/expiry, read-only speaker notes without pausing, safe names, master workflow at six sizes; mocked Neon only')
