@@ -5,7 +5,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import CloudDoneOutlinedIcon from '@mui/icons-material/CloudDoneOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutlineRounded';
 import MoodOutlinedIcon from '@mui/icons-material/MoodOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';

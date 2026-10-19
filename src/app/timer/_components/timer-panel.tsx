@@ -2,7 +2,7 @@
 
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineRounded';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
 import NorthEastIcon from '@mui/icons-material/NorthEast';

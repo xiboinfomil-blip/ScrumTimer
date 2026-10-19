@@ -34,7 +34,7 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@infomil/scrum-shared": "1.0.0",
-    "@mui/icons-material": "^9.0.0-alpha.0",
+    "@mui/icons-material": "9.0.0-alpha.0",
     "@mui/material": "^9.4.0",
     "@mui/material-nextjs": "^9.5.0",
     "@neondatabase/serverless": "^1.1.0",
@@ -49,6 +49,9 @@
     "server-only": "^0.0.1"
   },
   "overrides": {
+    "@mui/icons-material": {
+      "@mui/material": "$@mui/material"
+    },
     "typescript-eslint": "8.71.1",
     "@typescript-eslint/eslint-plugin": "8.71.1",
     "@typescript-eslint/parser": "8.71.1",
