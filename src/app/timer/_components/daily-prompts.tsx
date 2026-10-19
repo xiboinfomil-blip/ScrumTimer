@@ -21,13 +21,16 @@ type SpeakerContent = {
   note?: string;
   notesError?: string;
   retryNotes?: () => void;
+  running?: boolean;
+  remaining?: number;
+  onReturn?: () => void;
 };
 
 export function DailyPrompts({ className = '', ...speaker }: SpeakerContent & { className?: string }) {
   const { activeTeamId } = useTeam();
   return <TeamPrompts key={activeTeamId ?? 'none'} teamId={activeTeamId} className={className} {...speaker} />;
 }
-function TeamPrompts({ teamId, className, speakerId, speakerName, note, notesError, retryNotes }: SpeakerContent & { teamId: string | null; className: string }) {
+function TeamPrompts({ teamId, className, speakerId, speakerName, note, notesError, retryNotes, running, remaining = 0, onReturn }: SpeakerContent & { teamId: string | null; className: string }) {
   const reduced = useReducedMotion();
   const [settings, setSettings] = useState<MeetingSettings>({ prompts: [...DEFAULT_DISCUSSION_PROMPTS], revision: 0 });
   const [loaded, setLoaded] = useState(false);
@@ -78,22 +81,26 @@ function TeamPrompts({ teamId, className, speakerId, speakerName, note, notesErr
   };
   const standard = settings.prompts.length === 3 && settings.prompts.every((prompt, index) => prompt === DEFAULT_DISCUSSION_PROMPTS[index]);
   return (
-    <Paper component="section" elevation={0} className={`daily-prompts flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-line bg-white p-3 ${className}`} aria-labelledby={note ? 'sidebar-note-title' : 'prompts-title'} data-speaker-sidebar>
+    <Paper component="section" elevation={0} className={`daily-prompts flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[28px] border border-line bg-white p-6 max-[800px]:rounded-2xl max-[800px]:p-4 [@media(max-height:650px)]:p-3 ${className}`} aria-labelledby={note ? 'sidebar-note-title' : 'prompts-title'} data-speaker-sidebar>
+      <button type="button" onClick={onReturn} className="mb-3 flex min-h-11 shrink-0 items-center justify-between gap-3 rounded-xl bg-blue-50 px-3 text-left min-[801px]:hidden" aria-label="Revenir au minuteur">
+        <span className="min-w-0"><span className="block truncate text-xs font-bold text-brand">{speakerName}</span><span className="text-[10px] text-muted">{running ? 'À la parole · voir le minuteur' : 'Revenir au minuteur'}</span></span>
+        <span className={`shrink-0 text-xl font-bold tabular-nums ${remaining < 0 ? 'text-danger' : 'text-brand'}`}>{remaining < 0 ? '+' : ''}{String(Math.floor(Math.ceil(Math.abs(remaining)) / 60)).padStart(2, '0')}:{String(Math.ceil(Math.abs(remaining)) % 60).padStart(2, '0')}</span>
+      </button>
       <motion.div key={`${speakerId ?? 'none'}-${note ? 'note' : 'questions'}`} initial={reduced ? false : { x: '100%' }} animate={{ x: 0 }} transition={reduced ? { duration: 0 } : { duration: .32, ease: [.22, 1, .36, 1] }} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" data-sidebar-slide>
       {notesError && <div role="alert" className="shrink-0 text-[11px] text-danger">{notesError} <Button size="small" onClick={retryNotes}>Réessayer les notes</Button></div>}
       {note ? <>
         <div className="shrink-0 border-b border-line pb-3">
-          <p className="mb-1 text-[10px] font-semibold tracking-wide text-brand">LE FIL DE VOTRE PASSAGE</p>
-          <h2 id="sidebar-note-title" className="text-sm font-bold">Le pense-bête</h2>
+          <p className="mb-2 text-[10px] font-bold tracking-[.16em] text-brand">VOTRE ESPACE DE PAROLE</p>
+          <h2 id="sidebar-note-title" className="text-2xl font-bold tracking-tight">Le pense-bête</h2>
           <p className="mt-1 break-words text-xs text-muted">{speakerName}</p>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border-l-2 border-accent bg-orange-50/70 p-3">
-          <div data-speaker-hint className="text-ink"><ParticipantNote hint={note} /></div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-2xl border border-orange-100 border-l-[3px] border-l-accent bg-orange-50/40 p-5 max-[650px]:p-3">
+          <div data-speaker-hint className="text-ink [&_.participant-note]:whitespace-normal [&_p]:whitespace-pre-line [&_p]:text-base [&_p]:leading-relaxed [&_li]:text-base [&_li]:leading-relaxed"><ParticipantNote hint={note} /></div>
         </div>
         <p className="shrink-0 border-t border-line pt-3 text-[11px] text-muted [@media(max-height:650px)]:hidden">Note partagée avec l’équipe · aujourd’hui, heure de Maurice.</p>
       </> : <>
       <div className="flex shrink-0 items-center justify-between gap-1 border-b border-line">
-        <h2 id="prompts-title" className="text-sm font-bold">Le fil du point</h2>
+        <h2 id="prompts-title" className="text-xl font-bold tracking-tight">Le fil du point</h2>
         <Button size="small" sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 11, textTransform: 'none' }} disabled={!loaded || saving} onClick={() => { setDraft([...settings.prompts]); setEditing(true); setError(''); setNotice(''); }} aria-label="Modifier les questions de l’équipe">Modifier</Button>
       </div>
       {!loaded && !error && <PageSkeleton variant="timer" scope="section" label="Chargement des questions de l’équipe…" />}

@@ -1,5 +1,6 @@
-export function TimerIcon({ name, className = 'size-4' }: { name: 'play' | 'pause' | 'next' | 'reset' | 'later' | 'edit' | 'lock' | 'shuffle' | 'back'; className?: string }) {
+export function TimerIcon({ name, className = 'size-4' }: { name: 'play' | 'pause' | 'next' | 'reset' | 'later' | 'edit' | 'lock' | 'shuffle' | 'back' | 'timer'; className?: string }) {
   const paths = {
+    timer: 'M9 2h6 M12 2v3 M18 5l2 2 M12 10v5l3 2 M20 14a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
     play: 'm8 4 12 8-12 8V4',
     pause: 'M8 4v16 M16 4v16',
     next: 'M4 12h15m-6-6 6 6-6 6',

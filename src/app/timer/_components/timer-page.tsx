@@ -26,7 +26,8 @@ export function TimerPage() {
   const reduced = useReducedMotion();
   const allowed = useStepGuard('timer');
   const timer = useStandupTimer();
-  const [view, setView] = useState<'timer' | 'team' | 'prompts'>('timer');
+  const [view, setView] = useState<'timer' | 'prompts'>('timer');
+  const [lineupOpen, setLineupOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const panels = useViewMotion(`${view}-${timer.focusMode}`);
   const { activeTeamId, activeTeamName } = useTeam();
@@ -52,7 +53,12 @@ export function TimerPage() {
     : `${timer.duration / 60} min`;
 
   return (
-    <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-1 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh max-w-none! bg-white p-3 sm:p-6' : 'mx-auto w-full max-w-6xl'} overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
+    <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-1 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh max-w-none! bg-slate-50 p-3 sm:p-6' : 'mx-auto w-full max-w-7xl'} overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
+      <Dialog open={lineupOpen} onClose={() => setLineupOpen(false)} aria-labelledby="lineup-dialog-title" fullWidth maxWidth="sm" slotProps={{ paper: { sx: { height: 'min(640px, calc(100dvh - 32px))', m: 2, width: 'calc(100% - 32px)', borderRadius: '24px' } } }}>
+        <DialogTitle id="lineup-dialog-title">Le tour de parole</DialogTitle>
+        <DialogContent className="flex min-h-0 flex-1 flex-col"><p className="mb-3 shrink-0 text-xs text-muted">{timer.focusMode ? 'Votre passage reste sélectionné. Reprenez le minuteur une fois prêt.' : 'Choisissez la personne qui ouvrira le point.'}</p>{lineupOpen && <TeamLineup timer={timer} className="flex-1" />}</DialogContent>
+        <DialogActions><Button onClick={() => setLineupOpen(false)} sx={{ minHeight: 44 }}>Revenir au passage</Button></DialogActions>
+      </Dialog>
       <Dialog open={!timer.activeId && timer.people.some(person => person.postponed && !person.done)} aria-labelledby="postponed-choice-title" aria-describedby="postponed-choice-description" fullWidth maxWidth="xs" sx={{ zIndex: 1500 }}>
         <DialogTitle id="postponed-choice-title">Faire passer les personnes reportées ?</DialogTitle>
         <DialogContent>
@@ -71,24 +77,25 @@ export function TimerPage() {
         </div></DialogContent><DialogActions><Button onClick={() => setSharing(false)}>Fermer</Button></DialogActions>
       </Dialog>
       <header className="flex shrink-0 items-center justify-between gap-3 px-1">
-        <div className="min-w-0"><p className="mb-1 flex items-center gap-2 text-xs font-semibold text-brand"><span aria-hidden="true" className={`size-2 rounded-full ${timer.running ? 'bg-success' : 'bg-accent'}`} />Étape 3 sur 3 · Le point quotidien</p><h1 className="text-3xl font-bold tracking-tight text-ink max-[650px]:text-xl [@media(max-height:650px)]:text-xl">{timer.focusMode ? 'On vous écoute' : 'À chacun son tour'}</h1><p id="overview-people" className="mt-1 text-sm text-muted max-[650px]:text-xs [@media(max-height:650px)]:hidden">{timer.focusMode ? `${timer.people.filter(person => person.done).length} / ${timer.people.length} passages terminés · Une voix à la fois.` : `${timer.people.length} personnes · ${perPerson} chacun · Réglez, puis démarrez.`}</p></div>
+        <div className="min-w-0"><p className="mb-1 flex items-center gap-2 text-[10px] font-bold tracking-[.16em] text-brand [@media(max-height:650px)]:hidden"><span aria-hidden="true" className={`size-2 rounded-full ${timer.running ? 'bg-success' : 'bg-accent'}`} />LE POINT QUOTIDIEN</p><h1 className="text-2xl font-bold tracking-tight text-ink max-[650px]:text-xl">Une voix. Toute l’équipe.</h1><p id="overview-people" className="mt-1 truncate text-xs text-muted [@media(max-height:650px)]:hidden">{activeTeamName} · {timer.people.length} personnes · {perPerson} chacun</p></div>
+        <div className="flex shrink-0 items-center gap-2">
+        <button type="button" onClick={() => { if (timer.running) timer.toggle(); setLineupOpen(true); }} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand" aria-label="Voir le tour de parole"><span className="max-[650px]:hidden">Participants</span><span className="tabular-nums">{timer.people.filter(person => person.done).length}/{timer.people.length}</span></button>
         <button type="button" onClick={() => presentation.presenting ? void presentation.toggle() : setSharing(true)} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand hover:border-brand/30 hover:bg-blue-50">{broadcast.enabled && <span aria-hidden="true" className="size-1.5 rounded-full bg-success" />}{presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'}</button>
+        </div>
       </header>
-      {!timer.focusMode && !presentation.presenting && <ScreenTabs
+      {!presentation.presenting && <ScreenTabs
         className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 [@media(max-height:650px)]:h-11 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0`}
         label="Panneau du minuteur"
         value={view}
         onChange={setView}
         tabs={[
           { value: 'timer', label: 'Minuteur' },
-          { value: 'team', label: 'Participants' },
           { value: 'prompts', label: note ? 'Pense-bête' : 'Questions' },
         ]}
       />}
-      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 items-stretch gap-4 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'grid-cols-1' : timer.focusMode ? 'grid-cols-[minmax(0,1fr)_240px] max-[800px]:grid-cols-1' : 'grid-cols-[200px_minmax(0,1fr)_190px] min-[1100px]:grid-cols-[230px_minmax(0,1fr)_230px] max-[800px]:grid-cols-[minmax(0,1fr)]'}`} data-view={timer.focusMode || presentation.presenting ? 'timer' : view}>
-        {!timer.focusMode && !presentation.presenting && <TeamLineup timer={timer} className={view !== 'team' ? 'max-[800px]:hidden' : ''} />}
-        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={!timer.focusMode && !presentation.presenting && view !== 'timer' ? 'max-[800px]:hidden' : ''} />
-        {!presentation.presenting && <DailyPrompts speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} className={timer.focusMode || view !== 'prompts' ? 'max-[800px]:hidden' : ''} />}
+      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 items-stretch gap-4 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'grid-cols-1' : 'grid-cols-[minmax(0,1.2fr)_minmax(300px,.85fr)] max-[800px]:grid-cols-1'}`} data-view={presentation.presenting ? 'timer' : view}>
+        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={!presentation.presenting && view !== 'timer' ? 'max-[800px]:hidden' : ''} />
+        {!presentation.presenting && <DailyPrompts speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => setView('timer')} className={view !== 'prompts' ? 'max-[800px]:hidden' : ''} />}
       </div>
       <TimerManagementDialog timer={timer} />
     </motion.div>

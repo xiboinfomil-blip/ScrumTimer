@@ -94,6 +94,25 @@ with sync_playwright() as p:
         expect(page.get_by_role('button', name='Continuer vers le minuteur', exact=False)).to_be_enabled()
         page.get_by_role('button', name='Continuer vers le minuteur', exact=False).click()
         expect(page.locator('#speaker-turn-cue')).to_have_count(0)
+        for width, height in SIZES:
+            page.set_viewport_size({'width': width, 'height': height})
+            page.wait_for_function("document.documentElement.scrollWidth <= innerWidth")
+            ring = page.locator('#timer-ring').bounding_box()
+            assert ring and ring['width'] >= 90, ('setup', motion, width, ring)
+            for selector in ['#start-button', '#next-button', '#manage-timer-button']:
+                button = page.locator(selector).bounding_box()
+                assert button and button['height'] >= 43.99 and button['y'] + button['height'] <= height + 1, ('setup', motion, width, selector, button)
+        page.set_viewport_size({'width': 1366, 'height': 768})
+        # Setup keeps the speaking stage clean; queue and settings have their own context.
+        expect(page.locator('.timer-panel .timer-settings')).to_have_count(0)
+        page.get_by_role('button', name='Voir le tour de parole', exact=True).click()
+        lineup = page.get_by_role('dialog', name='Le tour de parole', exact=True)
+        expect(lineup).to_be_visible()
+        expect(lineup.locator('.person-row')).to_have_count(3)
+        lineup.get_by_role('button', name='Revenir au passage').click()
+        page.locator('#manage-timer-button').click()
+        expect(page.locator('#duration-minutes')).to_be_visible()
+        page.get_by_role('button', name='Fermer les réglages').click()
         page.locator('#start-button').click()
         cue = page.locator('#speaker-turn-cue')
         expect(cue).to_contain_text('À TOI DE PARLER !')
@@ -143,6 +162,15 @@ with sync_playwright() as p:
             for selector in ['#start-button', '#next-button', '#manage-timer-button']:
                 button = page.locator(selector).bounding_box()
                 assert button and button['height'] >= 44 and button['y'] + button['height'] <= height + 1, (motion, width, selector, button)
+            if width <= 800:
+                page.get_by_role('button', name='Pense-bête', exact=True).click()
+                expect(page.locator('[data-speaker-sidebar]')).to_be_visible()
+                expect(page.locator('[data-speaker-hint] strong')).to_have_text('Avancement')
+                expect(page.get_by_role('button', name='Revenir au minuteur', exact=True)).to_be_visible()
+                page.get_by_role('button', name='Revenir au minuteur', exact=True).click()
+                expect(page.locator('#start-button')).to_contain_text('Pause')
+            if motion == 'reduce' and width in [320, 1366]:
+                page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-timer-focus-{width}.png'))
 
         page.locator('#start-button').click()
         expect(cue).to_contain_text('TON TOUR EST EN PAUSE')
