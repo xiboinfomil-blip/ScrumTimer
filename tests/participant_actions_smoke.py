@@ -2,13 +2,15 @@
 import os
 from copy import deepcopy
 from playwright.sync_api import sync_playwright, expect
+from browser_bootstrap import install_browser_bootstrap, mauritius_day, team_fixture, team_options
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    context = browser.new_context(reduced_motion='reduce')
-    db = {'team': {'roster': [{'id': 'alice', 'name': 'Alice', 'present': True, 'mood': 2, 'moodUpdatedAt': None}], 'session': [], 'duration': 120, 'warning': 30, 'sound': False, 'usedMoodMeters': []}, 'revision': 1}
-    daily = {'day': '2026-10-14', 'meter': None}
+    context = browser.new_context(reduced_motion='reduce', service_workers='block')
+    bootstrap = install_browser_bootstrap(context)
+    db = {'team': team_fixture(roster=[{'id': 'alice', 'name': 'Alice', 'present': True, 'mood': 2, 'moodUpdatedAt': None}]), 'revision': 1}
+    daily = {'day': mauritius_day(), 'meter': None}
     def daily_api(route):
         assert route.request.headers.get('x-team-id') == 'a' * 64
         if route.request.method == 'POST' and daily['meter'] is None:
@@ -24,7 +26,7 @@ with sync_playwright() as p:
             db['revision'] += 1
             route.fulfill(json={'revision': db['revision']})
     context.route('**/api/team', api)
-    context.route('**/api/teams', lambda route: route.fulfill(json={'teams': [{'id': 'a' * 64, 'name': 'Mon équipe', 'memberCount': len(db['team']['roster'])}], 'activeTeamId': 'a' * 64}))
+    context.route('**/api/teams', lambda route: route.fulfill(json=team_options('Mon équipe', member_count=len(db['team']['roster']))))
     context.route('**/api/daily-meter', daily_api)
     context.route('**/api/history', lambda route: route.fulfill(json={'rounds': []}))
     page = context.new_page()
@@ -72,6 +74,7 @@ with sync_playwright() as p:
     page.wait_for_function("document.querySelector('header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
     assert not db['team']['roster']
     assert not errors, errors
+    bootstrap.assert_no_unexpected_api()
     context.close()
     browser.close()
     print('PASS: invalid names rejected, rename preserves ID/mood and survives reload, six-size editing, deletion cancel/confirm; mocked Neon only')

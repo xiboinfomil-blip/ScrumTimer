@@ -8,7 +8,7 @@ import { validateHistoryInput, validateTeamInput } from '@/lib/team-validation';
 import { useNotify } from '@/providers/notification-provider';
 import { usePathname } from 'next/navigation';
 import { resolveTeamContext, teamContextUrl } from '@/lib/team-context';
-import { clearCheckpoint, readCheckpoint, parseCheckpoint, writeCheckpoint, checkpointContext, checkpointDay, type TimerCheckpoint, type TimerState } from '@/lib/timer-checkpoint';
+import { clearCheckpoint, readCheckpoint, parseCheckpoint, writeCheckpoint, checkpointContext, checkpointDay, invalidatesCheckpoint, type TimerCheckpoint, type TimerState } from '@/lib/timer-checkpoint';
 import { rejoinCheckpoint } from '@/lib/timer-completion';
 import type { Mood } from '@/types/team';
 import { CloudRequestError, cloudFetch, cloudRetryDelay, isTransientCloudError, sameCloudTeam } from '@/lib/cloud-retry';
@@ -456,6 +456,10 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     try { validateTeamInput(next); }
     catch (error) { notify(error instanceof Error ? error.message : 'Action invalide.', 'error'); return false; }
     if (next === latest.current) return true;
+    if (invalidatesCheckpoint(latest.current, next)) {
+      timerMemory.current = null;
+      if (selectedId.current) clearCheckpoint(selectedId.current);
+    }
     latest.current = next;
     dirty.current = true;
     setState(latest.current);

@@ -3,24 +3,21 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from playwright.sync_api import sync_playwright, expect
+from browser_bootstrap import WARNING_SECONDS, install_browser_bootstrap, team_options
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for motion in ['reduce', 'no-preference']:
-        context = browser.new_context(reduced_motion=motion)
+        context = browser.new_context(reduced_motion=motion, service_workers='block')
+        bootstrap = install_browser_bootstrap(context)
         now = datetime.now(timezone.utc).isoformat()
         people = [{'id': f'p{i}', 'name': f'Personne {i:02}', 'mood': i % 4 + 1, 'speakingSeconds': 30, 'budgetSeconds': 120, 'timeUp': False, 'score': 1000, 'meterTitle': 'Baromètre exemple'} for i in range(40)]
-        team = {'roster': [{'id': person['id'], 'name': person['name'], 'present': True, 'mood': person['mood'], 'moodUpdatedAt': now, 'moodSlide': {'title': 'Baromètre exemple', 'image': '/mood-meters/slides/test/meter.svg', 'slideNumber': 1}} for person in people], 'session': [], 'duration': 120, 'warning': 20, 'sound': False, 'usedMoodMeters': []}
+        team = {'roster': [{'id': person['id'], 'name': person['name'], 'present': True, 'mood': person['mood'], 'moodUpdatedAt': now, 'moodSlide': {'title': 'Baromètre exemple', 'image': '/mood-meters/slides/test/meter.svg', 'slideNumber': 1}} for person in people], 'session': [], 'duration': 120, 'warning': WARNING_SECONDS, 'sound': False, 'usedMoodMeters': []}
         record = {'id': 'dashboard', 'completedAt': now, 'people': people}
         people[-1]['meterTitle'] = 'Autre baromètre'
         team['roster'][-1]['moodSlide'] = {'title': 'Autre baromètre', 'image': '/mood-meters/slides/test/other.svg', 'slideNumber': 1}
-        unexpected = []
-        def block_unexpected(route):
-            unexpected.append(f'{route.request.method} {route.request.url}')
-            route.fulfill(status=599, json={'error': 'Unexpected API blocked'})
-        context.route('**/api/**', block_unexpected)
-        context.route('**/api/teams', lambda route: route.fulfill(json={'teams': [{'id': 'a' * 64, 'name': 'Équipe dashboard', 'memberCount': 40}], 'activeTeamId': 'a' * 64}))
+        context.route('**/api/teams', lambda route: route.fulfill(json=team_options('Équipe dashboard', member_count=40)))
         context.route('**/api/team', lambda route: route.fulfill(json={'team': team, 'revision': 1}))
         context.route('**/api/history', lambda route: route.fulfill(json={'rounds': [record]}))
         context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json=[]))
@@ -91,7 +88,7 @@ with sync_playwright() as p:
         page.get_by_role('button', name='Masquer le bilan', exact=True).click()
         expect(page.get_by_role('region', name='Synthèse du point')).to_be_visible()
         assert not errors, errors
-        assert not unexpected, unexpected
+        bootstrap.assert_no_unexpected_api()
         context.close()
     browser.close()
     print('PASS: overview and detailed dashboard at six sizes, 44px actions, fully visible score rows, 40 participants, score details, mood filters, both motion preferences; all APIs mocked')

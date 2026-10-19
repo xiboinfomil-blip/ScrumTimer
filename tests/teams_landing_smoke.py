@@ -5,18 +5,20 @@ from pathlib import Path
 from copy import deepcopy
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
+from browser_bootstrap import install_browser_bootstrap, team_fixture
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 A, B, C = 'a' * 64, 'b' * 64, 'c' * 64
 
 def team(names):
-    return {'roster': [{'id': f'p{i}', 'name': name, 'present': True, 'mood': None, 'moodUpdatedAt': None} for i, name in enumerate(names)], 'duration': 120, 'warning': 30, 'sound': False, 'session': [], 'usedMoodMeters': [], 'currentMoodSlide': None}
+    return team_fixture(names)
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for motion in ['reduce', 'no-preference']:
         for width, height in [(320, 568), (390, 844), (650, 568), (768, 1024), (1024, 576), (1366, 768)]:
-            context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion=motion)
+            context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion=motion, service_workers='block')
+            bootstrap = install_browser_bootstrap(context)
             db = {A: {'name': 'Équipe Alpha', 'team': team(['Alice', 'Alex']), 'revision': 1}, B: {'name': 'Équipe Bêta', 'team': team(['Bob']), 'revision': 1}}
             def api(route):
                 req, path = route.request, urlparse(route.request.url).path
@@ -38,7 +40,7 @@ with sync_playwright() as p:
                         db[key]['revision'] += 1
                     route.fulfill(json={'team': deepcopy(db[key]['team']), 'revision': db[key]['revision']})
                 elif path == '/api/history': route.fulfill(json={'rounds': []})
-                else: raise AssertionError(path)
+                else: route.fallback()
             context.route('**/api/**', api)
             page = context.new_page()
             errors = []
@@ -112,6 +114,7 @@ with sync_playwright() as p:
             expect(page.locator('#manage-team-heading')).to_have_text('Gamma')
             fits()
             assert not errors, errors
+            bootstrap.assert_no_unexpected_api()
             context.close()
             print(f'PASS landing/search/create/manage/attendance/isolation {width}x{height} {motion}')
     browser.close()

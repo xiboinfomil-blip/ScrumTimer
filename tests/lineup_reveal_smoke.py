@@ -1,26 +1,26 @@
 """Responsive participant-to-mood shuffle, retained until timer. All APIs mocked; no database writes."""
 import os
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import tempfile
 from time import monotonic
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
+from browser_bootstrap import TEAM_ID, install_browser_bootstrap, mauritius_day, team_fixture
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3001')
-ID = 'a' * 64
+ID = TEAM_ID
 
 
 def setup(browser, width, height, motion, count=12):
-    context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion=motion)
-    team = {'roster': [{'id': f'p{i}', 'name': f'Personne {i + 1}', 'present': True,
-                       'mood': 2}
-                      for i in range(count)] + [{'id': 'absent', 'name': 'Absente', 'present': False, 'mood': None}],
-            'session': [], 'postponed': [f'p{count - 1}'] if count > 1 else [],
-            'duration': 120, 'warning': 30, 'sound': False, 'usedMoodMeters': [], 'currentMoodSlide': None}
-    db = {'revision': 1, 'session': None}
-    day = (datetime.now(timezone.utc) + timedelta(hours=4)).date().isoformat()
+    context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion=motion, service_workers='block')
+    bootstrap = install_browser_bootstrap(context)
+    team = team_fixture(roster=[{'id': f'p{i}', 'name': f'Personne {i + 1}', 'present': True,
+                   'mood': 2}
+                  for i in range(count)] + [{'id': 'absent', 'name': 'Absente', 'present': False, 'mood': None}],
+        postponed=[f'p{count - 1}'] if count > 1 else [])
+    db = {'revision': 1, 'session': None, 'bootstrap': bootstrap}
+    day = mauritius_day()
 
     def api(route):
         request = route.request
@@ -42,8 +42,10 @@ def setup(browser, width, height, motion, count=12):
             route.fulfill(json={'day': day, 'meter': {'meterId': 'original', 'title': 'Baromètre original'}})
         elif path == '/api/meeting-settings':
             route.fulfill(json={'prompts': [], 'revision': 0})
+        elif path == '/api/daily-hints':
+            route.fulfill(json={'day': day, 'hints': []})
         else:
-            route.fulfill(status=501, json={'error': f'Unexpected mocked route: {path}'})
+            route.fallback()
 
     context.route('**/api/**', api)
     page = context.new_page()
@@ -137,6 +139,7 @@ with sync_playwright() as p:
             continue_to_timer(page, width, db)
             assert db['session'] == final, (db['session'], final)
             assert not errors, errors
+            db['bootstrap'].assert_no_unexpected_api()
             context.close()
             print(f'PASS animated handoff {width}x{height} {motion}')
 
@@ -162,6 +165,7 @@ with sync_playwright() as p:
             expect(start).to_be_enabled(timeout=30000)
     continue_to_timer(page, 320, db)
     assert set(db['session']) == {'p0', 'p1'} and not errors
+    db['bootstrap'].assert_no_unexpected_api()
     context.close()
     print('PASS cancel, Escape, reopen and skip')
 
@@ -171,6 +175,7 @@ with sync_playwright() as p:
     page.wait_for_url('**/mood*')
     expect(page.get_by_role('dialog')).to_have_count(0)
     assert db['session'] is None and not errors
+    db['bootstrap'].assert_no_unexpected_api()
     context.close()
     print('PASS single participant')
     browser.close()

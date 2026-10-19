@@ -1,8 +1,7 @@
 """Speaking-turn cues with mocked Neon APIs; never writes to the live database."""
 import os
-from datetime import datetime, timedelta, timezone
 from playwright.sync_api import sync_playwright, expect
-from fullscreen_helpers import emulate_fullscreen
+from browser_bootstrap import WARNING_SECONDS, install_browser_bootstrap, mauritius_day
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]
@@ -10,16 +9,16 @@ SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for motion in ['no-preference', 'reduce']:
-        context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion=motion)
-        emulate_fullscreen(context)
+        context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion=motion, service_workers='block')
+        bootstrap = install_browser_bootstrap(context)
         team = {
             'roster': [
                 {'id': name.lower(), 'name': name, 'present': True, 'mood': 2, 'moodUpdatedAt': None}
                 for name in ['Alice <safe>', 'Bob', 'Charlie']
             ],
-            'session': [], 'duration': 120, 'warning': 20, 'sound': False, 'usedMoodMeters': [],
+            'session': [], 'duration': 120, 'warning': WARNING_SECONDS, 'sound': False, 'usedMoodMeters': [],
         }
-        daily = {'day': '2026-10-14', 'meter': None}
+        daily = {'day': mauritius_day(), 'meter': None}
         def daily_api(route):
             assert route.request.headers.get('x-team-id') == 'a' * 64
             if route.request.method == 'POST' and daily['meter'] is None:
@@ -36,7 +35,7 @@ with sync_playwright() as p:
         def hints_api(route):
             assert route.request.method == 'GET', 'Master timer must not edit notes'
             assert route.request.headers.get('x-team-id') == 'a' * 64
-            day = datetime.now(timezone(timedelta(hours=4))).date().isoformat()
+            day = mauritius_day()
             route.fulfill(json={'day': day, 'hints': [
                 {'participantId': pid, 'hint': text, 'revision': 1}
                 for pid, text in hints.items()]})
@@ -76,7 +75,7 @@ with sync_playwright() as p:
         row = page.locator('li').filter(has_text='Action test')
         expect(row).to_have_count(1)
         row.get_by_role('checkbox').check()
-        row.get_by_role('button', name='Retirer Action test').click()
+        row.get_by_role('button', name='Retirer Action test de l’équipe', exact=True).click()
         deletion = page.get_by_role('dialog', name='Supprimer cette personne ?', exact=True)
         expect(deletion).to_be_visible()
         deletion.get_by_role('button', name='Supprimer', exact=True).click()
@@ -215,6 +214,7 @@ with sync_playwright() as p:
         expect(page.locator('#speaker-name')).to_have_text(current)
         assert not errors, errors
         assert not external_notes, external_notes
+        bootstrap.assert_no_unexpected_api()
         context.close()
     browser.close()
     print('PASS: page/brand motion and reduced-motion opt-out, speaking banner, start/pause/resume/handoff/expiry, read-only speaker notes without pausing, safe names, master workflow at six sizes; mocked Neon only')

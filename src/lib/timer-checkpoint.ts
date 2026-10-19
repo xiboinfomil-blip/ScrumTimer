@@ -34,6 +34,13 @@ export const checkpointDay = (now = new Date()) => new Intl.DateTimeFormat('en-C
 // edits invalidate recovery; sound preferences do not change a speaking turn.
 export const checkpointContext = (team: TeamState) => JSON.stringify({ roster: team.roster.map(person => ({ ...person, moodSlide: person.moodSlide ?? null })), duration: team.duration, warning: team.warning });
 
+// Clear immediately, not just when a checkpoint is next read: reverting an edit
+// must never make a previously invalidated speaking turn valid again.
+export function invalidatesCheckpoint(previous: TeamState, next: TeamState): boolean {
+  return checkpointContext(previous) !== checkpointContext(next)
+    || (previous.session.length > 0 && next.session.length === 0);
+}
+
 export function parseCheckpoint(raw: string | null, team: TeamState, now = new Date()): TimerCheckpoint | null {
   try {
     if (!raw || raw.length > 256000) return null;

@@ -4,7 +4,7 @@ import re
 import tempfile
 from datetime import datetime, timezone
 from playwright.sync_api import sync_playwright, expect
-from fullscreen_helpers import emulate_fullscreen
+from browser_bootstrap import WARNING_SECONDS, install_browser_bootstrap, mauritius_day
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]
@@ -17,13 +17,13 @@ def assert_score_free_timer(page):
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for motion in ['reduce', 'no-preference']:
-        context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion=motion)
-        emulate_fullscreen(context)
+        context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion=motion, service_workers='block')
+        bootstrap = install_browser_bootstrap(context)
         team = {
             'roster': [{'id': name.lower(), 'name': name, 'present': True, 'mood': 2, 'moodUpdatedAt': None} for name in ['Alice', 'Bob']],
-            'session': [], 'duration': 120, 'warning': 20, 'sound': False, 'usedMoodMeters': [],
+            'session': [], 'duration': 120, 'warning': WARNING_SECONDS, 'sound': False, 'usedMoodMeters': [],
         }
-        daily = {'day': '2026-10-15', 'meter': None}
+        daily = {'day': mauritius_day(), 'meter': None}
         archived = []
         def history_api(route):
             if route.request.method == 'POST':
@@ -37,6 +37,8 @@ with sync_playwright() as p:
         context.route('**/api/team', lambda route: route.fulfill(json={'team': team, 'revision': 1} if route.request.method == 'GET' else {'revision': 2}))
         context.route('**/api/daily-meter', daily_api)
         context.route('**/api/history', history_api)
+        context.route('**/api/meeting-settings', lambda route: route.fulfill(json={'prompts': [], 'revision': 0}))
+        context.route('**/api/daily-hints', lambda route: route.fulfill(json={'day': mauritius_day(), 'hints': []}))
         context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
         context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=[]))
         page = context.new_page()
@@ -123,7 +125,7 @@ with sync_playwright() as p:
         page.clock.run_for(1000)
         expect(breakdown).not_to_be_visible()
         page.get_by_role('link', name='Guide d’utilisation', exact=True).click()
-        expect(page.get_by_role('heading', name='Une équipe, un tour de parole, un bilan.')).to_be_visible()
+        expect(page.get_by_role('heading', name='Guide d’utilisation', exact=True)).to_be_visible()
         assert page.locator('article img').count() == 4
         assert len(archived) == 1, archived
         snapshot = archived[0]
@@ -131,6 +133,7 @@ with sync_playwright() as p:
         assert sorted(person['score'] for person in people) == [450, 1000], people
         assert sorted(person['speakingSeconds'] for person in people) == [60, 144], people
         assert not errors, errors
+        bootstrap.assert_no_unexpected_api()
         context.close()
     browser.close()
     print('PASS: score-free setup/running/pause/overtime timer, pause/resume/management, archived scores 450/1000 and active times 144/60, ring geometry, timer controls, guide, six sizes and both motion preferences; mocked APIs only')

@@ -1,21 +1,23 @@
 """URL contexts and automatic random meters; all APIs mocked, no live writes."""
 import os
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
+from browser_bootstrap import install_browser_bootstrap, mauritius_day, team_fixture
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 A, B = 'a' * 64, 'b' * 64
 DECKS = ['deck-' + digit * 20 for digit in ['1', '2']]
-DAY = (datetime.now(timezone.utc) + timedelta(hours=4)).date().isoformat()
+DAY = mauritius_day()
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for width, height in [(320, 568), (1366, 768)]:
-        context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce')
+        context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce', service_workers='block')
+        bootstrap = install_browser_bootstrap(context)
         context.add_init_script("for (const name of ['localStorage', 'sessionStorage']) Object.defineProperty(window, name, {get() { throw new Error('Storage forbidden'); }});")
-        teams = {key: {'roster': [{'id': key, 'name': name, 'present': True, 'mood': None, 'moodUpdatedAt': None}], 'session': [], 'duration': 120, 'warning': 30, 'sound': False, 'usedMoodMeters': [], 'currentMoodSlide': None} for key, name in [(A, 'Alice'), (B, 'Bob')]}
+        teams = {key: team_fixture(roster=[{'id': key, 'name': name, 'present': True, 'mood': None, 'moodUpdatedAt': None}]) for key, name in [(A, 'Alice'), (B, 'Bob')]}
         meters, patches, reads = {}, [], []
         race = {'lock': False}
 
@@ -53,7 +55,7 @@ with sync_playwright() as p:
             elif path.startswith('/api/mood-meters/decks/'):
                 route.fulfill(json={'title': 'Meter', 'slides': ['mood-meters/slides/test/page.svg']})
             else:
-                raise AssertionError(path)
+                route.fallback()
 
         context.route('**/api/**', api)
         context.route('**/mood-meters/catalog.json', lambda r: r.fulfill(json={'remote': True}))
@@ -113,6 +115,7 @@ with sync_playwright() as p:
         page.wait_for_function("new URL(location.href).searchParams.get('team') === '" + A + "'")
         assert not errors, errors
         assert context.cookies() == []
+        bootstrap.assert_no_unexpected_api()
         context.close()
         print(f'PASS team refresh/navigation/isolation/fallback + random/locked/race {width}x{height}')
     browser.close()

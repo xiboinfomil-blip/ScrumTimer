@@ -9,6 +9,7 @@ from copy import deepcopy
 from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import expect, sync_playwright
+from browser_bootstrap import install_browser_bootstrap
 
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000').rstrip('/')
@@ -98,8 +99,7 @@ class MockTeams:
                        if path == '/api/team' else {'rounds': deepcopy(row['rounds'])})
             route.fulfill(json=payload)
         else:
-            route.abort('blockedbyclient')
-            raise AssertionError(f'Unexpected mocked API: {method} {path}, team={key}')
+            route.fallback()
 
 
 def saved(page):
@@ -324,10 +324,10 @@ def main():
                     context = browser.new_context(
                         viewport={'width': width, 'height': height},
                         reduced_motion='reduce', service_workers='block')
+                    bootstrap = install_browser_bootstrap(context)
                     mock = MockTeams()
                     context.route('**/api/**', mock.api)
                     page = context.new_page()
-                    page.set_default_timeout(15000)
                     errors = []
                     page.on('pageerror', lambda error: errors.append(str(error)))
                     try:
@@ -343,6 +343,7 @@ def main():
                         # PUT/history writes are deliberately unsupported by the mock.
                         assert all(method == 'GET' or path == '/api/teams'
                                    for method, path, _ in mock.requests), mock.requests
+                        bootstrap.assert_no_unexpected_api()
                         print(f'PASS team deletion {scenario} {width}x{height}')
                     finally:
                         for held in mock.held:

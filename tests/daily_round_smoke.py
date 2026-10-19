@@ -1,27 +1,36 @@
 """Daily view/reset across independent device contexts; mocked APIs, no live writes."""
 import os
+import re
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
+from browser_bootstrap import TEAM_ID, install_browser_bootstrap, mauritius_day, team_fixture
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
-TEAM_ID = 'a' * 64
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for width, height in [(320, 568), (1366, 768)]:
         now = datetime.now(timezone.utc)
-        day = (now + timedelta(hours=4)).date().isoformat()
+        day = mauritius_day(now)
         person = {'id': 'alice', 'name': 'Alice <safe>', 'present': True,
                   'mood': 2, 'moodUpdatedAt': now.isoformat(), 'moodSlide': None}
-        team = {'roster': [person], 'session': [], 'duration': 120, 'warning': 30,
-                'sound': False, 'usedMoodMeters': [], 'currentMoodSlide': None}
+        team = team_fixture(roster=[person])
         result = {'id': 'today', 'completedAt': now.isoformat(), 'people': [{
             'id': 'alice', 'name': 'Alice <safe>', 'mood': 2, 'speakingSeconds': 30,
             'budgetSeconds': 120, 'timeUp': False, 'score': 1000, 'meterTitle': None}]}
         db = {'rounds': [result], 'revision': 1, 'deletes': 0}
         errors = []
+        application_cookies = []
+
+        def check_response(response):
+            # Next dev may read document.cookie internally. Observe the actual
+            # application contract instead of replacing the browser getter.
+            if urlparse(response.url).path.startswith('/api/'):
+                values = response.header_values('set-cookie')
+                if values:
+                    application_cookies.append((response.url, values))
 
         def api(route):
             req = route.request
@@ -46,23 +55,25 @@ with sync_playwright() as p:
                     db['deletes'] += 1
                     db['rounds'] = []
                     db['revision'] += 1
-                    person.update(mood=None, moodUpdatedAt=None)
+                    team['roster'][0].update(mood=None, moodUpdatedAt=None)
                 else:
                     assert req.method == 'GET'
                 route.fulfill(json={'rounds': deepcopy(db['rounds']), 'day': day})
             else:
-                raise AssertionError(f'Unexpected API: {req.method} {path}')
+                route.fallback()
 
-        contexts = [browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce') for _ in range(2)]
+        contexts = []
+        bootstraps = []
         pages = []
-        for context in contexts:
+        for _ in range(2):
+            context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce', service_workers='block')
+            bootstrap = install_browser_bootstrap(context)
+            contexts.append(context)
+            bootstraps.append(bootstrap)
+            context.on('response', check_response)
             context.add_init_script("""for (const name of ['localStorage', 'sessionStorage', 'indexedDB']) {
                 Object.defineProperty(window, name, {get() {throw new Error('Browser storage forbidden');}});
-            }
-            Object.defineProperty(document, 'cookie', {
-                get() {throw new Error('Cookie read forbidden');},
-                set() {throw new Error('Cookie write forbidden');}
-            });""")
+            }""")
             context.route('**/api/**', api)
             page = context.new_page()
             page.on('pageerror', lambda error: errors.append(str(error)))
@@ -84,7 +95,7 @@ with sync_playwright() as p:
         assert db['deletes'] == 0
         page.get_by_role('button', name='Réinitialiser aujourd’hui', exact=True).click()
         dialog.get_by_role('button', name='Réinitialiser aujourd’hui', exact=True).click()
-        expect(page).to_have_url(BASE + '/participants')
+        expect(page).to_have_url(re.compile(re.escape(BASE + '/participants') + r'(?:\?team=' + TEAM_ID + r')?$'))
         expect(page.get_by_text('Alice <safe>', exact=True)).to_be_visible()
         expect(page.get_by_role('link', name='Voir le bilan ou réinitialiser', exact=True)).to_have_count(0)
         assert db['deletes'] == 1
@@ -92,8 +103,10 @@ with sync_playwright() as p:
         expect(pages[0].get_by_text('Alice <safe>', exact=True)).to_be_visible()
         expect(pages[0].get_by_role('link', name='Voir le bilan ou réinitialiser', exact=True)).to_have_count(0)
         assert not errors, errors
-        for context in contexts:
+        assert not application_cookies, application_cookies
+        for context, bootstrap in zip(contexts, bootstraps):
             assert context.cookies() == [], 'no browser cookie should be created'
+            bootstrap.assert_no_unexpected_api()
             context.close()
         print(f'PASS shared daily view/reset {width}x{height}')
     browser.close()

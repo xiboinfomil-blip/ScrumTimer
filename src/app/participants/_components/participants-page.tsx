@@ -12,6 +12,7 @@ import { ParticipantIcon } from './participant-icon';
 import { LineupRevealDialog, type RevealPerson } from '@/components/ui/lineup-reveal-dialog';
 import { shuffle } from '@/lib/shuffle';
 import { useViewMotion } from '@/hooks/use-view-motion';
+import { freshRound, toggleAttendance as toggleTeamAttendance } from '@/lib/attendance';
 
 export function ParticipantsPage() {
   const { state, activeTeamId, todayRound, updateTeam, participantOrder, setParticipantOrder } = useTeam();
@@ -29,7 +30,7 @@ export function ParticipantsPage() {
   function toggleAttendance(id: string) {
     const person = state.roster.find(person => person.id === id);
     if (!person) return;
-    if (updateTeam(current => current.roster.some(person => person.id === id) ? ({ ...current, session: [], roster: current.roster.map(person => person.id === id ? { ...person, present: !person.present } : person) }) : current)) {
+    if (updateTeam(current => toggleTeamAttendance(current, id))) {
       notify(`${person.name} : ${person.present ? 'absent(e)' : 'présent(e)'}.`);
     }
   }
@@ -65,6 +66,6 @@ export function ParticipantsPage() {
       setParticipantOrder(reveal.order);
       router.push(`/mood?team=${activeTeamId}`);
     }} />}
-    <ConfirmDialog open={fresh} title="Commencer un nouveau bilan ?" description="Votre équipe est conservée. Tout le monde sera marqué présent et les humeurs seront effacées pour permettre à chacun de choisir à nouveau." confirmLabel="Recommencer" onClose={() => setFresh(false)} onConfirm={() => { updateTeam(current => ({ ...current, session: [], roster: current.roster.map(person => ({ ...person, present: true, mood: null, moodUpdatedAt: null, moodSlide: null })) })); notify('Nouveau bilan prêt. Confirmez les présences et choisissez les humeurs du jour.'); }} />
+    <ConfirmDialog open={fresh} title="Commencer un nouveau bilan ?" description="Votre équipe est conservée. Tout le monde sera marqué présent ; les humeurs, les reports et la progression du minuteur seront effacés pour permettre à chacun de choisir à nouveau." confirmLabel="Recommencer" onClose={() => setFresh(false)} onConfirm={() => { if (updateTeam(freshRound)) { setParticipantOrder([]); notify('Nouveau bilan prêt. Confirmez les présences et choisissez les humeurs du jour.'); } }} />
   </div>;
 }
