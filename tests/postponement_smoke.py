@@ -10,6 +10,7 @@ import re
 from urllib.parse import urlparse
 
 from playwright.sync_api import expect, sync_playwright
+from fullscreen_helpers import emulate_fullscreen
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000').rstrip('/')
 TEAM_ID = 'a' * 64
@@ -162,13 +163,14 @@ def open_late_checkin(page, db, source, meter_value):
     expect(modal.get_by_role('button', name='Humeurs de l’équipe', exact=True)).to_have_count(0)
     expect(modal.get_by_role('button', name='Humeur 2 pour Alice', exact=True)).to_have_count(0)
     expect(modal.get_by_role('button', name='Humeur 3 pour Bob', exact=True)).to_be_enabled()
+    enlarge = modal.get_by_role('button', name='Afficher le baromètre en plein écran', exact=True)
+    geometry(page, page.viewport_size['width'], page.viewport_size['height'], [enlarge])
     assert modal.locator('.late-checkin-list').evaluate('el => el.scrollHeight <= el.clientHeight + 2'), 'Late voting controls must not be clipped'
     if db.remote:
         stack = modal.locator('#meter-slide-stack')
         expect(stack.locator('img')).to_have_count(2)
         for path in REMOTE_SLIDES:
             image = stack.locator(f'img[src="/{path}"]')
-            image.scroll_into_view_if_needed()
             expect(image).to_be_visible()
             expect(image).to_have_js_property('complete', True)
             expect(image).not_to_have_js_property('naturalWidth', 0)
@@ -176,6 +178,19 @@ def open_late_checkin(page, db, source, meter_value):
         geometry(page, page.viewport_size['width'], page.viewport_size['height'], stack.locator('img').all())
         size = stack.evaluate('el => ({height: el.clientHeight, scroll: el.scrollHeight})')
         assert size['scroll'] <= size['height'] + 2, ('both SVGs must fit together', size)
+        layout = stack.evaluate('''el => {
+            const rect = node => {const r = node.getBoundingClientRect();
+                return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};
+            return {stack:rect(el), images:[...el.querySelectorAll('img')].map(rect)};
+        }''')
+        for image in layout['images']:
+            assert image['left'] >= layout['stack']['left'] - 1 and image['right'] <= layout['stack']['right'] + 1, layout
+            assert image['top'] >= layout['stack']['top'] - 1 and image['bottom'] <= layout['stack']['bottom'] + 1, layout
+        first, second = layout['images']
+        if page.viewport_size['width'] >= 801:
+            assert first['right'] <= second['left'] + 1 and abs(first['top'] - second['top']) <= 1, ('desktop side-by-side SVGs', layout)
+        else:
+            assert first['bottom'] <= second['top'] + 1, ('phone stacked SVGs', layout)
         page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f"scrum-late-modal-{page.viewport_size['width']}.png"))
     assert db.daily == db.meter and db.daily_posts == [db.meter], 'late modal must not reassign the daily meter'
     no_archive(page, db)
@@ -200,6 +215,7 @@ def no_archive(page, db):
 def run_case(browser, width, height, skip=False, late_at_end=False, remote=False):
     context = browser.new_context(viewport={'width': width, 'height': height},
                                   reduced_motion='reduce', service_workers='block')
+    emulate_fullscreen(context)
     context.add_init_script(INIT)
     db = WorkspaceMock(remote)
     meter_value = '0' if remote else '-2'

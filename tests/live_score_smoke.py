@@ -4,6 +4,7 @@ import re
 import tempfile
 from datetime import datetime, timezone
 from playwright.sync_api import sync_playwright, expect
+from fullscreen_helpers import emulate_fullscreen
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]
@@ -17,6 +18,7 @@ with sync_playwright() as p:
     browser = p.chromium.launch()
     for motion in ['reduce', 'no-preference']:
         context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion=motion)
+        emulate_fullscreen(context)
         team = {
             'roster': [{'id': name.lower(), 'name': name, 'present': True, 'mood': 2, 'moodUpdatedAt': None} for name in ['Alice', 'Bob']],
             'session': [], 'duration': 120, 'warning': 20, 'sound': False, 'usedMoodMeters': [],

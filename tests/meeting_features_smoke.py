@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import expect, sync_playwright
+from fullscreen_helpers import emulate_fullscreen
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3001').rstrip('/')
 TEAM_ID = 'a' * 64
@@ -129,9 +130,11 @@ class MockMeeting:
             self.unexpected.append(str(error))
             route.fulfill(status=599, json={'error': 'Mock contract failed'})
 
-    def page(self, browser, width, height, fullscreen='unsupported'):
+    def page(self, browser, width, height, fullscreen='supported'):
         context = browser.new_context(viewport={'width': width, 'height': height},
-                                      reduced_motion='reduce', service_workers='block')
+                                      reduced_motion='reduce', service_workers='block',
+                                      has_touch=fullscreen == 'unsupported')
+        emulate_fullscreen(context)
         self.contexts.append(context)
         context.route('**/api/**', self.api)
         context.route('**/mood-meters/catalog.json', lambda r: r.fulfill(json={'remote': True}))
@@ -141,8 +144,6 @@ class MockMeeting:
         // Next.js development tooling reads document.cookie; leave that native.
         // Every application API is still intercepted above, including writes.
         """)
-        if fullscreen == 'unsupported':
-            context.add_init_script("Object.defineProperty(Element.prototype, 'requestFullscreen', {value: undefined, configurable: true});")
         page = context.new_page()
         page.on('pageerror', lambda error: self.errors.append(str(error)))
         return page
@@ -256,8 +257,11 @@ def sharing_dialog(page, enabled=False):
 
 
 def presentation_case(browser, mock, width, height):
-    page = mock.page(browser, width, height)
+    # A coarse-pointer context isolates fallback/exit behavior from the desktop
+    # fullscreen invitation, which correctly reappears after exiting fullscreen.
+    page = mock.page(browser, width, height, fullscreen='unsupported')
     mock.timer(page)
+    page.evaluate("Object.defineProperty(Element.prototype, 'requestFullscreen', {value: undefined, configurable: true, writable: true})")
     dialog = sharing_dialog(page)
     dialog.get_by_role('button', name='Présentation', exact=True).click()
     expect(dialog).not_to_be_visible()
@@ -281,10 +285,11 @@ def presentation_case(browser, mock, width, height):
     dialog.get_by_role('button', name='Présentation', exact=True).click()
     expect(dialog).not_to_be_visible()
     expect(page.get_by_role('button', name='Quitter', exact=True)).to_be_visible()
-    assert page.evaluate('document.fullscreenElement?.id') == 'timer-page'
+    assert page.evaluate('document.fullscreenElement === document.documentElement')
     page.get_by_role('button', name='Quitter', exact=True).click()
     expect(page.get_by_role('button', name='Diffusion', exact=True)).to_be_visible()
-    assert page.evaluate('document.fullscreenElement === null')
+    # Leaving presentation retains the app's fullscreen workspace.
+    assert page.evaluate('document.fullscreenElement === document.documentElement')
     dialog = sharing_dialog(page)
     dialog.get_by_role('button', name='Présentation', exact=True).click()
     expect(dialog).not_to_be_visible()

@@ -2,6 +2,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 from playwright.sync_api import sync_playwright, expect
+from fullscreen_helpers import emulate_fullscreen
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]
@@ -10,6 +11,7 @@ with sync_playwright() as p:
     browser = p.chromium.launch()
     for motion in ['no-preference', 'reduce']:
         context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion=motion)
+        emulate_fullscreen(context)
         team = {
             'roster': [
                 {'id': name.lower(), 'name': name, 'present': True, 'mood': 2, 'moodUpdatedAt': None}
@@ -172,8 +174,13 @@ with sync_playwright() as p:
             if motion == 'reduce' and width in [320, 1366]:
                 page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-timer-focus-{width}.png'))
 
-        page.locator('#start-button').click()
+        # Exiting desktop fullscreen pauses the timer before the entry gate blocks it.
+        page.evaluate('document.exitFullscreen()')
+        gate = page.get_by_role('dialog', name='Place à votre équipe', exact=True)
+        expect(gate).to_be_visible()
         expect(cue).to_contain_text('TON TOUR EST EN PAUSE')
+        gate.get_by_role('button', name='Entrer en plein écran', exact=True).click()
+        expect(gate).not_to_be_visible()
         expect(page.locator('#speaker-name')).to_have_text(first)
         page.locator('#start-button').click()
         expect(cue).to_contain_text('À TOI DE PARLER !')

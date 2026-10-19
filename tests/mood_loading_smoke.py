@@ -10,6 +10,7 @@ from time import monotonic
 from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import expect, sync_playwright
+from fullscreen_helpers import emulate_fullscreen
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000').rstrip('/')
 TEAM_ID = 'a' * 64
@@ -22,6 +23,7 @@ SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect wid
 def run_case(browser, case):
     # Fresh contexts also isolate the client-side catalogue/deck caches.
     context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion='reduce', service_workers='block')
+    emulate_fullscreen(context)
     try:
         day = (datetime.now(timezone.utc) + timedelta(hours=4)).date().isoformat()
         team = {'roster': [{'id': 'alice', 'name': 'Alice', 'present': True, 'mood': None, 'moodUpdatedAt': None}], 'session': [], 'duration': 120, 'warning': 30, 'sound': False, 'usedMoodMeters': [], 'currentMoodSlide': None}

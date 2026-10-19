@@ -157,6 +157,17 @@ export function useStandupTimer() {
     setLateChecking(true);
   }, [tick, commit]);
   const closeLateCheckin = useCallback(() => setLateChecking(false), []);
+  useEffect(() => {
+    const fullscreenChange = () => {
+      if (document.fullscreenElement || !matchMedia('(min-width: 1024px) and (pointer: fine)').matches || !latest.current.running) return;
+      const current = tick();
+      commit({ ...current, running: false });
+      notify('Minuteur en pause. Revenez en plein écran puis reprenez votre passage.');
+    };
+    fullscreenChange();
+    document.addEventListener('fullscreenchange', fullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', fullscreenChange);
+  }, [tick, commit, notify]);
   const postpone = useCallback((id: string) => {
     const current = tick();
     const target = current.people.find(p => p.id === id);

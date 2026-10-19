@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, IconButton, NativeSelect, Paper } from '@mui/material';
+import { Button, Dialog, DialogContent, DialogTitle, IconButton, NativeSelect, Paper } from '@mui/material';
 import {
   chooseUnusedDeck, displayTitle, groupMoodMeters, moodMeterId, isAnimatedImage, overlayCropStyle,
   overlayMatrix, type MoodMeterDeck, type MoodMeterSlide,
@@ -121,7 +121,7 @@ export function MeterSlide({ slide, title, paused, idPrefix = 'meter', onSettled
 
 function OrderedMeterSlides({ deck, title, retry }: { deck: MoodMeterDeck; title: string; retry: number }) {
   const [readyThrough, setReadyThrough] = useState(0);
-  return <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(140px,1fr)] gap-2 overflow-y-auto rounded-xl" aria-label="Toutes les diapositives du baromètre">
+  return <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(140px,1fr)] grid-cols-1 gap-2 overflow-y-auto rounded-xl min-[801px]:grid-cols-2 min-[801px]:auto-rows-[minmax(0,1fr)]" aria-label="Toutes les diapositives du baromètre">
     {deck.slides.map((item, index) => <div key={`${index}:${retry}`} className="relative flex min-h-0 flex-col overflow-hidden rounded-[14px] motion-safe:animate-page-reveal">
       {index <= readyThrough ? <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`}
         onSettled={() => setReadyThrough(value => Math.max(value, index + 1))} /> : <div className={meterStage}><MoodMeterLoading /></div>}
@@ -133,6 +133,8 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
   const { state, updateTeam, activeTeamId, setDailyReady, cloudStatus } = useTeam();
   const notify = useNotify();
   const [savingMeter, setSavingMeter] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [expandedSlide, setExpandedSlide] = useState(0);
   const changeController = useRef<AbortController | null>(null);
   useEffect(() => () => changeController.current?.abort(), []);
   const initialUsed = useRef(state.usedMoodMeters ?? []);
@@ -288,6 +290,13 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
 
   return (
     <Paper component="section" elevation={0} ref={panelRef} className={`flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden rounded-[28px] border border-line bg-white p-5 shadow-sm shadow-brand/3 max-[650px]:rounded-2xl max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-2.5 ${className}`} aria-labelledby="meter-title">
+      <Dialog open={expanded} onClose={() => setExpanded(false)} fullScreen aria-labelledby="expanded-meter-title" sx={{ zIndex: 1700 }}>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-2"><DialogTitle id="expanded-meter-title" className="min-w-0 truncate p-0! text-base!">{title}</DialogTitle><Button onClick={() => setExpanded(false)} sx={{ minHeight: 44 }}>Fermer le plein écran</Button></div>
+        <DialogContent className="flex min-h-0 flex-1 flex-col gap-3 bg-slate-50 p-3! sm:p-5!">
+          {expanded && (deck?.slides[expandedSlide] ? <MeterSlide key={`${expandedSlide}:${retry}`} slide={deck.slides[expandedSlide]} title={`${title} — diapositive ${expandedSlide + 1}`} paused={!playing} idPrefix="expanded-meter" /> : <div className={`${meterStage}`}><DefaultMoodMeter /></div>)}
+          {deck && <div className="flex shrink-0 flex-wrap items-center justify-center gap-2" role="group" aria-label="Diapositives en plein écran">{deck.slides.map((_, index) => <Button key={index} variant={expandedSlide === index ? 'contained' : 'outlined'} onClick={() => setExpandedSlide(index)} aria-pressed={expandedSlide === index} sx={{ minHeight: 44 }}>Diapositive {index + 1}</Button>)}</div>}
+        </DialogContent>
+      </Dialog>
       <div className="flex shrink-0 items-center justify-between gap-2 max-[800px]:sr-only"><div><p className="mb-1 text-[10px] font-bold tracking-[.16em] text-brand">OBSERVER & RESSENTIR</p><h2 id="meter-title" className="text-xl font-bold tracking-tight">Votre repère du jour</h2></div><span className="rounded-full bg-orange-50 px-3 py-2 text-[10px] font-semibold text-amber-800">4 humeurs · aucun jugement</span></div>
       <div className={`flex min-w-0 shrink-0 items-center gap-2 ${locked ? 'max-[800px]:sr-only' : ''}`}>
         <label className="sr-only" htmlFor="meter-catalogue-select">Catalogue · {catalog.length} baromètres</label>
@@ -302,6 +311,7 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
           title="Choisir un autre baromètre avant le premier vote" disabled={!canChange}
           onClick={() => void selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}><MoodIcon name="shuffle" className="size-5" /></IconButton>
       </div>
+      <Button variant="outlined" size="small" onClick={() => { setExpandedSlide(selection.slide); setExpanded(true); }} disabled={pending || status !== 'ready' || conversion === 'error'} aria-label="Afficher le baromètre en plein écran" sx={{ minHeight: 44, flexShrink: 0, alignSelf: 'flex-end', fontSize: 11 }}><span aria-hidden="true" className="mr-2 text-lg">⛶</span>Agrandir le baromètre</Button>
       <p id="daily-meter-note" role="status" className={`flex shrink-0 items-start gap-2 rounded-lg px-2 py-1 text-xs leading-snug ${locked && status === 'ready' ? 'max-[800px]:sr-only' : ''} ${status === 'error' ? 'bg-danger-soft text-danger' : savingMeter || !daily ? 'text-amber-800' : 'text-muted'}`}><MoodIcon name={hasVotes ? 'lock' : 'meter'} className="mt-0.5 size-3.5 shrink-0" /><span>{savingMeter ? 'Enregistrement du baromètre partagé…' : daily ? hasVotes ? 'Verrouillé après le premier vote. Le même repère pour toute l’équipe.' : 'Commun à l’équipe · Modifiable avant le premier vote.' : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</span></p>
       {stacked ? <OrderedMeterSlides key={`${deck.remoteId}:${retry}`} deck={deck} title={title} retry={retry} /> : showSlide ? <MeterSlide key={`${selection.deck}:${selection.slide}:${retry}`} slide={slide}
         title={`${title} — diapositive ${selection.slide + 1}`} paused={!playing} /> : (

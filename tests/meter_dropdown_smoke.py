@@ -6,13 +6,79 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
+from fullscreen_helpers import emulate_fullscreen
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 ID = 'a' * 64
+
+
+def viewer(page, remote=False):
+    """The image viewer is a dialog, independent of browser fullscreen."""
+    fullscreen_before = page.evaluate('document.fullscreenElement === document.documentElement')
+    page.get_by_role('button', name='Afficher le baromètre en plein écran', exact=True).click()
+    dialog = page.get_by_role('dialog', name='Test meter' if remote else 'Baromètre original', exact=True)
+    expect(dialog).to_be_visible()
+    close = dialog.get_by_role('button', name='Fermer le plein écran', exact=True)
+    expect(close).to_be_visible()
+    if remote:
+        image = dialog.locator('#expanded-meter-slide')
+        buttons = dialog.get_by_role('group', name='Diapositives en plein écran').get_by_role('button')
+        expect(buttons).to_have_text(['Diapositive 1', 'Diapositive 2'])
+        for number in (1, 2, 1):
+            button = dialog.get_by_role('button', name=f'Diapositive {number}', exact=True)
+            button.click()
+            expect(button).to_have_attribute('aria-pressed', 'true')
+            expect(dialog.get_by_role('button', name=f'Diapositive {3 - number}', exact=True)).to_have_attribute('aria-pressed', 'false')
+            expect(image).to_have_attribute('src', f'/mood-meters/slides/test/page-{number}.svg')
+            expect(image).to_have_js_property('complete', True)
+            expect(image).not_to_have_js_property('naturalWidth', 0)
+        # Viewer selection must not change the slide recorded with a vote.
+        dialog.get_by_role('button', name='Diapositive 2', exact=True).click()
+    else:
+        expect(dialog.locator('#default-mood-meter')).to_be_visible()
+    close.click()
+    expect(dialog).not_to_be_visible()
+    assert page.evaluate('document.fullscreenElement === document.documentElement') == fullscreen_before
+    if remote:
+        # Opening again starts on the selected check-in slide, not the last
+        # viewed slide (2); both inline slides must still be displayed.
+        page.get_by_role('button', name='Afficher le baromètre en plein écran', exact=True).click()
+        expect(dialog.locator('#expanded-meter-slide')).to_have_attribute('src', '/mood-meters/slides/test/page-1.svg')
+        expect(dialog.get_by_role('button', name='Diapositive 1', exact=True)).to_have_attribute('aria-pressed', 'true')
+        close.click()
+        expect(dialog).not_to_be_visible()
+
+
+def remote_geometry(page, width, height):
+    stack = page.locator('#meter-slide-stack')
+    expect(stack.locator('img')).to_have_count(2)
+    for image in stack.locator('img').all():
+        expect(image).to_have_js_property('complete', True)
+        expect(image).not_to_have_js_property('naturalWidth', 0)
+    page.evaluate('async () => { for (let i=0; i<3; i++) await new Promise(requestAnimationFrame); }')
+    layout = stack.evaluate('''el => {
+        const rect = node => { const r = node.getBoundingClientRect();
+            return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height}; };
+        return {stack:rect(el), images:[...el.querySelectorAll('img')].map(rect),
+            scroll:el.scrollHeight,height:el.clientHeight};
+    }''')
+    first, second = layout['images']
+    assert all(image['width'] > 0 and image['height'] > 0 for image in layout['images']), layout
+    if width >= 801:
+        assert first['right'] <= second['left'] + 1 and abs(first['top'] - second['top']) <= 1, layout
+        assert layout['scroll'] <= layout['height'] + 2, layout
+        for image in layout['images']:
+            assert image['left'] >= layout['stack']['left'] - 1 and image['right'] <= layout['stack']['right'] + 1, layout
+            assert image['top'] >= layout['stack']['top'] - 1 and image['bottom'] <= min(layout['stack']['bottom'], height) + 1, layout
+    else:
+        assert first['bottom'] <= second['top'] + 1, layout
+
+
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for width, height in [(320, 568), (390, 844), (768, 1024), (820, 568), (1024, 576), (1366, 768)]:
         context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce')
+        emulate_fullscreen(context)
         team = {'roster': [{'id': 'alice', 'name': 'Alice', 'present': True, 'mood': None, 'moodUpdatedAt': None}], 'session': [], 'duration': 120, 'warning': 30, 'sound': False, 'usedMoodMeters': [], 'currentMoodSlide': None}
         db = {'revision': 1, 'meter': {'meterId': 'original', 'title': 'Baromètre original'}, 'patches': 0}
         day = (datetime.now(timezone.utc) + timedelta(hours=4)).date().isoformat()
@@ -36,7 +102,7 @@ with sync_playwright() as p:
             elif path == '/api/mood-meters/catalog':
                 route.fulfill(json=[{'title': 'Test meter', 'category': 'Animals & Creatures', 'remoteId': 'deck-1234567890abcdef1234', 'slides': []}])
             elif path.startswith('/api/mood-meters/decks/'):
-                route.fulfill(json={'title': 'Test meter', 'slides': ['mood-meters/slides/test/page.svg']})
+                route.fulfill(json={'title': 'Test meter', 'slides': ['mood-meters/slides/test/page-1.svg', 'mood-meters/slides/test/page-2.svg']})
             else:
                 raise AssertionError(path)
         context.route('**/api/**', api)
@@ -56,6 +122,9 @@ with sync_playwright() as p:
         expect(select).to_have_value('0')
         assert db['patches'] == 3
         assert db['meter']['meterId'] == 'deck-1234567890abcdef1234'
+        remote_geometry(page, width, height)
+        viewer(page, remote=True)
+        remote_geometry(page, width, height)
         page.reload()
         expect(select).to_have_value('0')
         expect(select).to_be_enabled()
@@ -67,6 +136,7 @@ with sync_playwright() as p:
         page.evaluate('async () => { for (let i=0; i<3; i++) await new Promise(requestAnimationFrame); }')
         meter_size = page.locator('#default-mood-meter').evaluate('e => ({height: e.clientHeight, scroll: e.scrollHeight})')
         assert meter_size['scroll'] <= meter_size['height'] + 2, (width, height, meter_size)
+        viewer(page)
         if width in [320, 1366]:
             page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-mood-design-meter-{width}.png'))
         if width <= 800:

@@ -1,6 +1,7 @@
 """Tab recovery and automatic Neon retries; all APIs mocked, no database writes."""
 import os
 from playwright.sync_api import sync_playwright, expect
+from fullscreen_helpers import emulate_fullscreen
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3001')
 TEAM_ID = 'a' * 64
@@ -9,6 +10,7 @@ with sync_playwright() as p:
     browser = p.chromium.launch()
     for width, height in [(320, 568), (1366, 768)]:
         context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce')
+        emulate_fullscreen(context)
         model = {'team': {'roster': [
             {'id': name.lower(), 'name': name, 'present': True, 'mood': 2, 'moodUpdatedAt': None}
             for name in ['Alice', 'Bob']], 'session': [], 'duration': 120,

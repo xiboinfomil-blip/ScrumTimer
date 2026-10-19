@@ -9,6 +9,7 @@ import { motion, MotionConfig, useAnimate, useReducedMotion } from 'framer-motio
 import { Alert, Button } from '@mui/material';
 import { PageSkeleton, skeletonVariantForPath } from '@/components/ui/page-skeleton';
 import { DailyRound } from './daily-round';
+import { DesktopFullscreenGate } from './desktop-fullscreen-gate';
 
 export function AppShell({ children }: { children: ReactNode }) {
   useActionMotion();
@@ -33,6 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (legacy) router.replace(legacy);
   }, [pathname, router]);
   return <MotionConfig reducedMotion="user" transition={{ type: 'spring', stiffness: 420, damping: 28 }}>
+    {pathname !== '/spectator' && <DesktopFullscreenGate />}
     {pathname !== '/spectator' && <Navbar />}
     <main id="main-content" tabIndex={-1} className="page mx-auto flex min-h-0 w-full max-w-480 flex-1 flex-col gap-3 overflow-hidden px-6 pt-4.5 pb-2.5 max-[1100px]:px-4 max-[1100px]:pt-3 max-[650px]:gap-2 max-[650px]:px-3 max-[650px]:py-2.5">
       {cloudStatus === 'error' && <Alert severity="warning" className="shrink-0" action={<Button onClick={retryCloud}>Réessayer Neon</Button>}>Données Neon indisponibles ou conflit de sauvegarde. Aucun stockage local. Les modifications non confirmées restent en mémoire. Ne rechargez pas avant de les sauvegarder.</Alert>}
