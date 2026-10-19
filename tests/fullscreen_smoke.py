@@ -17,6 +17,7 @@ with sync_playwright() as p:
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(BASE + '/teams')
+        page.get_by_role('button', name='Fermer l’introduction').click()
         gate = page.get_by_role('dialog', name='Place à votre équipe', exact=True)
         if scenario == 'mobile':
             expect(gate).not_to_be_visible()

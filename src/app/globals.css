@@ -25,6 +25,14 @@
 	--animate-live-breathe: live-breathe 3s ease-in-out infinite;
 	--animate-brand-flow: brand-flow 8s ease-in-out infinite;
 	--animate-chart-grow: chart-grow .65s ease-out both;
+	--animate-welcome-float: welcome-float 3s ease-in-out infinite;
+	--animate-welcome-orbit: welcome-orbit 6s ease-in-out infinite;
+	@keyframes welcome-cover { from { opacity: 0; } to { opacity: 1; } }
+	@keyframes welcome-title { from { opacity: 0; transform: translateY(24px) scale(.9); filter: blur(8px); } to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); } }
+	@keyframes welcome-float { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-14px) rotate(5deg); } }
+	@keyframes welcome-orbit { 50% { transform: translate(8%, 10%) scale(1.12); } }
+	@keyframes welcome-ring { from { opacity: .6; transform: scale(.85); } to { opacity: 0; transform: scale(1.3); } }
+	@keyframes welcome-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 	@keyframes page-reveal { from { opacity: 0; } to { opacity: 1; } }
 	@keyframes live-breathe { 50% { opacity: .55; box-shadow: 0 0 0 4px #ec8b2318; } }
 	@keyframes brand-flow { 0%, 100% { opacity: .25; transform: scaleX(.65); } 50% { opacity: 1; transform: scaleX(1); } }
