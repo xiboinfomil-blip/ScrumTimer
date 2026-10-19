@@ -2,6 +2,7 @@
 import os
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
+from fullscreen_helpers import emulate_fullscreen
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 TEAM_ID = 'a' * 64
@@ -11,6 +12,7 @@ with sync_playwright() as p:
     for motion in ['reduce', 'no-preference']:
         for width, height in [(320, 568), (768, 1024), (1440, 900)]:
             context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion=motion)
+            emulate_fullscreen(context)
             teams = [{'id': TEAM_ID, 'name': 'Équipe Alpha', 'memberCount': 2}] + [
                 {'id': f'{i:064x}', 'name': f'Équipe {i} ' + ('TrèsLongNomSansEspace' * 2 if i == 7 else 'Produit'), 'memberCount': i}
                 for i in range(1, 8)

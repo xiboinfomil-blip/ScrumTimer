@@ -6,9 +6,8 @@ import { ParticipantIcon } from './participant-icon';
 export function ParticipantsHeading({ total, present, onFresh }: { total: number; present: number; onFresh: () => void }) {
   return <header className="flex shrink-0 items-center justify-between gap-3 px-1">
     <div className="min-w-0">
-      <p className="mb-1 flex items-center gap-2 text-xs font-semibold text-brand"><span aria-hidden="true" className="size-2 rounded-full bg-accent" />Étape 1 sur 3 · Les présences</p>
-      <h1 className="text-3xl font-bold tracking-tight text-ink max-[650px]:text-xl [@media(max-height:650px)]:text-xl">Qui est là aujourd’hui ?</h1>
-      <p className="mt-1 text-sm text-muted max-[650px]:text-xs"><span className="font-semibold text-ink">{present} sur {total}</span> membres présents<span className="max-[650px]:hidden"> · Un moment pour chacun.</span></p>
+      <h1 className="text-xl font-bold tracking-tight text-ink">Présences</h1>
+      <p className="mt-1 text-xs text-muted"><span className="font-semibold text-ink">{present} sur {total}</span> membres présents</p>
     </div>
     <button type="button" onClick={onFresh} aria-label="Nouveau bilan" title="Commencer un nouveau bilan" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-muted hover:border-brand/30 hover:bg-blue-50 hover:text-brand"><ParticipantIcon name="reset" /><span className="max-[650px]:hidden">Nouveau bilan</span></button>
   </header>;

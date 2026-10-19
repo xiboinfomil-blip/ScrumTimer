@@ -3,6 +3,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert } from '@mui/material';
+import { motion, useReducedMotion } from 'framer-motion';
 import { useTeam } from '@/providers/team-provider';
 import { NavIcon } from '@/components/layout/nav-icon';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
@@ -21,6 +22,8 @@ export function TeamsPage() {
   const [error, setError] = useState('');
   const [createError, setCreateError] = useState('');
   const [page, setPage] = useState(0);
+  const [direction, setDirection] = useState(0);
+  const reducedMotion = useReducedMotion();
   const [openingId, setOpeningId] = useState<string | null>(null);
   const nameInput = useRef<HTMLInputElement>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
@@ -31,6 +34,7 @@ export function TeamsPage() {
   const totalMembers = teams.reduce((total, team) => total + team.memberCount, 0);
   const disabled = teamBusy || pending || !ready;
   function changePage(next: number) {
+    setDirection(next > currentPage ? 1 : -1);
     setPage(next);
     listHeading.current?.focus();
   }
@@ -57,12 +61,8 @@ export function TeamsPage() {
     else setCreateError('Création impossible. Ce nom existe peut-être déjà ; vérifiez aussi la connexion.');
   }
   return <div className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto pb-3" aria-labelledby="teams-heading">
-    <header className="flex shrink-0 flex-wrap items-end justify-between gap-4 px-1 pt-2">
-      <div>
-        <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-brand"><span aria-hidden="true" className="size-2 rounded-full bg-accent" />Le point quotidien, ensemble</p>
-        <h1 id="teams-heading" className="text-3xl font-bold tracking-tight text-ink sm:text-4xl">Vos équipes<span className="text-accent">.</span></h1>
-        <p className="mt-2 text-sm leading-relaxed text-muted">Un espace pour se retrouver. Un moment pour chacun.</p>
-      </div>
+    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-1">
+      <h1 id="teams-heading" className="text-xl font-bold tracking-tight text-ink">Vos équipes</h1>
       <dl className="flex gap-5 text-sm sm:gap-6" aria-label="Résumé des équipes">
         <div><dt className="text-xs text-muted">Équipes</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-ink">{ready ? teams.length : '—'}</dd></div>
         <div className="border-l border-line pl-5 sm:pl-6"><dt className="text-xs text-muted">Membres au total</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-ink">{ready ? totalMembers : '—'}</dd></div>
@@ -84,6 +84,8 @@ export function TeamsPage() {
         </div>
         {error && <Alert severity="error" className="m-4">{error}</Alert>}
         <p role="status" className="sr-only">{pending ? openingId ? 'Ouverture de l’équipe…' : 'Création de l’équipe…' : ''}</p>
+        <div className="flex min-w-0 overflow-hidden">
+        <div className="min-w-0 flex-1 overflow-hidden">
         {!ready && cloudStatus !== 'error' ? <PageSkeleton variant="teams" scope="section" className="p-4" /> : !teams.length ? <div className="px-5 py-10 text-center">
           <span className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-blue-50 text-brand"><NavIcon name="people" /></span>
           <p role="status" className="text-sm font-semibold text-ink">{cloudStatus === 'error' ? 'Équipes indisponibles. Réessayez la connexion Neon.' : 'Votre première équipe commence ici.'}</p>
@@ -93,10 +95,10 @@ export function TeamsPage() {
           <p className="text-sm font-semibold text-ink">Aucune équipe trouvée.</p>
           <p className="mt-2 text-sm text-muted">Essayez un autre nom ou créez votre équipe.</p>
           <button type="button" onClick={() => { setQuery(''); setPage(0); }} className={`${secondaryButton} mt-4`}>Effacer la recherche</button>
-        </div> : <ul aria-label="Équipes disponibles" aria-busy={pending && openingId !== null} className="list-none divide-y divide-line p-2">
+        </div> : <motion.ul key={currentPage} initial={reducedMotion || !direction ? false : { y: direction * 20, opacity: .35 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: reducedMotion ? 0 : .3, ease: [.22, 1, .36, 1] }} aria-label="Équipes disponibles" aria-busy={pending && openingId !== null} className="list-none divide-y divide-line p-2">
           {visibleTeams.map(team => {
             const active = activeTeamId === team.id;
-            return <li key={team.id} className="group grid min-w-0 gap-3 rounded-xl p-3 hover:bg-slate-50 motion-safe:animate-enter sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            return <li key={team.id} className="group grid min-w-0 gap-3 rounded-xl p-3 hover:bg-slate-50 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
               <div className="flex min-w-0 items-center gap-3">
                 <span aria-hidden="true" className={`grid size-11 shrink-0 place-items-center rounded-2xl text-base font-bold ${active ? 'bg-brand text-white shadow-sm shadow-brand/20' : 'bg-blue-50 text-brand'}`}>{Array.from(team.name)[0]?.toLocaleUpperCase('fr-FR')}</span>
                 <div className="min-w-0 flex-1">
@@ -116,11 +118,14 @@ export function TeamsPage() {
               </div>
             </li>;
           })}
-        </ul>}
-        {results.length > pageSize && <nav aria-label="Pagination des équipes" className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-4 py-3">
-          <p className="text-xs text-muted">Page {currentPage + 1} sur {pageCount}</p>
-          <div className="flex gap-2"><button type="button" className={secondaryButton} disabled={currentPage === 0} onClick={() => changePage(currentPage - 1)} aria-label="Page précédente des équipes">←<span className="sr-only sm:not-sr-only">Précédente</span></button><button type="button" className={secondaryButton} disabled={currentPage === pageCount - 1} onClick={() => changePage(currentPage + 1)} aria-label="Page suivante des équipes"><span className="sr-only sm:not-sr-only">Suivante</span>→</button></div>
+        </motion.ul>}
+        </div>
+        {results.length > pageSize && <nav aria-label="Pagination des équipes" className="flex w-14 shrink-0 flex-col items-center justify-center gap-2 border-l border-line px-1 py-3">
+          <button type="button" className={`${secondaryButton} size-11 shrink-0 px-0`} disabled={currentPage === 0} onClick={() => changePage(currentPage - 1)} aria-label="Page précédente des équipes"><svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 14 6-6 6 6" /></svg></button>
+          <p role="status" aria-live="polite" aria-atomic="true" className="text-center text-xs tabular-nums text-muted"><span className="sr-only">Page </span>{currentPage + 1}<span className="block text-[10px]">sur {pageCount}</span></p>
+          <button type="button" className={`${secondaryButton} size-11 shrink-0 px-0`} disabled={currentPage === pageCount - 1} onClick={() => changePage(currentPage + 1)} aria-label="Page suivante des équipes"><svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 10 6 6 6-6" /></svg></button>
         </nav>}
+        </div>
         {ready && teams.length > 0 && <p className="border-t border-line px-5 py-3 text-xs leading-relaxed text-muted">Ouvrir pour préparer le point · Gérer pour modifier les membres et les réglages.</p>}
       </section>
 

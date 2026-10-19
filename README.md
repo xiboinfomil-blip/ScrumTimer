@@ -279,7 +279,7 @@ Dans le bilan d’humeur, **Plus tard** reporte explicitement l’humeur et le p
 
 À leur arrivée, utiliser **Renseigner les humeurs** dans la fenêtre Participants, dans **Modifier**, ou dans la fenêtre proposée après le dernier passage disponible (via **Suivant**, sans changement automatique à zéro). Cette action met le décompte en pause et ouvre une fenêtre sur le minuteur, sans quitter la page. Le même baromètre attribué reste verrouillé et ses diapositives SVG sont affichées ensemble ; aucun nouveau tirage n’est effectué. Seules les personnes encore reportées y votent et rejoignent la fin du tour. **Revenir au tour** conserve l’ordre, les passages terminés et le temps déjà utilisé, sans démarrage automatique. Ce fonctionnement reste disponible si le stockage de session est bloqué ; la reprise après actualisation exige ce stockage. On peut aussi **Terminer sans les personnes en attente** : seuls les passages non reportés sont archivés, sans marquer les autres absentes ni leur attribuer un passage ou un score. Au moins un passage terminé est nécessaire pour enregistrer un bilan. Seules les humeurs et les bilans confirmés sont sauvegardés dans Neon.
 
-Les listes utilisent uniquement les boutons **Page précédente** et **Page suivante** ; la fonctionnalité « Vue d’ensemble » a été supprimée.
+Les listes affichent une barre de pagination à droite : flèche vers le haut pour **Page précédente**, flèche vers le bas pour **Page suivante**, et numéro de page entre les deux. Le changement de page glisse verticalement, sans animation si la réduction des mouvements est activée. La barre disparaît lorsqu’une seule page suffit. La fonctionnalité « Vue d’ensemble » a été supprimée.
 
 ### Plein écran et lecture du baromètre
 

@@ -41,7 +41,7 @@ export function SpectatorPage() {
   const remaining = snapshot ? liveRemaining(snapshot, now + live!.offset) : 0;
   const seconds = Math.ceil(Math.abs(remaining));
   return <section ref={target} aria-label="Vue spectateur" className={`${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh' : 'min-h-0 flex-1 rounded-2xl border border-line'} flex flex-col gap-3 overflow-auto bg-white p-4 text-center sm:p-6`}>
-    <header className="flex flex-wrap items-center justify-between gap-2 text-left"><div><h1 className="text-lg font-bold text-brand">{activeTeamName} · Spectateur</h1><p className="text-xs text-muted">Lecture seule · le facilitateur garde les commandes</p></div><Button variant="outlined" onClick={() => void presentation.toggle()} sx={{ minHeight: 44 }}>{presentation.presenting ? 'Quitter la présentation' : 'Présentation'}</Button></header>
+    <header className="flex flex-wrap items-center justify-between gap-2 text-left"><h1 className="min-w-0 text-xl font-bold wrap-anywhere text-brand">{activeTeamName} · Spectateur</h1><Button variant="outlined" onClick={() => void presentation.toggle()} sx={{ minHeight: 44 }}>{presentation.presenting ? 'Quitter la présentation' : 'Présentation'}</Button></header>
     {presentation.notice && <p role="status" className="text-xs text-muted">{presentation.notice}</p>}
     {localOnly && <Alert severity="info">Diffusion limitée à cette instance. Un service Redis partagé est nécessaire sur un hébergement multi-instance.</Alert>}
     {error && <Alert severity="warning">{error} Reconnexion automatique…</Alert>}

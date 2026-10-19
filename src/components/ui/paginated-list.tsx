@@ -10,6 +10,7 @@ export function PaginatedList<T extends { id: string; name?: string; present?: b
   const positions = useRef(new Map<string, number>());
   const [capacity, setCapacity] = useState(100);
   const [page, setPage] = useState(0);
+  const direction = useRef(1);
   useLayoutEffect(() => {
     const list = ref.current;
     if (!list) return;
@@ -53,7 +54,7 @@ export function PaginatedList<T extends { id: string; name?: string; present?: b
   useEffect(() => {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     if (!ref.current) return;
-    const animation = animate(ref.current, { opacity: [.35, 1] }, { duration: .3, ease: [.22, 1, .36, 1] });
+    const animation = animate(ref.current, { y: [direction.current * 20, 0], opacity: [.35, 1] }, { duration: .3, ease: [.22, 1, .36, 1] });
     return () => animation.stop();
   }, [current]);
   useEffect(() => {
@@ -65,5 +66,12 @@ export function PaginatedList<T extends { id: string; name?: string; present?: b
   }, [activeId, capacity]);
   const Tag = ordered ? 'ol' : 'ul';
   const pageButtonSx = { width: 44, height: 44, flexShrink: 0, borderRadius: 2, bgcolor: 'action.hover' };
-  return <><Tag ref={ref} className={`relative mt-2 flex min-h-0 flex-1 list-none flex-col gap-2 overflow-hidden p-1 ${className}`}>{items.slice(current * capacity, (current + 1) * capacity).map((item, index) => renderItem(item, current * capacity + index))}</Tag><nav className={`list-pagination mt-1 flex min-h-11 shrink-0 items-center justify-center gap-1 text-[10px] text-muted ${pages === 1 ? 'invisible' : ''}`} aria-label="Pages de la liste"><IconButton type="button" color="primary" sx={pageButtonSx} aria-label="Page précédente" disabled={current === 0} onClick={() => setPage(current - 1)}>←</IconButton><span className="shrink-0">{current + 1} / {pages}</span><IconButton type="button" color="primary" sx={pageButtonSx} aria-label="Page suivante" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>→</IconButton></nav></>;
+  return <div className="paginated-list @container relative flex min-h-0 min-w-0 flex-1 gap-1 overflow-hidden">
+    <Tag ref={ref} className={`relative mt-2 flex min-h-0 min-w-0 flex-1 list-none flex-col gap-2 overflow-hidden p-1 ${className}`}>{items.slice(current * capacity, (current + 1) * capacity).map((item, index) => renderItem(item, current * capacity + index))}</Tag>
+    {pages > 1 && <nav className="list-pagination flex w-11 shrink-0 flex-col items-center justify-center gap-2 text-[10px] text-muted" aria-label="Pages de la liste">
+      <IconButton type="button" color="primary" sx={pageButtonSx} aria-label="Page précédente" disabled={current === 0} onClick={() => { direction.current = -1; setPage(current - 1); }}><svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 14 6-6 6 6" /></svg></IconButton>
+      <span className="text-center tabular-nums" role="status" aria-live="polite">{current + 1}<span className="block text-[9px]">sur {pages}</span></span>
+      <IconButton type="button" color="primary" sx={pageButtonSx} aria-label="Page suivante" disabled={current >= pages - 1} onClick={() => { direction.current = 1; setPage(current + 1); }}><svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 10 6 6 6-6" /></svg></IconButton>
+    </nav>}
+  </div>;
 }

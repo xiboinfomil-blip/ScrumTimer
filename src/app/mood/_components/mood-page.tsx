@@ -13,14 +13,14 @@ import { useViewMotion } from '@/hooks/use-view-motion';
 
 export function MoodPage() {
   const allowed = useStepGuard('mood');
-  const { activeTeamId, activeTeamName } = useTeam();
+  const { activeTeamId } = useTeam();
   const [view, setView] = useState<'meter' | 'people'>('meter');
   const panels = useViewMotion(view);
   if (!allowed) return null;
   return (
     <div id="mood-page" className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-3 text-ink max-[650px]:gap-2 [@media(max-height:650px)]:gap-1">
       <header className="flex shrink-0 items-center justify-between gap-3 px-1">
-        <div className="min-w-0"><p className="mb-1 flex items-center gap-2 text-[10px] font-bold tracking-[.16em] text-brand [@media(max-height:650px)]:hidden"><span aria-hidden="true" className="size-2 rounded-full bg-accent" />LE POULS DE L’ÉQUIPE</p><h1 className="text-2xl font-bold tracking-tight text-ink max-[650px]:text-xl">Comment va l’équipe ?</h1><p className="mt-1 truncate text-xs text-muted [@media(max-height:650px)]:hidden">{activeTeamName} · Un instant pour soi, un repère pour tous.</p></div>
+        <h1 className="min-w-0 text-xl font-bold tracking-tight text-ink">Humeurs</h1>
         <Link href={`/participants?team=${activeTeamId}`} aria-label="Retour aux participants" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-muted hover:border-brand/30 hover:bg-blue-50 hover:text-brand"><MoodIcon name="back" /><span className="max-[650px]:sr-only">Participants</span></Link>
       </header>
       <ScreenTabs

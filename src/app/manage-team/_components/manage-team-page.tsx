@@ -43,9 +43,7 @@ export function ManageTeamPage() {
     <header className="flex shrink-0 flex-wrap items-end justify-between gap-3 px-1">
       <div className="min-w-0 flex-1 basis-64">
         <Link href={`/teams?team=${activeTeamId}`} className="mb-1 inline-flex min-h-11 items-center gap-2 rounded-lg text-xs font-semibold text-brand hover:text-brand-dark"><span aria-hidden="true">←</span>Toutes les équipes</Link>
-        <p className="mb-1 text-xs font-semibold text-muted">Gestion de l’équipe</p>
-        <h1 id="manage-team-heading" className="text-2xl font-bold tracking-tight wrap-anywhere text-ink sm:text-3xl">{activeTeamName}</h1>
-        <p className="mt-2 text-sm text-muted">Les bonnes personnes, dans le bon espace.</p>
+        <h1 id="manage-team-heading" className="text-xl font-bold tracking-tight wrap-anywhere text-ink">{activeTeamName}</h1>
       </div>
       <Link href={`/participants?team=${activeTeamId}`} className="group inline-flex min-h-11 items-center justify-center gap-3 rounded-xl bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-dark max-sm:w-full">Confirmer les présences<span aria-hidden="true" className="motion-safe:transition-transform motion-safe:group-hover:translate-x-1">→</span></Link>
     </header>
