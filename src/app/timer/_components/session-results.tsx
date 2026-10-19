@@ -20,7 +20,7 @@ export function SessionResults({ timer }: { timer: StandupTimer }) {
   const stats = sessionStatistics(timer.people);
   const winners = ranked.filter(person => person.rank === 1);
   const date = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).format(new Date());
-  return <div id="timer-page" data-mode="results" className={`${routeStage} mx-auto w-full max-w-6xl overflow-hidden`}>
+  return <div id="timer-page" data-mode="results" className={`${routeStage} mx-auto w-full overflow-hidden`}>
     <WorkflowHeading step={3} title="Bilan du tour" description={`${date} · ${timer.people.length} participants`} action={<Button disableElevation size="small" variant="contained" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 12 }} id="new-round-button" type="button" className={primaryButton} onClick={timer.newRound}>Nouveau tour</Button>} />
     <ScreenTabs className={segmentedTabs} label="Bilan du point quotidien" value={view} onChange={setView} tabs={[{ value: 'ranking', label: 'Classement' }, { value: 'stats', label: 'Statistiques' }]} />
     <div ref={panels} className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.3fr)_minmax(280px,1fr)] gap-3 max-[800px]:grid-cols-1">

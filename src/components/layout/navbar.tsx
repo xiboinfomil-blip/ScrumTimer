@@ -28,7 +28,7 @@ export function Navbar() {
   const utilityClass = 'relative flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition-colors motion-reduce:transition-none max-[1100px]:px-2';
   return <AppBar component="header" position="relative" color="transparent" elevation={0} className="site-header z-20 shrink-0 border-b border-line bg-white/95 text-ink backdrop-blur-xl" sx={{ color: 'text.primary' }}>
     <a href="#main-content" className="absolute top-2 left-3 z-50 -translate-y-24 rounded-xl bg-brand px-4 py-3 text-xs font-semibold text-white focus:translate-y-0">Aller au contenu</a>
-    <div className="mx-auto flex min-h-17 w-full max-w-480 items-center gap-4 px-6 max-[1100px]:gap-2 max-[1100px]:px-4 max-[800px]:min-h-0 max-[800px]:flex-wrap max-[800px]:gap-y-0 max-[800px]:px-3 max-[800px]:py-1">
+    <div className="mx-auto flex min-h-17 w-full items-center gap-4 px-6 max-[1100px]:gap-2 max-[1100px]:px-4 max-[800px]:min-h-0 max-[800px]:flex-wrap max-[800px]:gap-y-0 max-[800px]:px-3 max-[800px]:py-1">
       <Link className="flex min-h-11 shrink-0 items-center rounded-lg pr-4 max-[1100px]:pr-1 min-[1101px]:border-r min-[1101px]:border-line" href="/teams" aria-label="Accueil du point quotidien Infomil Mauritius"><img className="h-8 w-25 object-contain max-[1100px]:w-22 max-[800px]:h-7 max-[800px]:w-17 max-[360px]:w-14" src="/infomil-logo.svg" alt="Infomil Mauritius" width={190} height={60} /></Link>
       <TeamSwitcher />
       <nav aria-label="Navigation du point quotidien" className="mx-auto min-w-0 max-w-132 flex-1 max-[800px]:order-3 max-[800px]:max-w-none max-[800px]:basis-full max-[800px]:border-t max-[800px]:border-line/70">

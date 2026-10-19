@@ -10,7 +10,7 @@ const sections = [
 ];
 
 export default function HelpPage() {
-  return <article aria-labelledby="help-heading" tabIndex={0} className="mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto overscroll-contain rounded-xl p-1 pr-2 pb-6 text-sm leading-relaxed text-ink focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent">
+  return <article aria-labelledby="help-heading" tabIndex={0} className="mx-auto min-h-0 w-full flex-1 overflow-y-auto overscroll-contain rounded-xl p-1 pr-2 pb-6 text-sm leading-relaxed text-ink focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent">
     <header className="pb-6 pt-1 sm:pb-8">
       <p className="flex items-center gap-2 text-xs font-semibold text-brand"><span aria-hidden="true" className="size-2 rounded-full bg-accent" />Le guide du point quotidien</p>
       <h1 id="help-heading" tabIndex={-1} className="mt-3 max-w-2xl scroll-mt-4 text-3xl font-bold leading-tight tracking-tight text-ink sm:text-4xl">Une équipe, un tour de parole, un bilan.</h1>

@@ -121,7 +121,7 @@ export function MeterSlide({ slide, title, paused, idPrefix = 'meter', onSettled
 
 function OrderedMeterSlides({ deck, title, retry }: { deck: MoodMeterDeck; title: string; retry: number }) {
   const [readyThrough, setReadyThrough] = useState(0);
-  return <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(140px,1fr)] grid-cols-1 gap-2 overflow-y-auto rounded-xl min-[801px]:grid-cols-2 min-[801px]:auto-rows-[minmax(0,1fr)]" aria-label="Toutes les diapositives du baromètre">
+  return <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(140px,1fr)] grid-cols-1 gap-2 overflow-y-auto rounded-xl" aria-label="Toutes les diapositives du baromètre">
     {deck.slides.map((item, index) => <div key={`${index}:${retry}`} className="relative flex min-h-0 flex-col overflow-hidden rounded-[14px] motion-safe:animate-page-reveal">
       {index <= readyThrough ? <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`}
         onSettled={() => setReadyThrough(value => Math.max(value, index + 1))} /> : <div className={meterStage}><MoodMeterLoading /></div>}

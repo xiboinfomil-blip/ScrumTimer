@@ -33,7 +33,7 @@ export function ParticipantsPage() {
       notify(`${person.name} : ${person.present ? 'absent(e)' : 'présent(e)'}.`);
     }
   }
-  return <div id="participants-page" className={`mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-4 max-[650px]:gap-2 [@media(max-height:650px)]:gap-2 ${todayRound ? 'overflow-y-auto [&>.participants-panel]:min-h-96 [&>.participants-panel]:shrink-0' : ''}`}>
+  return <div id="participants-page" className={`mx-auto flex min-h-0 w-full flex-1 flex-col gap-4 max-[650px]:gap-2 [@media(max-height:650px)]:gap-2 ${todayRound ? 'overflow-y-auto [&>.participants-panel]:min-h-96 [&>.participants-panel]:shrink-0' : ''}`}>
     <ParticipantsHeading total={state.roster.length} present={present.length} onFresh={() => setFresh(true)} />
     {todayRound && <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 rounded-xl border border-green-200 bg-success-soft px-3 text-xs text-success"><p>Point quotidien déjà terminé aujourd’hui.</p><Link href={`/timer?team=${activeTeamId}`} className="inline-flex min-h-11 items-center rounded-lg font-semibold hover:underline">Voir le bilan ou réinitialiser</Link></div>}
     <section className="participants-panel flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm shadow-brand/3" aria-label="Les participants">

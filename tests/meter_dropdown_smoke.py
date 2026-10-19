@@ -64,14 +64,10 @@ def remote_geometry(page, width, height):
     }''')
     first, second = layout['images']
     assert all(image['width'] > 0 and image['height'] > 0 for image in layout['images']), layout
-    if width >= 801:
-        assert first['right'] <= second['left'] + 1 and abs(first['top'] - second['top']) <= 1, layout
-        assert layout['scroll'] <= layout['height'] + 2, layout
-        for image in layout['images']:
-            assert image['left'] >= layout['stack']['left'] - 1 and image['right'] <= layout['stack']['right'] + 1, layout
-            assert image['top'] >= layout['stack']['top'] - 1 and image['bottom'] <= min(layout['stack']['bottom'], height) + 1, layout
-    else:
-        assert first['bottom'] <= second['top'] + 1, layout
+    assert first['bottom'] <= second['top'] + 1, layout
+    assert abs(first['left'] - second['left']) <= 1, layout
+    for image in layout['images']:
+        assert image['left'] >= layout['stack']['left'] - 1 and image['right'] <= layout['stack']['right'] + 1, layout
 
 
 with sync_playwright() as p:

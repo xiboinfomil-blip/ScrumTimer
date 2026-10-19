@@ -39,7 +39,7 @@ export function ManageTeamPage() {
     if (!updateTeam(current => ({ ...current, session: [], roster: current.roster.map(person => person.id === id ? { ...person, name: name.trim() } : person) }))) return 'Modification impossible. Vérifiez la connexion et les sauvegardes.';
     notify('Nom du participant modifié.'); return null;
   }
-  return <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-4 overflow-y-auto pb-3" aria-labelledby="manage-team-heading">
+  return <div className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-4 overflow-y-auto pb-3" aria-labelledby="manage-team-heading">
     <header className="flex shrink-0 flex-wrap items-end justify-between gap-3 px-1">
       <div className="min-w-0 flex-1 basis-64">
         <Link href={`/teams?team=${activeTeamId}`} className="mb-1 inline-flex min-h-11 items-center gap-2 rounded-lg text-xs font-semibold text-brand hover:text-brand-dark"><span aria-hidden="true">←</span>Toutes les équipes</Link>

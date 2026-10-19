@@ -42,7 +42,7 @@ export function PageSkeleton({ variant = 'list', scope = 'page', label, classNam
   className?: string;
 }) {
   const section = scope === 'section';
-  return <div data-page-skeleton={variant} className={`flex min-h-0 min-w-0 w-full flex-col gap-3 ${section ? '' : 'mx-auto max-w-6xl flex-1 overflow-y-auto pb-2'} ${className}`}>
+  return <div data-page-skeleton={variant} className={`flex min-h-0 min-w-0 w-full flex-col gap-3 ${section ? '' : 'mx-auto flex-1 overflow-y-auto pb-2'} ${className}`}>
     <p role="status" aria-live="polite" aria-atomic="true" className="shrink-0 text-[11px] text-muted">{label ?? labels[variant]}</p>
     <div aria-hidden="true" className={`flex min-h-0 flex-col gap-3 ${variant === 'mood' || variant === 'timer' ? 'flex-1' : ''}`}>
       {!section && <div className={`${surface} shrink-0 border-l-4 border-l-accent`}><Block className="h-6 w-3/4 max-w-80" /><Block className="mt-3 h-3 w-5/6 max-w-96" /></div>}

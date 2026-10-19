@@ -17,7 +17,7 @@ export function DailyRound() {
     setConfirm(false);
     if (await resetToday()) router.replace('/participants');
   };
-  return <section className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-3 overflow-hidden max-[650px]:gap-2 [@media(max-height:650px)]:gap-1" aria-label="Point quotidien du jour">
+  return <section className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden max-[650px]:gap-2 [@media(max-height:650px)]:gap-1" aria-label="Point quotidien du jour">
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
       <div className="min-w-0 flex-1 basis-56">
         <p className="mb-1 flex items-center gap-2 text-xs font-semibold text-success"><span aria-hidden="true" className="size-2 rounded-full bg-success" />Point terminé · {new Intl.DateTimeFormat('fr-FR', { timeZone: 'Indian/Mauritius', day: 'numeric', month: 'long' }).format(new Date(round.completedAt))}</p>

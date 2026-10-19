@@ -56,7 +56,7 @@ export function TeamsPage() {
     if (success) router.push(`/manage-team${window.location.search}`);
     else setCreateError('Création impossible. Ce nom existe peut-être déjà ; vérifiez aussi la connexion.');
   }
-  return <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-5 overflow-y-auto pb-3" aria-labelledby="teams-heading">
+  return <div className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto pb-3" aria-labelledby="teams-heading">
     <header className="flex shrink-0 flex-wrap items-end justify-between gap-4 px-1 pt-2">
       <div>
         <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-brand"><span aria-hidden="true" className="size-2 rounded-full bg-accent" />Le point quotidien, ensemble</p>

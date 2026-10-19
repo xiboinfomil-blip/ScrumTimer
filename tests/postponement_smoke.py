@@ -187,10 +187,7 @@ def open_late_checkin(page, db, source, meter_value):
             assert image['left'] >= layout['stack']['left'] - 1 and image['right'] <= layout['stack']['right'] + 1, layout
             assert image['top'] >= layout['stack']['top'] - 1 and image['bottom'] <= layout['stack']['bottom'] + 1, layout
         first, second = layout['images']
-        if page.viewport_size['width'] >= 801:
-            assert first['right'] <= second['left'] + 1 and abs(first['top'] - second['top']) <= 1, ('desktop side-by-side SVGs', layout)
-        else:
-            assert first['bottom'] <= second['top'] + 1, ('phone stacked SVGs', layout)
+        assert first['bottom'] <= second['top'] + 1, ('vertically stacked SVGs', layout)
         page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f"scrum-late-modal-{page.viewport_size['width']}.png"))
     assert db.daily == db.meter and db.daily_posts == [db.meter], 'late modal must not reassign the daily meter'
     no_archive(page, db)
