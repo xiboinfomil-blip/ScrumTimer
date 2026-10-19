@@ -15,6 +15,6 @@ export function PostponedPeople({ timer }: { timer: StandupTimer }) {
         <p className="truncate text-xs font-medium" title={person.name}>{person.name}</p>
       </div>)}
     </div>
-    <Button variant="outlined" className={`${secondaryButton} w-full`} sx={{ minHeight: 44 }} onClick={timer.openLateCheckin}>Retour au baromètre</Button>
+    <Button variant="outlined" className={`${secondaryButton} w-full`} sx={{ minHeight: 44 }} onClick={timer.openLateCheckin}>Renseigner les humeurs</Button>
   </Paper>;
 }

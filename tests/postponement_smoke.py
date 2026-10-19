@@ -1,6 +1,6 @@
 """Postponed/late-vote browser contracts; all APIs mocked, no live Neon writes.
 
-Run only against a current localhost:3000 app. Countdown time is controlled via
+Run against a current local app (BROWSER_TEST_URL overrides localhost:3000). Countdown time is controlled via
 Date.now, while native timers/RAF and new Date (archive timestamps) stay real.
 """
 from copy import deepcopy
@@ -15,6 +15,8 @@ BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000').rstrip('/')
 TEAM_ID = 'a' * 64
 SIZES = [(320, 568), (1366, 768)]
 ORIGINAL = {'meterId': 'original', 'title': 'Baromètre original'}
+REMOTE_SLIDES = ['mood-meters/slides/test/page-1.svg',
+                 'mood-meters/slides/test/page-2.svg']
 INIT = """
 for (const name of ['localStorage', 'sessionStorage']) {
     Object.defineProperty(window, name, {get() {
@@ -58,7 +60,7 @@ class WorkspaceMock:
                    '/api/daily-hints': {'GET'}, '/api/meeting-settings': {'GET'},
                    '/api/mood-meters/catalog': {'GET'}}
         if path == '/api/mood-meters/decks/deck-1234567890abcdef1234' and method == 'GET':
-            route.fulfill(json={'title': 'Même baromètre', 'slides': ['mood-meters/slides/test/page.svg']})
+            route.fulfill(json={'title': 'Même baromètre', 'slides': REMOTE_SLIDES})
             return
         if method not in allowed.get(path, set()):
             self.unexpected.append((method, path))
@@ -132,15 +134,59 @@ def geometry(page, width, height, controls=()):
 
 
 def team_view(page, width):
-    if width <= 800:
-        page.get_by_role('group', name='Panneau du minuteur', exact=True).get_by_role(
-            'button', name='Participants', exact=True).click()
+    page.get_by_role('button', name='Voir le tour de parole', exact=True).click()
+    expect(page.get_by_role('dialog', name='Le tour de parole', exact=True)).to_be_visible()
 
 
 def timer_view(page, width):
+    lineup = page.get_by_role('dialog', name='Le tour de parole', exact=True)
+    if lineup.is_visible():
+        lineup.get_by_role('button', name='Revenir au passage', exact=True).click()
+        expect(lineup).not_to_be_visible()
     if width <= 800:
         page.get_by_role('group', name='Panneau du minuteur', exact=True).get_by_role(
             'button', name='Minuteur', exact=True).click()
+
+
+def open_late_checkin(page, db, source, meter_value):
+    timer_url = page.url
+    assert urlparse(timer_url).path == '/timer', timer_url
+    source.get_by_role('button', name='Renseigner les humeurs', exact=True).click()
+    modal = page.get_by_role('dialog', name='Un instant pour votre humeur', exact=True)
+    expect(modal).to_be_visible()
+    expect(source).not_to_be_visible()
+    expect(page).to_have_url(timer_url)
+    expect(modal.locator('#meter-catalogue-select')).to_have_value(meter_value)
+    expect(modal.locator('#meter-catalogue-select')).to_be_disabled()
+    expect(modal.locator('#random-meter-button')).to_be_disabled()
+    expect(modal.get_by_role('button', name='Humeurs de l’équipe', exact=True)).to_have_count(0)
+    expect(modal.get_by_role('button', name='Humeur 2 pour Alice', exact=True)).to_have_count(0)
+    expect(modal.get_by_role('button', name='Humeur 3 pour Bob', exact=True)).to_be_enabled()
+    assert modal.locator('.late-checkin-list').evaluate('el => el.scrollHeight <= el.clientHeight + 2'), 'Late voting controls must not be clipped'
+    if db.remote:
+        stack = modal.locator('#meter-slide-stack')
+        expect(stack.locator('img')).to_have_count(2)
+        for path in REMOTE_SLIDES:
+            image = stack.locator(f'img[src="/{path}"]')
+            image.scroll_into_view_if_needed()
+            expect(image).to_be_visible()
+            expect(image).to_have_js_property('complete', True)
+            expect(image).not_to_have_js_property('naturalWidth', 0)
+        page.evaluate('async () => { for (let i=0; i<3; i++) await new Promise(requestAnimationFrame); }')
+        geometry(page, page.viewport_size['width'], page.viewport_size['height'], stack.locator('img').all())
+        size = stack.evaluate('el => ({height: el.clientHeight, scroll: el.scrollHeight})')
+        assert size['scroll'] <= size['height'] + 2, ('both SVGs must fit together', size)
+        page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f"scrum-late-modal-{page.viewport_size['width']}.png"))
+    assert db.daily == db.meter and db.daily_posts == [db.meter], 'late modal must not reassign the daily meter'
+    no_archive(page, db)
+    return modal, timer_url
+
+
+def close_late_checkin(page, db, modal, timer_url):
+    modal.get_by_role('button', name='Revenir au tour', exact=True).click()
+    expect(modal).not_to_be_visible()
+    expect(page).to_have_url(timer_url)
+    assert db.daily == db.meter and db.daily_posts == [db.meter]
 
 
 def no_archive(page, db):
@@ -216,17 +262,16 @@ def run_case(browser, width, height, skip=False, late_at_end=False, remote=False
             page.locator('#next-button').click()
             choice = page.get_by_role('dialog', name='Faire passer les personnes reportées ?', exact=True)
             expect(choice).to_be_visible()
-            choice.get_by_role('button', name='Retour au baromètre', exact=True).click()
-            expect(page.locator('#meter-catalogue-select')).to_have_value(meter_value)
-            expect(page.locator('#meter-catalogue-select')).to_be_disabled()
-            if width <= 800:
-                page.get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
-            expect(page.get_by_role('button', name='Humeur 2 pour Alice', exact=True)).to_have_count(0)
-            late_vote = page.get_by_role('button', name='Humeur 4 pour Bob', exact=True)
+            modal, timer_url = open_late_checkin(page, db, choice, meter_value)
+            late_vote = modal.get_by_role('button', name='Humeur 4 pour Bob', exact=True)
+            late_vote.scroll_into_view_if_needed()
             geometry(page, width, height, [late_vote])
+            idle_time = page.locator('#timer-display').inner_text()
+            advance(page, 15)
+            expect(page.locator('#timer-display')).to_have_text(idle_time)
             late_vote.click()
             saved(page)
-            page.get_by_role('button', name='Reprendre le tour en cours', exact=True).click()
+            close_late_checkin(page, db, modal, timer_url)
             expect(choice).not_to_be_visible()
             expect(page.locator('#speaker-name')).to_have_text('Bob')
             expect(page.locator('#status-pill')).to_have_attribute('data-status', 'Prêt à démarrer')
@@ -250,17 +295,14 @@ def run_case(browser, width, height, skip=False, late_at_end=False, remote=False
         dialog = page.get_by_role('dialog', name='Modifier le minuteur', exact=True)
         expect(dialog).to_be_visible()
         expect(page.locator('#status-pill')).to_have_attribute('data-status', 'En pause')
-        dialog.get_by_role('button', name='Retour au baromètre', exact=True).click()
-        expect(page.locator('#meter-catalogue-select')).to_have_value(meter_value)
-        expect(page.locator('#meter-catalogue-select')).to_be_disabled()
-        if width <= 800:
-            page.get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
-        late_vote = page.get_by_role('button', name='Humeur 3 pour Bob', exact=True)
+        modal, timer_url = open_late_checkin(page, db, dialog, meter_value)
+        late_vote = modal.get_by_role('button', name='Humeur 3 pour Bob', exact=True)
         geometry(page, width, height, [late_vote])
         advance(page, 15)
+        expect(page.locator('#timer-display')).to_have_text('01:55')
         late_vote.click()
         saved(page)
-        page.get_by_role('button', name='Reprendre le tour en cours', exact=True).click()
+        close_late_checkin(page, db, modal, timer_url)
         expect(page.locator('#speaker-name')).to_have_text('Alice')
         expect(page.locator('#upcoming-speaker')).to_have_text('Bob')
         expect(page.locator('#timer-display')).to_have_text('01:55')
@@ -309,17 +351,14 @@ def run_case(browser, width, height, skip=False, late_at_end=False, remote=False
             print(f'PASS: {width}x{height} explicit finish without postponed Bob, only Alice archived once')
             return
         advance(page, 20)
-        rejoin = choice.get_by_role('button', name='Retour au baromètre', exact=True)
+        rejoin = choice.get_by_role('button', name='Renseigner les humeurs', exact=True)
         expect(rejoin).to_be_enabled()
         geometry(page, width, height, [rejoin])
         no_archive(page, db)
-        rejoin.click()
-        expect(page.locator('#meter-catalogue-select')).to_have_value(meter_value)
-        if width <= 800:
-            page.get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
-        page.get_by_role('button', name='Humeur 3 pour Bob', exact=True).click()
+        modal, timer_url = open_late_checkin(page, db, choice, meter_value)
+        modal.get_by_role('button', name='Humeur 3 pour Bob', exact=True).click()
         saved(page)
-        page.get_by_role('button', name='Reprendre le tour en cours', exact=True).click()
+        close_late_checkin(page, db, modal, timer_url)
         expect(choice).not_to_be_visible()
         expect(page.locator('#speaker-name')).to_have_text('Bob')
         expect(page.locator('#status-pill')).to_have_attribute('data-status', 'Prêt à démarrer')
@@ -361,7 +400,7 @@ def run_case(browser, width, height, skip=False, late_at_end=False, remote=False
         saved(page)
         assert db.history_posts == [archived] and db.rounds == [archived]
         assert db.writes and not db.unexpected, db.unexpected
-        assert db.daily_posts == [ORIGINAL]
+        assert db.daily_posts == [db.meter]
         assert not errors, errors
         print(f'PASS: {width}x{height} original daily meter, late vote via paused Modifier, '
               'Alice progress retained, Bob postponed/waiting/rejoined, exactly one archive; mocked APIs only')

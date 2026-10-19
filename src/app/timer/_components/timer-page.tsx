@@ -19,6 +19,7 @@ import { TimerManagementDialog } from './timer-management-dialog';
 import { useViewMotion } from '@/hooks/use-view-motion';
 import { useDailyHints } from '@/hooks/use-daily-hints';
 import { roundSpeakers } from '@/lib/timer-completion';
+import { LateCheckinDialog } from './late-checkin-dialog';
 
 export type StandupTimer = ReturnType<typeof useStandupTimer>;
 
@@ -54,18 +55,18 @@ export function TimerPage() {
 
   return (
     <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-1 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh max-w-none! bg-slate-50 p-3 sm:p-6' : 'mx-auto w-full max-w-7xl'} overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
-      <Dialog open={lineupOpen} onClose={() => setLineupOpen(false)} aria-labelledby="lineup-dialog-title" fullWidth maxWidth="sm" slotProps={{ paper: { sx: { height: 'min(640px, calc(100dvh - 32px))', m: 2, width: 'calc(100% - 32px)', borderRadius: '24px' } } }}>
+      <Dialog open={lineupOpen && !timer.lateChecking} onClose={() => setLineupOpen(false)} aria-labelledby="lineup-dialog-title" fullWidth maxWidth="sm" slotProps={{ paper: { sx: { height: 'min(640px, calc(100dvh - 32px))', m: 2, width: 'calc(100% - 32px)', borderRadius: '24px' } } }}>
         <DialogTitle id="lineup-dialog-title">Le tour de parole</DialogTitle>
         <DialogContent className="flex min-h-0 flex-1 flex-col"><p className="mb-3 shrink-0 text-xs text-muted">{timer.focusMode ? 'Votre passage reste sélectionné. Reprenez le minuteur une fois prêt.' : 'Choisissez la personne qui ouvrira le point.'}</p>{lineupOpen && <TeamLineup timer={timer} className="flex-1" />}</DialogContent>
         <DialogActions><Button onClick={() => setLineupOpen(false)} sx={{ minHeight: 44 }}>Revenir au passage</Button></DialogActions>
       </Dialog>
-      <Dialog open={!timer.activeId && timer.people.some(person => person.postponed && !person.done)} aria-labelledby="postponed-choice-title" aria-describedby="postponed-choice-description" fullWidth maxWidth="xs" sx={{ zIndex: 1500 }}>
+      <Dialog open={!timer.lateChecking && !timer.activeId && timer.people.some(person => person.postponed && !person.done)} aria-labelledby="postponed-choice-title" aria-describedby="postponed-choice-description" fullWidth maxWidth="xs" sx={{ zIndex: 1500 }}>
         <DialogTitle id="postponed-choice-title">Faire passer les personnes reportées ?</DialogTitle>
         <DialogContent>
-          <p id="postponed-choice-description" className="mb-3 text-sm text-muted">Les passages disponibles sont terminés. Retournez au même baromètre pour recueillir les humeurs des personnes reportées, puis reprenez ce tour. Sinon, terminez sans elles : elles ne figureront pas au bilan.</p>
+          <p id="postponed-choice-description" className="mb-3 text-sm text-muted">Les passages disponibles sont terminés. Ouvrez le baromètre dans une fenêtre pour recueillir les humeurs des personnes reportées, puis reprenez ce tour. Sinon, terminez sans elles : elles ne figureront pas au bilan.</p>
           {!timer.people.some(person => person.done && !person.postponed) && <p className="mt-2 text-xs text-muted">Au moins un passage doit être terminé pour enregistrer un bilan.</p>}
         </DialogContent>
-        <DialogActions className="flex-wrap gap-1"><Button onClick={timer.openLateCheckin} sx={{ minHeight: 44 }}>Retour au baromètre</Button><Button onClick={timer.finishWithoutPostponed} disabled={!timer.people.some(person => person.done && !person.postponed)} sx={{ minHeight: 44 }}>Terminer sans les personnes en attente</Button></DialogActions>
+        <DialogActions className="flex-wrap gap-1"><Button onClick={timer.openLateCheckin} sx={{ minHeight: 44 }}>Renseigner les humeurs</Button><Button onClick={timer.finishWithoutPostponed} disabled={!timer.people.some(person => person.done && !person.postponed)} sx={{ minHeight: 44 }}>Terminer sans les personnes en attente</Button></DialogActions>
       </Dialog>
       <Dialog open={sharing} onClose={() => setSharing(false)} aria-labelledby="sharing-title" fullWidth maxWidth="xs">
         <DialogTitle id="sharing-title">Diffusion et présentation</DialogTitle>
@@ -98,6 +99,7 @@ export function TimerPage() {
         {!presentation.presenting && <DailyPrompts speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => setView('timer')} className={view !== 'prompts' ? 'max-[800px]:hidden' : ''} />}
       </div>
       <TimerManagementDialog timer={timer} />
+      <LateCheckinDialog timer={timer} />
     </motion.div>
   );
 }

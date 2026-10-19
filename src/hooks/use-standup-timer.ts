@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
 import { TimerAudio } from '@/lib/audio';
@@ -14,7 +13,7 @@ import { recoverTimer, type TimerState } from '@/lib/timer-checkpoint';
 
 export function useStandupTimer() {
   const { state: team, activeTeamId, updateTeam, saveRound, getTimerCheckpoint, storeTimerCheckpoint } = useTeam();
-  const router = useRouter();
+  const [lateChecking, setLateChecking] = useState(false);
   const [checkpoint] = useState(getTimerCheckpoint);
   const roundId = useRef<string | null>(checkpoint?.roundId ?? null);
   const notify = useNotify();
@@ -155,8 +154,9 @@ export function useStandupTimer() {
   const openLateCheckin = useCallback(() => {
     const current = tick();
     commit({ ...current, running: false, managing: false });
-    router.push(`/mood?resume=timer&team=${encodeURIComponent(activeTeamId ?? '')}`);
-  }, [tick, commit, router, activeTeamId]);
+    setLateChecking(true);
+  }, [tick, commit]);
+  const closeLateCheckin = useCallback(() => setLateChecking(false), []);
   const postpone = useCallback((id: string) => {
     const current = tick();
     const target = current.people.find(p => p.id === id);
@@ -191,5 +191,5 @@ export function useStandupTimer() {
     return () => document.removeEventListener('keydown', onKey);
   }, [toggle, next, reset]);
 
-  return { ...timer, person: timer.people.find(p => p.id === timer.activeId), duration: team.duration, warning: team.warning, toggle, reset, next, select, newRound, addTime, setDuration, setWarning, manage, closeManage, postpone, rejoin, finishWithoutPostponed, openLateCheckin };
+  return { ...timer, lateChecking, closeLateCheckin, person: timer.people.find(p => p.id === timer.activeId), duration: team.duration, warning: team.warning, toggle, reset, next, select, newRound, addTime, setDuration, setWarning, manage, closeManage, postpone, rejoin, finishWithoutPostponed, openLateCheckin };
 }
