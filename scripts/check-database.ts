@@ -38,6 +38,27 @@ async function main() {
   }
   const journal = await db.execute(sql`SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations`);
   console.log(`Applied Drizzle migrations: ${journal.rows[0].count}`);
+  // Aggregate-only diagnostics: no names, notes, credentials or team capabilities.
+  // Read directly; application read routes may perform retention housekeeping.
+  const integrity = await db.execute(sql`
+    SELECT
+      (SELECT count(*)::int FROM team_members m LEFT JOIN participants p ON p.team_id=m.team_id AND p.id=m.participant_id WHERE p.id IS NULL) AS orphan_members,
+      (SELECT count(*)::int FROM participant_check_ins c LEFT JOIN team_members m ON m.team_id=c.team_id AND m.participant_id=c.participant_id WHERE m.participant_id IS NULL) AS orphan_check_ins,
+      (SELECT count(*)::int FROM participant_daily_hints h LEFT JOIN participants p ON p.team_id=h.team_id AND p.id=h.participant_id WHERE p.id IS NULL) AS orphan_notes,
+      (SELECT count(*)::int FROM speaking_turns t LEFT JOIN standup_sessions s ON s.team_id=t.team_id AND s.id=t.session_id LEFT JOIN participants p ON p.team_id=t.team_id AND p.id=t.participant_id WHERE s.id IS NULL OR p.id IS NULL) AS orphan_turns,
+      (SELECT count(*)::int FROM round_feedback f LEFT JOIN speaking_turns t ON t.team_id=f.team_id AND t.session_id=f.session_id AND t.participant_id=f.participant_id WHERE t.participant_id IS NULL) AS orphan_feedback,
+      (SELECT count(*)::int FROM standup_sessions s WHERE NOT EXISTS(SELECT 1 FROM speaking_turns t WHERE t.team_id=s.team_id AND t.session_id=s.id)) AS empty_sessions,
+      (SELECT count(*)::int FROM speaking_turns WHERE score IS NOT NULL AND (score NOT BETWEEN 0 AND 1000 OR speaking_seconds < 1 OR budget_seconds <= 0)) AS invalid_scored_turns,
+      (SELECT count(*)::int FROM (SELECT team_id FROM team_members GROUP BY team_id HAVING min(position)<>0 OR max(position)<>count(*)-1) gaps) AS roster_position_gaps,
+      (SELECT count(*)::int FROM (SELECT team_id,session_id FROM speaking_turns GROUP BY team_id,session_id HAVING min(position)<>0 OR max(position)<>count(*)-1) gaps) AS turn_position_gaps
+  `);
+  for (const [name, count] of Object.entries(integrity.rows[0])) {
+    console.log(`Integrity ${name}: ${count}`);
+    if (Number(count) !== 0) throw new Error('Persisted data integrity check failed');
+  }
+  const coverage = await db.execute(sql`SELECT count(*)::int AS total, count(score)::int AS scored,
+    count(*) FILTER (WHERE score IS NULL)::int AS unscored FROM speaking_turns`);
+  console.log(`Archived turns: ${coverage.rows[0].total}; scored: ${coverage.rows[0].scored}; unscored: ${coverage.rows[0].unscored}`);
 }
 main().catch((error: unknown) => {
   // Never log messages, SQL parameters, URLs, credentials or full driver errors.

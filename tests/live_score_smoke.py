@@ -28,7 +28,7 @@ with sync_playwright() as p:
         def history_api(route):
             if route.request.method == 'POST':
                 archived.append(route.request.post_data_json)
-            route.fulfill(json={'rounds': []})
+            route.fulfill(json={'rounds': archived, 'day': mauritius_day()})
         def daily_api(route):
             if route.request.method == 'POST':
                 daily['meter'] = route.request.post_data_json
@@ -107,13 +107,13 @@ with sync_playwright() as p:
         page.locator('#next-button').click()
         expect(page.locator('#speaker-name')).not_to_have_text(first)
         assert_score_free_timer(page)
-        page.clock.run_for(60000)
+        page.clock.run_for(72000)
         assert_score_free_timer(page)
         page.locator('#next-button').click()
         expect(page.get_by_role('button', name='Voir le bilan du jour')).to_be_visible()
         page.get_by_role('button', name='Voir le bilan du jour').click()
         expect(page.get_by_role('heading', name='Bilan enregistré · Classement')).to_be_visible()
-        expect(page.get_by_text('1000 pts', exact=True)).to_be_visible()
+        expect(page.get_by_text('986 pts', exact=True)).to_be_visible()
         expect(page.get_by_text('450 pts', exact=True)).to_be_visible()
         page.get_by_role('button', name=f'Comprendre le score de {first}').click()
         breakdown = page.get_by_role('dialog')
@@ -124,16 +124,22 @@ with sync_playwright() as p:
         breakdown.get_by_role('button', name='Fermer', exact=True).click()
         page.clock.run_for(1000)
         expect(breakdown).not_to_be_visible()
+        # A fresh provider must read the persisted score, not recompute the old plateau.
+        page.reload()
+        page.get_by_role('button', name='Voir le bilan du jour').click()
+        expect(page.get_by_text('986 pts', exact=True)).to_be_visible()
+        expect(page.get_by_text('450 pts', exact=True)).to_be_visible()
+        assert len(archived) == 1, 'Reload must not create another archive'
         page.get_by_role('link', name='Guide d’utilisation', exact=True).click()
         expect(page.get_by_role('heading', name='Guide d’utilisation', exact=True)).to_be_visible()
         assert page.locator('article img').count() == 4
         assert len(archived) == 1, archived
         snapshot = archived[0]
         people = snapshot.get('round', snapshot)['people']
-        assert sorted(person['score'] for person in people) == [450, 1000], people
-        assert sorted(person['speakingSeconds'] for person in people) == [60, 144], people
+        assert sorted(person['score'] for person in people) == [450, 986], people
+        assert sorted(person['speakingSeconds'] for person in people) == [72, 144], people
         assert not errors, errors
         bootstrap.assert_no_unexpected_api()
         context.close()
     browser.close()
-    print('PASS: score-free setup/running/pause/overtime timer, pause/resume/management, archived scores 450/1000 and active times 144/60, ring geometry, timer controls, guide, six sizes and both motion preferences; mocked APIs only')
+    print('PASS: score-free setup/running/pause/overtime timer, pause/resume/management, archived scores 450/986 and active times 144/72, reload readback without duplicate archive, ring geometry, timer controls, guide, six sizes and both motion preferences; mocked APIs only')

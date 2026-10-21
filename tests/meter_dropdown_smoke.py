@@ -6,7 +6,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
-from fullscreen_helpers import emulate_fullscreen
+from browser_bootstrap import install_browser_bootstrap
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 ID = 'a' * 64
@@ -73,8 +73,8 @@ def remote_geometry(page, width, height):
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for width, height in [(320, 568), (390, 844), (768, 1024), (820, 568), (1024, 576), (1366, 768)]:
-        context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce')
-        emulate_fullscreen(context)
+        context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce', service_workers='block')
+        bootstrap = install_browser_bootstrap(context)
         team = {'roster': [{'id': 'alice', 'name': 'Alice', 'present': True, 'mood': None, 'moodUpdatedAt': None}], 'session': [], 'duration': 120, 'warning': 30, 'sound': False, 'usedMoodMeters': [], 'currentMoodSlide': None}
         db = {'revision': 1, 'meter': {'meterId': 'original', 'title': 'Baromètre original'}, 'patches': 0}
         day = (datetime.now(timezone.utc) + timedelta(hours=4)).date().isoformat()
@@ -100,7 +100,7 @@ with sync_playwright() as p:
             elif path.startswith('/api/mood-meters/decks/'):
                 route.fulfill(json={'title': 'Test meter', 'slides': ['mood-meters/slides/test/page-1.svg', 'mood-meters/slides/test/page-2.svg']})
             else:
-                raise AssertionError(path)
+                route.fallback()
         context.route('**/api/**', api)
         context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
         context.route('**/mood-meters/slides/**/*.svg', lambda route: route.fulfill(content_type='image/svg+xml', body='<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"/>'))
@@ -175,6 +175,7 @@ with sync_playwright() as p:
         expect(page.get_by_role('group', name='Humeur de Alice : choisissez de 1 à 4').get_by_role('button')).to_have_text(['1', '2', '3', '4'])
         assert db['patches'] == 4
         assert not errors, errors
+        bootstrap.assert_no_unexpected_api()
         context.close()
         print(f'PASS dropdown change/reload/vote-lock {width}x{height}')
     browser.close()

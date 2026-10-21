@@ -8,7 +8,10 @@ export function timeScore(speakingSeconds: number, budgetSeconds: number) {
   const elapsed = Math.max(0, Math.round(speakingSeconds * 1000) / 1000);
   const ratio = elapsed / budgetSeconds;
   const zone: ScoreZone = ratio < .5 ? 'building' : ratio <= .85 ? 'optimal' : ratio <= 1 ? 'closing' : 'overtime';
-  const base = ratio < .5 ? 1000 * ratio / .5 : ratio <= .85 ? 1000 : ratio <= 1 ? 1000 - 1000 * (ratio - .85) : 850 - 2000 * (ratio - 1);
+  const base = ratio < .5 ? 1000 * ratio / .5
+    : ratio <= .85 ? 1000 - 50 * (ratio - .5) / .35
+      : ratio <= 1 ? 950 - 100 * (ratio - .85) / .15
+        : 850 - 2000 * (ratio - 1);
   return { ratio, zone, points: Math.round(Math.max(0, base)) };
 }
 
@@ -19,9 +22,9 @@ export function explainScore(person: { speakingSeconds: number; budgetSeconds: n
   const lines = [`Temps actif : ${number(person.speakingSeconds)} s sur ${number(person.budgetSeconds)} s, soit ${number(ratio * 100)} % du budget initial. Pauses exclues.`];
   const calculation = zone === 'building'
     ? `Avant 50 % : 1 000 × (${number(person.speakingSeconds)} ÷ ${number(person.budgetSeconds / 2)}) = ${points} pts après arrondi.`
-    : zone === 'optimal' ? 'Entre 50 % et 85 % inclus : 1 000 pts. Parler plus longtemps dans cette zone ne rapporte rien de plus.'
-      : zone === 'closing' ? `Derniers 15 % : 1 000 − (1 000 × ${number(ratio - .85)}) = ${points} pts après arrondi. Retrait de 100 pts par 10 % du budget, soit 850 pts à 100 %.`
-        : `Dépassement de ${number((ratio - 1) * 100)} % : 850 − (2 000 × ${number(ratio - 1)}) = ${points} pts après arrondi, minimum 0. Retrait doublé : 200 pts par 10 % du budget.`;
+    : zone === 'optimal' ? `Entre 50 % et 85 % inclus : 1 000 − (50 × (${number((ratio - .5) * 100)} ÷ 35)) = ${points} pts après arrondi. Baisse linéaire de 1 000 à 950 pts.`
+      : zone === 'closing' ? `Derniers 15 % : 950 − (100 × (${number((ratio - .85) * 100)} ÷ 15)) = ${points} pts après arrondi. Baisse linéaire de 950 à 850 pts à 100 %.`
+        : `Dépassement de ${number((ratio - 1) * 100)} % : 850 − (2 000 × ${number(ratio - 1)}) = ${points} pts après arrondi, minimum 0. Retrait de 200 pts par 10 % du budget.`;
   if (person.attempts !== undefined) {
     const penalty = Math.min(200, Math.max(0, person.attempts - 1) * 100);
     lines.push(calculation, `Relances après réinitialisation : ${Math.max(0, person.attempts - 1)} ; pénalité de ${penalty} pts (100 par relance, plafond 200). Pause/reprise sans pénalité.`, `Total : max(0, ${points} − ${penalty}) = ${person.score} pts.`);

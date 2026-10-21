@@ -4,7 +4,7 @@ import { normalizeTeam, canStartSession, hasValidSession } from '../src/lib/team
 import { shuffle } from '../src/lib/shuffle.ts';
 import { secondsUntil, timerFrame, formatTime, shuffleEligible, timerUrgency } from '../src/lib/timer.ts';
 import { parseMoodMeterCatalog } from '../src/lib/mood-meter.ts';
-import { scoreSpeaker, speakerScoreProgress, explainScore, sessionLeaderboard, sessionStatistics, type SessionSpeaker } from '../src/lib/session-results.ts';
+import { timeScore, scoreSpeaker, speakerScoreProgress, explainScore, sessionLeaderboard, sessionStatistics, type SessionSpeaker } from '../src/lib/session-results.ts';
 import { validateTeamInput } from '../src/lib/team-validation.ts';
 
 test('explicit postponement permits ready teammates without treating waiting members as absent or persisting progress', () => {
@@ -38,7 +38,7 @@ test('leaderboard scores time fairly, excludes unmeasured turns and shares ties 
   const person: SessionSpeaker = { id: 'a', name: 'Alice', present: true, mood: 1, moodUpdatedAt: null, done: true, started: true, speakingSeconds: 50, budgetSeconds: 120, timeUp: false, attempts: 1 };
   assert.equal(scoreSpeaker(person), 833);
   assert.equal(scoreSpeaker({ ...person, mood: 4 }), 833);
-  assert.equal(scoreSpeaker({ ...person, speakingSeconds: 110 }), 933);
+  assert.equal(scoreSpeaker({ ...person, speakingSeconds: 110 }), 906);
   assert.equal(scoreSpeaker({ ...person, speakingSeconds: 3 }), 50);
   assert.equal(scoreSpeaker({ ...person, attempts: 2 }), 733);
   assert.equal(scoreSpeaker({ ...person, attempts: 9 }), 633);
@@ -133,9 +133,9 @@ test('mood slide context preserves safe local references and rejects remote and 
   assert.equal(normalizeTeam({ currentMoodSlide: { ...context, image: '/mood-meters/slides/../a.png' } }).currentMoodSlide, null);
 });
 
-test('scores reach full at half time, decline in the last fifteen percent and double deductions overtime', () => {
+test('scores peak at half time, gently decline through optimal and closing zones and penalize overtime', () => {
   const person: SessionSpeaker = { id: 'a', name: 'Alice', present: true, mood: 1, moodUpdatedAt: null, done: false, started: true, speakingSeconds: 0, budgetSeconds: 120, timeUp: false, attempts: 1 };
-  for (const [seconds, expected, zone] of [[0, 0, 'building'], [15, 250, 'building'], [30, 500, 'building'], [59.9, 998, 'building'], [60, 1000, 'optimal'], [102, 1000, 'optimal'], [108, 950, 'closing'], [120, 850, 'closing'], [120.1, 848, 'overtime'], [132, 650, 'overtime'], [144, 450, 'overtime'], [171, 0, 'overtime'], [240, 0, 'overtime'], [1000, 0, 'overtime']] as const) {
+  for (const [seconds, expected, zone] of [[0, 0, 'building'], [15, 250, 'building'], [30, 500, 'building'], [59.9, 998, 'building'], [60, 1000, 'optimal'], [72, 986, 'optimal'], [90, 964, 'optimal'], [102, 950, 'optimal'], [108, 917, 'closing'], [120, 850, 'closing'], [120.1, 848, 'overtime'], [132, 650, 'overtime'], [144, 450, 'overtime'], [171, 0, 'overtime'], [240, 0, 'overtime'], [1000, 0, 'overtime']] as const) {
     const active = { ...person, speakingSeconds: seconds };
     assert.deepEqual(speakerScoreProgress(active), { score: expected, zone });
     assert.equal(scoreSpeaker(active), null);
@@ -146,6 +146,33 @@ test('scores reach full at half time, decline in the last fifteen percent and do
   assert.equal(speakerScoreProgress({ ...person, speakingSeconds: Infinity }).score, null);
   assert.equal(scoreSpeaker({ ...person, done: true, speakingSeconds: 120, attempts: 2 }), 750);
   assert.equal(scoreSpeaker({ ...person, done: true, speakingSeconds: 240, attempts: 5 }), 0);
+});
+
+test('score slopes are continuous at boundaries, budget-relative and nonincreasing after the peak', () => {
+  for (const [seconds, points] of [[60, 1000], [102, 950], [120, 850], [171, 0]]) {
+    assert.equal(timeScore(seconds - .001, 120).points, points);
+    assert.equal(timeScore(seconds, 120).points, points);
+    assert.equal(timeScore(seconds + .001, 120).points, points);
+  }
+  let previous = 1000;
+  for (let seconds = 60; seconds <= 240; seconds += .25) {
+    const { points } = timeScore(seconds, 120);
+    assert.ok(Number.isInteger(points) && points >= 0 && points <= 1000);
+    assert.ok(points <= previous);
+    assert.equal(timeScore(seconds / 2, 60).points, points);
+    previous = points;
+  }
+});
+
+test('optimal-zone durations differentiate rankings while identical inputs retain shared ranks and retry penalties', () => {
+  const person: SessionSpeaker = { id: 'a', name: 'Alice', present: true, mood: 1, moodUpdatedAt: null, done: true, started: true, speakingSeconds: 72, budgetSeconds: 120, timeUp: false, attempts: 1 };
+  const ranked = sessionLeaderboard([person, { ...person, id: 'b', speakingSeconds: 90 }, { ...person, id: 'c', speakingSeconds: 102 }, { ...person, id: 'd' }]);
+  assert.deepEqual(ranked.map(({ id, score, rank }) => ({ id, score, rank })), [
+    { id: 'a', score: 986, rank: 1 }, { id: 'd', score: 986, rank: 1 },
+    { id: 'b', score: 964, rank: 3 }, { id: 'c', score: 950, rank: 4 },
+  ]);
+  assert.equal(scoreSpeaker({ ...person, attempts: 2 }), 886);
+  assert.equal(scoreSpeaker({ ...person, attempts: 9 }), 786);
 });
 
 test('signed deadline frames measure overtime and pauses without interval-count drift', () => {
@@ -167,10 +194,15 @@ test('individual score explanations show arithmetic and never invent archived re
   const overtime = explainScore({ speakingSeconds: 144, budgetSeconds: 120, score: 450, attempts: 1 }).join(' ');
   assert.match(overtime, /Dépassement de 20 %/);
   assert.match(overtime, /450 pts après arrondi/);
-  assert.match(explainScore({ speakingSeconds: 108, budgetSeconds: 120, score: 950, attempts: 1 }).join(' '), /Derniers 15 %/);
+  assert.match(explainScore({ speakingSeconds: 90, budgetSeconds: 120, score: 964, attempts: 1 }).join(' '), /1 000 − \(50 × \(25 ÷ 35\)\) = 964 pts/);
+  assert.match(explainScore({ speakingSeconds: 108, budgetSeconds: 120, score: 917, attempts: 1 }).join(' '), /950 − \(100 × \(5 ÷ 15\)\) = 917 pts/);
   const archive = explainScore({ speakingSeconds: 60, budgetSeconds: 120, score: 867 }).join(' ');
   assert.match(archive, /Score enregistré : 867 pts/);
   assert.match(archive, /-133 pts/);
   assert.match(archive, /ne peut donc pas être attribué avec certitude/);
+  const oldPlateau = explainScore({ speakingSeconds: 102, budgetSeconds: 120, score: 1000 }).join(' ');
+  assert.match(oldPlateau, /Score enregistré : 1000 pts/);
+  assert.match(oldPlateau, /Écart avec le score de temps actuel : 50 pts/);
+  assert.match(oldPlateau, /Le score enregistré n’est pas recalculé/);
   assert.match(explainScore({ speakingSeconds: 0, budgetSeconds: 120, score: null })[0], /aucun score attribué/);
 });

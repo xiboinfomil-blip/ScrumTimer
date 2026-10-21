@@ -5,6 +5,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
+from browser_bootstrap import install_browser_bootstrap, mauritius_day, team_fixture
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]
@@ -17,8 +18,7 @@ NO_STORAGE = """for (const name of ['localStorage', 'sessionStorage']) Object.de
 
 
 def empty_team():
-    return {'roster': [], 'session': [], 'duration': 120, 'warning': 30,
-            'sound': False, 'usedMoodMeters': [], 'currentMoodSlide': None}
+    return team_fixture()
 
 
 class WorkspaceMock:
@@ -30,7 +30,7 @@ class WorkspaceMock:
         self.teams = {DEFAULT_ID: {'name': 'Mon équipe', 'team': initial, 'revision': 1}}
         self.active = DEFAULT_ID
         # Keep mocked day independent of the browser's timezone (Mauritius UTC+4).
-        self.day = (datetime.now(timezone.utc) + timedelta(hours=4)).date().isoformat()
+        self.day = mauritius_day()
         self.daily = {}
         self.requests = []
         self.daily_posts = []
@@ -52,6 +52,10 @@ class WorkspaceMock:
         path, method = urlparse(request.url).path, request.method
         team_id = request.headers.get('x-team-id')
         self.requests.append((path, method, team_id))
+        if path not in ('/api/teams', '/api/team', '/api/history', '/api/daily-meter',
+                        '/api/daily-hints', '/api/meeting-settings'):
+            route.fallback()
+            return
         if path == '/api/teams':
             if method == 'POST':
                 body = request.post_data_json
@@ -92,6 +96,12 @@ class WorkspaceMock:
             else:
                 assert method == 'GET'
                 route.fulfill(json={'rounds': deepcopy(rounds), 'day': self.day})
+        elif path == '/api/daily-hints':
+            assert method == 'GET', 'Master must not edit participant notes'
+            route.fulfill(json={'day': self.day, 'hints': []})
+        elif path == '/api/meeting-settings':
+            assert method == 'GET'
+            route.fulfill(json={'prompts': ['Hier ?', 'Aujourd’hui ?', 'Des blocages ?'], 'revision': 0})
         elif path == '/api/daily-meter':
             key = (team_id, self.day)
             if method in ('POST', 'PATCH'):
@@ -127,23 +137,47 @@ def people_panel(page, width):
         page.get_by_role('group', name='Panneau du bilan', exact=True).get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
 
 
-def meter_locked(page, meter, day):
+def meter_locked(page, db, team_id, meter, day):
     select = page.locator('#meter-catalogue-select')
     expect(select).to_be_disabled()
     expect(select.locator('option:checked')).to_contain_text(meter['title'])
     expect(page.locator('#random-meter-button')).to_be_disabled()
-    expect(page.locator('#daily-meter-note')).to_contain_text(day)
     expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé après le premier vote')
+    assert db.day == day and db.daily[(team_id, day)] == meter
 
 
-def meter_editable(page, day):
+def meter_editable(page, db, team_id, day):
     expect(page.locator('#meter-catalogue-select')).to_be_enabled()
     expect(page.get_by_role('button', name='Afficher un autre baromètre au hasard', exact=True)).to_be_enabled()
-    expect(page.locator('#daily-meter-note')).to_contain_text(day)
-    expect(page.locator('#daily-meter-note')).to_contain_text('Choisissez dans la liste avant le premier vote')
+    expect(page.locator('#daily-meter-note')).to_contain_text('Commun à l’équipe · Modifiable avant le premier vote.')
+    assert db.day == day and (team_id, day) in db.daily
+
+
+def read_history(page, db, team_id):
+    # Read through browser interception, never APIRequestContext/live Neon.
+    result = page.evaluate("""async id => {
+        const response = await fetch('/api/history', {headers: {'X-Team-Id': id}});
+        return {status: response.status, body: await response.json()};
+    }""", team_id)
+    assert result == {'status': 200, 'body': {'rounds': db.rounds[team_id], 'day': db.day}}
+    return result['body']['rounds']
+
+
+def daily_readback(page, person, other):
+    expect(page.get_by_role('heading', name='Bilan du jour', exact=True)).to_be_visible()
+    page.get_by_role('button', name='Voir le bilan du jour', exact=True).click()
+    scores = page.locator('.daily-score-list')
+    expect(scores.get_by_text(person, exact=True)).to_be_visible()
+    expect(scores.get_by_text(other, exact=True)).to_have_count(0)
+    expect(scores.locator('[data-daily-person]')).to_have_count(1)
 
 
 def choose_team(page, current, target, query, width):
+    # Leave guarded mood/timer (including its completed-day replacement) before
+    # changing context, as in the current team-context journey.
+    page.get_by_role('link', name='Participants', exact=True).click()
+    expect(page.locator('#participants-page')).to_be_visible()
+    expect(page).to_have_url(re.compile(r'/participants\?team=[a-f0-9]{64}$'))
     switcher(page, current).click()
     panel = page.get_by_role('region', name='Choisir ou créer une équipe', exact=True)
     expect(panel).to_be_visible()
@@ -168,6 +202,7 @@ with sync_playwright() as p:
     browser = p.chromium.launch()
     for width, height in SIZES:
         context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce', service_workers='block')
+        bootstrap = install_browser_bootstrap(context)
         context.add_init_script(NO_STORAGE)
         db = WorkspaceMock()
         context.route('**/api/**', db.api)
@@ -192,26 +227,26 @@ with sync_playwright() as p:
         expect(page.locator('#meter-catalogue-select')).to_have_value('0')
         first_meter = deepcopy(db.daily[(DEFAULT_ID, db.day)])
         assert first_meter == {'meterId': NEW_ID, 'title': 'New meter'}
-        meter_editable(page, db.day)
+        meter_editable(page, db, DEFAULT_ID, db.day)
         # Manual and load-time choices use PATCH without another initialization
         # POST or historical round; refresh randomizes only before votes.
         page.locator('#meter-catalogue-select').select_option('-2')
-        meter_editable(page, db.day)
+        meter_editable(page, db, DEFAULT_ID, db.day)
         assert db.daily[(DEFAULT_ID, db.day)] == {'meterId': 'original', 'title': 'Baromètre original'}
         page.reload()
         expect(page.locator('#meter-catalogue-select')).to_have_value('0')
-        meter_editable(page, db.day)
+        meter_editable(page, db, DEFAULT_ID, db.day)
         page.locator('#meter-catalogue-select').select_option('0')
-        meter_editable(page, db.day)
+        meter_editable(page, db, DEFAULT_ID, db.day)
         assert db.daily[(DEFAULT_ID, db.day)] == first_meter
         assert len(db.daily_patches) == 2
         people_panel(page, width)
         page.get_by_role('button', name='Humeur 2 pour Alice <safe>', exact=True).click()
         saved(page)
         assert db.teams[DEFAULT_ID]['team']['roster'][0]['mood'] == 2
-        meter_locked(page, first_meter, db.day)
+        meter_locked(page, db, DEFAULT_ID, first_meter, db.day)
         page.reload()
-        meter_locked(page, first_meter, db.day)
+        meter_locked(page, db, DEFAULT_ID, first_meter, db.day)
         assert len(db.daily_posts) == 1, db.daily_posts
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
 
@@ -247,18 +282,20 @@ with sync_playwright() as p:
         assert [person['name'] for person in db.teams[CREATED_ID]['team']['roster']] == ['Bob <safe>']
         assert [person['name'] for person in db.teams[DEFAULT_ID]['team']['roster']] == ['Alice <safe>']
         expect(switcher(page, 'Équipe Bêta').get_by_label('1 membres', exact=True)).to_have_count(1)
-        page.get_by_role('link', name='Statistiques', exact=True).click()
-        page.get_by_text('Historique chargé depuis Neon', exact=False).wait_for()
-        expect(page.locator('dd').first).to_have_text('0')
-        expect(page.get_by_role('list', name='Classement des participants', exact=True)).to_have_count(0)
+        assert read_history(page, db, CREATED_ID) == []
+        expect(page.get_by_role('link', name='Voir le bilan ou réinitialiser', exact=True)).to_have_count(0)
+        page.reload()
+        saved(page)
+        expect(page.get_by_text('Bob <safe>', exact=True)).to_be_visible()
+        assert read_history(page, db, CREATED_ID) == []
 
         page.get_by_role('link', name='Humeurs', exact=True).click()
-        meter_editable(page, db.day)
+        meter_editable(page, db, CREATED_ID, db.day)
         second_meter = deepcopy(db.daily[(CREATED_ID, db.day)])
         people_panel(page, width)
         page.get_by_role('button', name='Humeur 2 pour Bob <safe>', exact=True).click()
         saved(page)
-        meter_locked(page, second_meter, db.day)
+        meter_locked(page, db, CREATED_ID, second_meter, db.day)
         expect(page.get_by_role('button', name='Humeur 2 pour Bob <safe>', exact=True)).to_have_attribute('aria-pressed', 'true')
         page.get_by_role('button', name='Continuer vers le minuteur', exact=False).click()
         page.get_by_role('button', name='Démarrer', exact=True).click()
@@ -270,25 +307,24 @@ with sync_playwright() as p:
         assert db.rounds[CREATED_ID][0]['people'][0]['name'] == 'Bob <safe>'
         assert db.rounds[CREATED_ID][0]['people'][0]['speakingSeconds'] >= 1
         assert len(db.rounds[DEFAULT_ID]) == 1
-        page.get_by_role('link', name='Statistiques', exact=True).click()
-        page.get_by_text('Historique chargé depuis Neon', exact=False).wait_for()
-        leaderboard = page.get_by_role('list', name='Classement des participants', exact=True)
-        expect(leaderboard.get_by_text('Bob <safe>', exact=True)).to_be_visible()
-        expect(leaderboard.get_by_text('Alice <safe>', exact=True)).to_have_count(0)
+        bob_round = deepcopy(db.rounds[CREATED_ID])
+        assert read_history(page, db, CREATED_ID) == bob_round
+        daily_readback(page, 'Bob <safe>', 'Alice <safe>')
         page.reload()
-        page.get_by_text('Historique chargé depuis Neon', exact=False).wait_for()
+        saved(page)
         expect(switcher(page, 'Équipe Bêta')).to_be_enabled()
-        expect(leaderboard.get_by_text('Bob <safe>', exact=True)).to_be_visible()
+        daily_readback(page, 'Bob <safe>', 'Alice <safe>')
+        assert read_history(page, db, CREATED_ID) == bob_round
 
         choose_team(page, 'Équipe Bêta', 'Mon équipe', 'MON EQUIPE', width)
         expect(page.get_by_text('Alice <safe>', exact=True)).to_be_visible()
         expect(page.get_by_text('Bob <safe>', exact=True)).to_have_count(0)
-        page.get_by_role('link', name='Statistiques', exact=True).click()
-        page.get_by_text('Historique chargé depuis Neon', exact=False).wait_for()
-        expect(leaderboard.get_by_text('Alice <safe>', exact=True)).to_be_visible()
-        expect(leaderboard.get_by_text('Bob <safe>', exact=True)).to_have_count(0)
+        alice_rounds = read_history(page, db, DEFAULT_ID)
+        assert len(alice_rounds) == 1 and alice_rounds[0]['id'] == 'alice-history'
+        assert [person['name'] for person in alice_rounds[0]['people']] == ['Alice <safe>']
+        expect(page.get_by_role('link', name='Voir le bilan ou réinitialiser', exact=True)).to_have_count(0)
         page.get_by_role('link', name='Humeurs', exact=True).click()
-        meter_locked(page, first_meter, db.day)
+        meter_locked(page, db, DEFAULT_ID, first_meter, db.day)
         choose_team(page, 'Mon équipe', 'Équipe Bêta', 'equipe beta', width)
         expect(page.get_by_text('Bob <safe>', exact=True)).to_be_visible()
         expect(page.get_by_text('Alice <safe>', exact=True)).to_have_count(0)
@@ -298,6 +334,7 @@ with sync_playwright() as p:
         posts_before_reload = len(db.daily_posts)
         page.reload()
         expect(page.get_by_role('region', name='Point quotidien du jour', exact=True)).to_be_visible()
+        assert read_history(page, db, CREATED_ID) == bob_round
         assert len(db.daily_posts) == posts_before_reload
 
         # A new Mauritius calendar day has its own assignment; yesterday is immutable.
@@ -308,12 +345,14 @@ with sync_playwright() as p:
         for person in db.teams[CREATED_ID]['team']['roster']:
             person.update(mood=None, moodUpdatedAt=None, moodSlide=None)
         page.reload()
-        meter_editable(page, db.day)
+        meter_editable(page, db, CREATED_ID, db.day)
+        assert read_history(page, db, CREATED_ID) == bob_round
+        expect(page.get_by_role('region', name='Point quotidien du jour', exact=True)).to_have_count(0)
         today_meter = deepcopy(db.daily[(CREATED_ID, db.day)])
         people_panel(page, width)
         page.get_by_role('button', name='Humeur 2 pour Bob <safe>', exact=True).click()
         saved(page)
-        meter_locked(page, today_meter, db.day)
+        meter_locked(page, db, CREATED_ID, today_meter, db.day)
         assert today_meter['meterId'] != second_meter['meterId']
         assert db.daily[(CREATED_ID, yesterday)] == second_meter
         assert db.daily[(DEFAULT_ID, yesterday)] == first_meter
@@ -328,6 +367,7 @@ with sync_playwright() as p:
         assert ('/api/daily-meter', 'PATCH', DEFAULT_ID) in db.requests
         assert len(db.daily_patches) == 2
         assert not errors, (width, errors)
+        bootstrap.assert_no_unexpected_api()
         context.close()
         print(f'PASS: {width}x{height} multiteam creation/search/switch, isolated members/history/headers, daily lock/reload/first-write-wins/day rollover')
     browser.close()
