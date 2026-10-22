@@ -1,31 +1,40 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="720" height="360" viewBox="0 0 720 360" role="img" aria-labelledby="title desc">
 	<title id="title">Comprendre les points en fin de tour</title>
-	<desc id="desc">Progression linéaire de 0 à 1 000 points à 50 % du budget, puis baisse linéaire à 950 points à 85 % inclus et à 850 points à 100 %. Ensuite, depuis 850 points, perte de 200 points par 10 % du budget total, plancher zéro à 142,5 %. Relances : moins 100 points chacune, maximum 200. Aucun score en direct.</desc>
+	<desc id="desc">Référence fixe en secondes de temps actif, indépendante du budget configuré même différent de 120 secondes. Moins d’une seconde : non mesuré ; jusqu’à 5 secondes incluses : grâce à zéro. Après 5 secondes : maximum de 125 et (temps moins 5) fois 10, jusqu’à 1 000 points à 105 secondes. Puis moins 5 points par seconde jusqu’à 110 secondes (975), moins 10 jusqu’à 115 (925), moins 15 jusqu’à 120 (850). Après 120 : moins 50 par tranche complète de 10 secondes, plancher 125 dès 270 secondes. Exemples : 30 secondes 250 points, 60 secondes 550, 130 secondes 800, 140 secondes 750. Relances : moins 100 chacune, maximum 200, sans descendre sous 125 après 5 secondes ; grâce à zéro conservée. Pauses exclues. Archives inchangées. Aucun score en direct.</desc>
 	<rect width="720" height="360" rx="24" fill="#f1f5f9"/>
 	<g font-family="Arial,sans-serif">
 		<rect x="28" y="20" width="664" height="324" rx="16" fill="white"/>
 		<text x="52" y="52" fill="#205f9d" font-size="23" font-weight="bold">Comprendre les points</text>
-		<text x="52" y="75" fill="#64748b" font-size="13">Fin de tour et historique uniquement · hors pénalités de relance</text>
-		<path d="M88 101V260H640" fill="none" stroke="#94a3b8" stroke-width="2"/>
-		<rect x="90" y="109" width="180" height="149" fill="#fff4db"/>
-		<rect x="270" y="109" width="126" height="149" fill="#edf9f2"/>
-		<rect x="396" y="109" width="54" height="149" fill="#fff4db"/>
-		<rect x="450" y="109" width="180" height="149" fill="#fceceb"/>
-		<path d="M90 258L270 114" fill="none" stroke="#b86910" stroke-width="5"/>
-		<path d="M270 114L396 121.2" fill="none" stroke="#147d52" stroke-width="5"/>
-		<path d="M396 121.2L450 135.6" fill="none" stroke="#b86910" stroke-width="5"/>
-		<path d="M450 135.6L603 258H630" fill="none" stroke="#b42318" stroke-width="5"/>
+		<text x="52" y="75" fill="#64748b" font-size="13">Référence fixe en secondes · indépendante du budget configuré</text>
+		<rect x="80" y="100" width="210" height="150" fill="#edf9f2"/>
+		<rect x="290" y="100" width="30" height="150" fill="#fff4db"/>
+		<rect x="320" y="100" width="360" height="150" fill="#fceceb"/>
+		<path d="M80 110H680M80 180H680M80 232.5H680" fill="none" stroke="#cbd5e1" stroke-dasharray="3 4"/>
+		<path d="M80 100V250H680" fill="none" stroke="#94a3b8" stroke-width="2"/>
+		<!-- Échelles : x = 80 + 2 × secondes ; y = 250 − 0,14 × points. -->
+		<path d="M80 250H90" fill="none" stroke="#205f9d" stroke-width="3"/>
+		<circle cx="90" cy="250" r="3" fill="#205f9d"/>
+		<path d="M90 232.5H115L290 110" fill="none" stroke="#147d52" stroke-width="3"/>
+		<circle cx="90" cy="232.5" r="3" fill="white" stroke="#147d52" stroke-width="2"/>
+		<path d="M290 110L300 113.5L310 120.5L320 131" fill="none" stroke="#b86910" stroke-width="3"/>
+		<path d="M320 131H340V138H360V145H380V152H400V159H420V166H440V173H460V180H480V187H500V194H520V201H540V208H560V215H580V222H600V229H620V232.5H680" fill="none" stroke="#b42318" stroke-width="3"/>
 		<g fill="#475569" font-size="12" text-anchor="middle">
-			<text x="58" y="118">1 000</text><text x="72" y="262">0</text>
-			<text x="90" y="279">0 %</text><text x="270" y="279">50 %</text>
-			<text x="396" y="279">85 %</text><text x="450" y="279">100 %</text><text x="603" y="279">142,5 %</text>
+			<text x="55" y="114">1 000</text><text x="55" y="184">500</text>
+			<text x="55" y="236.5">125</text><text x="64" y="254">0</text>
+			<text x="80" y="268">0</text><text x="200" y="268">60</text>
+			<text x="320" y="268">120</text><text x="440" y="268">180</text>
+			<text x="560" y="268">240</text><text x="680" y="268">300</text>
 		</g>
-		<text x="333" y="150" text-anchor="middle" fill="#147d52" font-size="14" font-weight="bold">1 000 → 950 pts</text>
-		<text x="462" y="126" fill="#b42318" font-size="13" font-weight="bold">850 pts à 100 %</text>
-		<text x="294" y="188" fill="#b86910" font-size="13">85–100 % : 950 → 850 pts</text>
-		<text x="385" y="222" fill="#b42318" font-size="13">Après 100 % : −200 pts / 10 %</text>
-		<text x="52" y="301" fill="#64748b" font-size="12">Pourcentages du budget total initial · plancher 0 · relance −100 pts (max. 200)</text>
-		<text x="52" y="319" fill="#64748b" font-size="12">Budget 120 s : 30 s → 500 · 60 s → 1 000 · 72 s → 986 · 90 s → 964 pts</text>
-		<text x="52" y="335" fill="#64748b" font-size="12">102 s → 950 · 108 s → 917 · 120 s → 850 · 132 s → 650 · 171 s et plus → 0 pt</text>
+		<path d="M200 250V254M320 250V254M440 250V254M560 250V254M680 250V254" stroke="#94a3b8"/>
+		<text x="52" y="96" fill="#475569" font-size="11">Points</text>
+		<text x="380" y="286" text-anchor="middle" fill="#475569" font-size="12">Temps actif (secondes) · pauses exclues</text>
+		<text x="236" y="96" fill="#147d52" font-size="12" font-weight="bold">105 s : 1 000</text>
+		<text x="335" y="118" fill="#b86910" font-size="12">120 s : 850</text>
+		<text x="390" y="147" fill="#b42318" font-size="12">−50 / 10 s complètes après 120 s</text>
+		<text x="536" y="219" fill="#b42318" font-size="12">270 s et plus : 125</text>
+		<text x="98" y="216" fill="#205f9d" font-size="11">≤ 5 s : 0 ; ensuite ≥ 125</text>
+		<text x="52" y="304" fill="#64748b" font-size="11">Hors relances : 30 s → 250 · 60 s → 550 · 105 s → 1 000 · 110 s → 975 · 115 s → 925</text>
+		<text x="52" y="320" fill="#64748b" font-size="11">120 s → 850 · 130 s → 800 · 140 s → 750 · 270 s → 125 · archives inchangées</text>
+		<text x="52" y="336" fill="#64748b" font-size="11">Relance −100 (max. 200), minimum 125 après 5 s ; grâce 0 · moins de 1 s : non mesuré</text>
 	</g>
 </svg>

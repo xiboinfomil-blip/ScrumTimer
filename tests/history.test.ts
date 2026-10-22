@@ -104,7 +104,7 @@ test('daily summary fills empty days and does not call unmeasured skips on time'
 test('round snapshot retains stable id, meter label and calculated score', () => {
   const result = completedRound('stable-round', [{ id: 'a', name: '<b>Alice</b>', mood: 1, present: true, moodUpdatedAt: null, moodSlide: { title: 'Used deck', image: '/mood-meters/slides/deck/1.svg', slideNumber: 1 }, done: true, started: true, speakingSeconds: 30, budgetSeconds: 120, timeUp: false, attempts: 1 }]);
   assert.equal(result.id, 'stable-round');
-  assert.equal(result.people[0].score, 500);
+  assert.equal(result.people[0].score, 250);
   assert.equal(result.people[0].meterTitle, 'Used deck');
   assert.equal(normalizeHistory([result]).length, 1);
 });

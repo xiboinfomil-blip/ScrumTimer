@@ -36,6 +36,7 @@ class LoadingMock(MockMeeting):
         self.held = set()
         self.pending = {}
         self.requests = []
+        self.read_failures = {}
 
     def api(self, route):
         request = route.request
@@ -44,6 +45,10 @@ class LoadingMock(MockMeeting):
         if request.method == 'GET' and path in self.held:
             self.pending.setdefault(path, []).append(route)
             return  # Never continue/fallback to the real server.
+        if request.method == 'GET' and path in self.read_failures:
+            route.fulfill(status=self.read_failures[path],
+                          json={'error': 'Chargement mock indisponible'})
+            return
         super().api(route)
 
     def hold(self, *paths):
@@ -210,11 +215,21 @@ def mood_case(browser, mock, width, height):
     mock.release('/api/daily-meter')
     page.wait_for_timeout(100)
     static_skeleton(page, 'mood')
+    # A single 503 is automatically retried and would then receive the base
+    # fixture's successful empty catalogue. Keep the outage active through all
+    # three retries so this actually exercises the terminal error/manual retry.
+    mock.read_failures['/api/mood-meters/catalog'] = 503
     mock.release('/api/mood-meters/catalog', 503)
     expect(page.get_by_role('button', name='Réessayer le catalogue', exact=True)).to_be_visible()
+    assert mock.count_requests('/api/mood-meters/catalog') == 4
     expect(page.locator('[data-page-skeleton="mood"]')).to_have_count(0)
     expect(page.locator('#daily-meter-note')).to_contain_text('indisponible')
+    expect(page.locator('#meter-source-note')).to_contain_text('Chargement mock indisponible')
+    expect(page.locator('#default-mood-meter')).to_have_count(0)
+    expect(page.locator('#meter-catalogue-select')).to_be_disabled()
+    expect(page.locator('#random-meter-button')).to_be_disabled()
     mock.hold('/api/mood-meters/catalog', '/api/daily-meter')
+    mock.read_failures.clear()
     page.get_by_role('button', name='Réessayer le catalogue', exact=True).click()
     mock.wait_pending(page, '/api/mood-meters/catalog', '/api/daily-meter')
     static_skeleton(page, 'mood')
@@ -222,6 +237,15 @@ def mood_case(browser, mock, width, height):
     mock.release('/api/daily-meter')
     expect(page.locator('#default-mood-meter')).to_be_visible()
     expect(page.locator('[data-page-skeleton="mood"]')).to_have_count(0)
+    expect(page.get_by_role('button', name='Réessayer le catalogue', exact=True)).to_have_count(0)
+    expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé après le premier vote')
+    expect(page.locator('#meter-catalogue-select')).to_have_value('-2')
+    expect(page.locator('#meter-catalogue-select')).to_be_disabled()
+    expect(page.locator('#random-meter-button')).to_be_disabled()
+    assert mock.count_requests('/api/mood-meters/catalog') == 5
+    assert mock.count_requests('/api/daily-meter') == 2
+    assert not any(method != 'GET' and path == '/api/daily-meter'
+                   for method, path in mock.requests), 'retry changed the voted daily meter'
 
 
 def prompts_case(browser, mock, width, height):

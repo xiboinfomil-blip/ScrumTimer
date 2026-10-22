@@ -7,12 +7,15 @@ export type ScoreZone = 'waiting' | 'building' | 'optimal' | 'closing' | 'overti
 export function timeScore(speakingSeconds: number, budgetSeconds: number) {
   const elapsed = Math.max(0, Math.round(speakingSeconds * 1000) / 1000);
   const ratio = elapsed / budgetSeconds;
-  const zone: ScoreZone = ratio < .5 ? 'building' : ratio <= .85 ? 'optimal' : ratio <= 1 ? 'closing' : 'overtime';
-  const base = ratio < .5 ? 1000 * ratio / .5
-    : ratio <= .85 ? 1000 - 50 * (ratio - .5) / .35
-      : ratio <= 1 ? 950 - 100 * (ratio - .85) / .15
-        : 850 - 2000 * (ratio - 1);
-  return { ratio, zone, points: Math.round(Math.max(0, base)) };
+  // Fixed two-minute scoring reference, independent of the configured timer budget.
+  const zone: ScoreZone = elapsed <= 30 ? 'building' : elapsed <= 105 ? 'optimal' : elapsed <= 120 ? 'closing' : 'overtime';
+  const closing = Math.max(0, elapsed - 105);
+  const base = elapsed <= 105 ? (elapsed - 5) * 10
+    : elapsed <= 120 ? 1000 - 5 * Math.min(closing, 5)
+      - 10 * Math.min(Math.max(closing - 5, 0), 5)
+      - 15 * Math.min(Math.max(closing - 10, 0), 5)
+      : 850 - 50 * Math.floor((elapsed - 120) / 10);
+  return { ratio, zone, points: elapsed <= 5 ? 0 : Math.round(Math.max(125, Math.min(1000, base))) };
 }
 
 export function explainScore(person: { speakingSeconds: number; budgetSeconds: number; score: number | null; attempts?: number }) {
@@ -20,14 +23,15 @@ export function explainScore(person: { speakingSeconds: number; budgetSeconds: n
   const { ratio, zone, points } = timeScore(person.speakingSeconds, person.budgetSeconds);
   const number = (value: number) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(value);
   const lines = [`Temps actif : ${number(person.speakingSeconds)} s sur ${number(person.budgetSeconds)} s, soit ${number(ratio * 100)} % du budget initial. Pauses exclues.`];
-  const calculation = zone === 'building'
-    ? `Avant 50 % : 1 000 × (${number(person.speakingSeconds)} ÷ ${number(person.budgetSeconds / 2)}) = ${points} pts après arrondi.`
-    : zone === 'optimal' ? `Entre 50 % et 85 % inclus : 1 000 − (50 × (${number((ratio - .5) * 100)} ÷ 35)) = ${points} pts après arrondi. Baisse linéaire de 1 000 à 950 pts.`
-      : zone === 'closing' ? `Derniers 15 % : 950 − (100 × (${number((ratio - .85) * 100)} ÷ 15)) = ${points} pts après arrondi. Baisse linéaire de 950 à 850 pts à 100 %.`
-        : `Dépassement de ${number((ratio - 1) * 100)} % : 850 − (2 000 × ${number(ratio - 1)}) = ${points} pts après arrondi, minimum 0. Retrait de 200 pts par 10 % du budget.`;
+  const elapsed = Math.max(0, Math.round(person.speakingSeconds * 1000) / 1000);
+  lines.push('Barème fixe de référence : 120 s, même si le budget du minuteur est différent.');
+  const calculation = elapsed <= 5 ? 'Les 5 premières secondes : 0 pt.'
+    : zone === 'building' || zone === 'optimal' ? `Jusqu’à 105 s : max(125, (${number(elapsed)} − 5) × 10) = ${points} pts après arrondi. Pic de 1 000 pts à 105 s.`
+      : zone === 'closing' ? `De 105 à 120 s : depuis 1 000 pts, retrait par seconde de 5 pts pendant 5 s, puis 10 pts pendant 5 s, puis 15 pts pendant 5 s = ${points} pts après arrondi. 850 pts à 120 s.`
+        : `Après 120 s : max(125, 850 − 50 × ${Math.floor((elapsed - 120) / 10)}) = ${points} pts. Retrait de 50 pts par tranche complète de 10 s, plancher 125.`;
   if (person.attempts !== undefined) {
     const penalty = Math.min(200, Math.max(0, person.attempts - 1) * 100);
-    lines.push(calculation, `Relances après réinitialisation : ${Math.max(0, person.attempts - 1)} ; pénalité de ${penalty} pts (100 par relance, plafond 200). Pause/reprise sans pénalité.`, `Total : max(0, ${points} − ${penalty}) = ${person.score} pts.`);
+    lines.push(calculation, `Relances après réinitialisation : ${Math.max(0, person.attempts - 1)} ; pénalité de ${penalty} pts (100 par relance, plafond 200). Pause/reprise sans pénalité.`, elapsed <= 5 ? `Total : 0 pt pendant les 5 premières secondes.` : `Total : max(125, ${points} − ${penalty}) = ${person.score} pts.`);
   } else {
     lines.push(`Comparaison avec le barème actuel : ${calculation}`, `Score enregistré : ${person.score} pts. Écart avec le score de temps actuel : ${number(person.score - points)} pts.`, 'Cette archive conserve le total, pas le nombre de relances ni la version du barème. Cet écart ne peut donc pas être attribué avec certitude à des relances ou à un ancien barème. Le score enregistré n’est pas recalculé.');
   }
@@ -40,7 +44,7 @@ export function speakerScoreProgress(person: SessionSpeaker): { score: number | 
   if (!person.started || !Number.isFinite(person.speakingSeconds) || !Number.isFinite(person.budgetSeconds) || person.budgetSeconds <= 0) return { score: null, zone: 'waiting' };
   const { zone, points } = timeScore(person.speakingSeconds, person.budgetSeconds);
   const retries = Math.min(200, Math.max(0, person.attempts - 1) * 100);
-  return { score: Math.max(0, points - retries), zone };
+  return { score: points === 0 ? 0 : Math.max(125, points - retries), zone };
 }
 
 export function scoreSpeaker(person: SessionSpeaker): number | null {

@@ -36,19 +36,19 @@ test('remote SVG catalogue keeps lazy decks and validates safe slide references'
 
 test('leaderboard scores time fairly, excludes unmeasured turns and shares ties independently of mood', () => {
   const person: SessionSpeaker = { id: 'a', name: 'Alice', present: true, mood: 1, moodUpdatedAt: null, done: true, started: true, speakingSeconds: 50, budgetSeconds: 120, timeUp: false, attempts: 1 };
-  assert.equal(scoreSpeaker(person), 833);
-  assert.equal(scoreSpeaker({ ...person, mood: 4 }), 833);
-  assert.equal(scoreSpeaker({ ...person, speakingSeconds: 110 }), 906);
-  assert.equal(scoreSpeaker({ ...person, speakingSeconds: 3 }), 50);
-  assert.equal(scoreSpeaker({ ...person, attempts: 2 }), 733);
-  assert.equal(scoreSpeaker({ ...person, attempts: 9 }), 633);
+  assert.equal(scoreSpeaker(person), 450);
+  assert.equal(scoreSpeaker({ ...person, mood: 4 }), 450);
+  assert.equal(scoreSpeaker({ ...person, speakingSeconds: 110 }), 975);
+  assert.equal(scoreSpeaker({ ...person, speakingSeconds: 3 }), 0);
+  assert.equal(scoreSpeaker({ ...person, attempts: 2 }), 350);
+  assert.equal(scoreSpeaker({ ...person, attempts: 9 }), 250);
   assert.equal(scoreSpeaker({ ...person, started: false }), null);
   assert.equal(scoreSpeaker({ ...person, speakingSeconds: 0.1 }), null);
   assert.equal(scoreSpeaker({ ...person, timeUp: true, speakingSeconds: 120 }), 850);
   assert.equal(scoreSpeaker({ ...person, timeUp: true, speakingSeconds: 120.000000001 }), 850);
-  assert.equal(scoreSpeaker({ ...person, timeUp: true, speakingSeconds: 240 }), 0);
+  assert.equal(scoreSpeaker({ ...person, timeUp: true, speakingSeconds: 240 }), 250);
   const people = [person, { ...person, id: 'b', mood: 4 as const }, { ...person, id: 'c', timeUp: true, speakingSeconds: 132 }];
-  assert.deepEqual(sessionLeaderboard(people).map(p => p.rank), [1, 1, 3]);
+  assert.deepEqual(sessionLeaderboard(people).map(p => p.rank), [1, 2, 2]);
   const stats = sessionStatistics(people);
   assert.equal(stats.speakingSeconds, 232);
   assert.equal(stats.withinTime, 2);
@@ -133,9 +133,9 @@ test('mood slide context preserves safe local references and rejects remote and 
   assert.equal(normalizeTeam({ currentMoodSlide: { ...context, image: '/mood-meters/slides/../a.png' } }).currentMoodSlide, null);
 });
 
-test('scores peak at half time, gently decline through optimal and closing zones and penalize overtime', () => {
+test('fixed two-minute scoring uses grace, floor, peak, three closing bands and completed overtime steps', () => {
   const person: SessionSpeaker = { id: 'a', name: 'Alice', present: true, mood: 1, moodUpdatedAt: null, done: false, started: true, speakingSeconds: 0, budgetSeconds: 120, timeUp: false, attempts: 1 };
-  for (const [seconds, expected, zone] of [[0, 0, 'building'], [15, 250, 'building'], [30, 500, 'building'], [59.9, 998, 'building'], [60, 1000, 'optimal'], [72, 986, 'optimal'], [90, 964, 'optimal'], [102, 950, 'optimal'], [108, 917, 'closing'], [120, 850, 'closing'], [120.1, 848, 'overtime'], [132, 650, 'overtime'], [144, 450, 'overtime'], [171, 0, 'overtime'], [240, 0, 'overtime'], [1000, 0, 'overtime']] as const) {
+  for (const [seconds, expected, zone] of [[0, 0, 'building'], [5, 0, 'building'], [5.001, 125, 'building'], [15, 125, 'building'], [17.5, 125, 'building'], [30, 250, 'building'], [60, 550, 'optimal'], [72, 670, 'optimal'], [100, 950, 'optimal'], [105, 1000, 'optimal'], [107.5, 988, 'closing'], [110, 975, 'closing'], [112.5, 950, 'closing'], [115, 925, 'closing'], [117.5, 888, 'closing'], [120, 850, 'closing'], [120.1, 850, 'overtime'], [129.999, 850, 'overtime'], [130, 800, 'overtime'], [140, 750, 'overtime'], [144, 750, 'overtime'], [260, 150, 'overtime'], [270, 125, 'overtime'], [1000, 125, 'overtime']] as const) {
     const active = { ...person, speakingSeconds: seconds };
     assert.deepEqual(speakerScoreProgress(active), { score: expected, zone });
     assert.equal(scoreSpeaker(active), null);
@@ -145,21 +145,24 @@ test('scores peak at half time, gently decline through optimal and closing zones
   assert.equal(speakerScoreProgress({ ...person, budgetSeconds: 0 }).score, null);
   assert.equal(speakerScoreProgress({ ...person, speakingSeconds: Infinity }).score, null);
   assert.equal(scoreSpeaker({ ...person, done: true, speakingSeconds: 120, attempts: 2 }), 750);
-  assert.equal(scoreSpeaker({ ...person, done: true, speakingSeconds: 240, attempts: 5 }), 0);
+  assert.equal(scoreSpeaker({ ...person, done: true, speakingSeconds: 240, attempts: 5 }), 125);
+  assert.equal(scoreSpeaker({ ...person, done: true, speakingSeconds: 5, attempts: 5 }), 0);
+  assert.equal(scoreSpeaker({ ...person, done: true, speakingSeconds: 6, attempts: 5 }), 125);
 });
 
-test('score slopes are continuous at boundaries, budget-relative and nonincreasing after the peak', () => {
-  for (const [seconds, points] of [[60, 1000], [102, 950], [120, 850], [171, 0]]) {
+test('closing boundaries are continuous and the fixed scoring timeline does not scale with timer budgets', () => {
+  for (const [seconds, points] of [[105, 1000], [110, 975], [115, 925], [120, 850]]) {
     assert.equal(timeScore(seconds - .001, 120).points, points);
     assert.equal(timeScore(seconds, 120).points, points);
     assert.equal(timeScore(seconds + .001, 120).points, points);
   }
   let previous = 1000;
-  for (let seconds = 60; seconds <= 240; seconds += .25) {
+  for (let seconds = 105; seconds <= 300; seconds += .25) {
     const { points } = timeScore(seconds, 120);
-    assert.ok(Number.isInteger(points) && points >= 0 && points <= 1000);
+    assert.ok(Number.isInteger(points) && points >= 125 && points <= 1000);
     assert.ok(points <= previous);
-    assert.equal(timeScore(seconds / 2, 60).points, points);
+    assert.equal(timeScore(seconds, 60).points, points);
+    assert.equal(timeScore(seconds, 180).points, points);
     previous = points;
   }
 });
@@ -168,11 +171,11 @@ test('optimal-zone durations differentiate rankings while identical inputs retai
   const person: SessionSpeaker = { id: 'a', name: 'Alice', present: true, mood: 1, moodUpdatedAt: null, done: true, started: true, speakingSeconds: 72, budgetSeconds: 120, timeUp: false, attempts: 1 };
   const ranked = sessionLeaderboard([person, { ...person, id: 'b', speakingSeconds: 90 }, { ...person, id: 'c', speakingSeconds: 102 }, { ...person, id: 'd' }]);
   assert.deepEqual(ranked.map(({ id, score, rank }) => ({ id, score, rank })), [
-    { id: 'a', score: 986, rank: 1 }, { id: 'd', score: 986, rank: 1 },
-    { id: 'b', score: 964, rank: 3 }, { id: 'c', score: 950, rank: 4 },
+    { id: 'c', score: 970, rank: 1 }, { id: 'b', score: 850, rank: 2 },
+    { id: 'a', score: 670, rank: 3 }, { id: 'd', score: 670, rank: 3 },
   ]);
-  assert.equal(scoreSpeaker({ ...person, attempts: 2 }), 886);
-  assert.equal(scoreSpeaker({ ...person, attempts: 9 }), 786);
+  assert.equal(scoreSpeaker({ ...person, attempts: 2 }), 570);
+  assert.equal(scoreSpeaker({ ...person, attempts: 9 }), 470);
 });
 
 test('signed deadline frames measure overtime and pauses without interval-count drift', () => {
@@ -186,23 +189,22 @@ test('signed deadline frames measure overtime and pauses without interval-count 
 });
 
 test('individual score explanations show arithmetic and never invent archived retry counts', () => {
-  assert.match(explainScore({ speakingSeconds: 30, budgetSeconds: 120, score: 500, attempts: 1 }).join(' '), /500 pts après arrondi/);
-  const optimal = explainScore({ speakingSeconds: 60, budgetSeconds: 120, score: 800, attempts: 3 }).join(' ');
-  assert.match(optimal, /Entre 50 % et 85 % inclus/);
+  assert.match(explainScore({ speakingSeconds: 30, budgetSeconds: 120, score: 250, attempts: 1 }).join(' '), /250 pts après arrondi/);
+  const optimal = explainScore({ speakingSeconds: 105, budgetSeconds: 120, score: 800, attempts: 3 }).join(' ');
+  assert.match(optimal, /Pic de 1 000 pts à 105 s/);
   assert.match(optimal, /pénalité de 200 pts/);
-  assert.match(optimal, /max\(0, 1000 − 200\) = 800 pts/);
-  const overtime = explainScore({ speakingSeconds: 144, budgetSeconds: 120, score: 450, attempts: 1 }).join(' ');
-  assert.match(overtime, /Dépassement de 20 %/);
-  assert.match(overtime, /450 pts après arrondi/);
-  assert.match(explainScore({ speakingSeconds: 90, budgetSeconds: 120, score: 964, attempts: 1 }).join(' '), /1 000 − \(50 × \(25 ÷ 35\)\) = 964 pts/);
-  assert.match(explainScore({ speakingSeconds: 108, budgetSeconds: 120, score: 917, attempts: 1 }).join(' '), /950 − \(100 × \(5 ÷ 15\)\) = 917 pts/);
+  assert.match(optimal, /max\(125, 1000 − 200\) = 800 pts/);
+  const overtime = explainScore({ speakingSeconds: 144, budgetSeconds: 120, score: 750, attempts: 1 }).join(' ');
+  assert.match(overtime, /max\(125, 850 − 50 × 2\) = 750 pts/);
+  assert.match(explainScore({ speakingSeconds: 5, budgetSeconds: 120, score: 0, attempts: 1 }).join(' '), /5 premières secondes : 0 pt/);
+  assert.match(explainScore({ speakingSeconds: 108, budgetSeconds: 120, score: 985, attempts: 1 }).join(' '), /985 pts après arrondi/);
   const archive = explainScore({ speakingSeconds: 60, budgetSeconds: 120, score: 867 }).join(' ');
   assert.match(archive, /Score enregistré : 867 pts/);
-  assert.match(archive, /-133 pts/);
+  assert.match(archive, /317 pts/);
   assert.match(archive, /ne peut donc pas être attribué avec certitude/);
   const oldPlateau = explainScore({ speakingSeconds: 102, budgetSeconds: 120, score: 1000 }).join(' ');
   assert.match(oldPlateau, /Score enregistré : 1000 pts/);
-  assert.match(oldPlateau, /Écart avec le score de temps actuel : 50 pts/);
+  assert.match(oldPlateau, /Écart avec le score de temps actuel : 30 pts/);
   assert.match(oldPlateau, /Le score enregistré n’est pas recalculé/);
   assert.match(explainScore({ speakingSeconds: 0, budgetSeconds: 120, score: null })[0], /aucun score attribué/);
 });
