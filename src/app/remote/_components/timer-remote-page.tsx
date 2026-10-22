@@ -8,7 +8,9 @@ import SkipNextRounded from '@mui/icons-material/SkipNextRounded';
 import SmartphoneRounded from '@mui/icons-material/SmartphoneRounded';
 import LinkOffRounded from '@mui/icons-material/LinkOffRounded';
 import ShieldOutlined from '@mui/icons-material/ShieldOutlined';
-import { isRemoteToken, type RemoteSnapshot, type RemoteStatus, type RemoteTransport } from '@/lib/timer-remote';
+import { type RemoteSnapshot, type RemoteStatus, type RemoteTransport } from '@/lib/timer-remote';
+import { CompanionInstall } from '@/components/remote/companion-install';
+import { COMPANION_PAIRING_KEY, resolveCompanionPairing } from '@/lib/companion-pairing';
 
 interface Connection { snapshot: RemoteSnapshot | null; status: RemoteStatus; serverNow: number; transport: RemoteTransport; receivedAt: number; receivedMono: number }
 interface Credentials { id: string; token: string }
@@ -18,6 +20,7 @@ export function TimerRemotePage() {
   const [connection, setConnection] = useState<Connection | null>(null);
   const [message, setMessage] = useState('Connexion au minuteur…');
   const [invalid, setInvalid] = useState(false);
+  const [storageNotice, setStorageNotice] = useState('');
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
   const [now, setNow] = useState(0);
@@ -28,11 +31,16 @@ export function TimerRemotePage() {
   useEffect(() => {
     mounted.current = true;
     // Fragment capabilities are never included in HTTP URLs or referrers.
-    const [id, token, extra] = location.hash.slice(1).split('.');
-    if (!isRemoteToken(id) || !isRemoteToken(token) || extra !== undefined) {
+    let stored: string | null = null;
+    try { stored = localStorage.getItem(COMPANION_PAIRING_KEY); } catch { /* Pairing still works for this visit. */ }
+    const pairing = resolveCompanionPairing(location.hash, stored);
+    if (!pairing) {
       setInvalid(true); setMessage('Ce lien est incomplet. Scannez le QR code affiché sur le minuteur.');
       return () => { mounted.current = false; };
     }
+    const { id, token } = pairing;
+    try { localStorage.setItem(COMPANION_PAIRING_KEY, `${id}.${token}`); }
+    catch { setStorageNotice('Association non mémorisée : le stockage du navigateur est bloqué. Conservez le lien ou scannez à nouveau le QR code à la prochaine ouverture.'); }
     credentials.current = { id, token };
     let stopped = false;
     let busy = false;
@@ -45,11 +53,11 @@ export function TimerRemotePage() {
         const body = await response.json();
         if (stopped) return;
         if (response.status === 401 || response.status === 404) {
-          stopped = true; setInvalid(true); setConnection(null); setMessage('Ce lien a expiré ou a été désactivé. Scannez un nouveau QR code.'); return;
+          stopped = true; setInvalid(true); setConnection(null); setMessage('Ce lien n’est plus valide. Scannez le QR code actuel de votre équipe.'); return;
         }
         if (!response.ok) throw new Error();
         setConnection({ ...body, receivedAt: Date.now(), receivedMono: performance.now() });
-        setMessage(body.status === 'online' ? '' : 'Gardez le minuteur ouvert et visible sur l’ordinateur.');
+        setMessage(body.status === 'online' ? '' : 'Votre équipe est associée. Activez la télécommande sur le minuteur de l’ordinateur pour commencer.');
         setNow(performance.now());
       } catch { if (!stopped) { setConnection(null); setMessage('Connexion interrompue. Reconnexion automatique…'); } }
       finally { busy = false; }
@@ -107,6 +115,12 @@ export function TimerRemotePage() {
         {confirmNext && confirmNext === snapshot?.version && usable ? <div className="rounded-3xl border border-orange-200 bg-orange-50 p-4"><p className="text-sm font-bold text-ink">Terminer ce passage ?</p><p className="mt-1 text-xs leading-relaxed text-muted">{snapshot?.nextSpeaker ? `${snapshot.nextSpeaker} prendra la parole immédiatement.` : 'Ce passage sera terminé sur l’ordinateur.'}</p><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => setConfirmNext(null)} className="min-h-12 rounded-xl bg-white text-sm font-semibold text-brand">Annuler</button><button type="button" onClick={() => void command('next')} className="min-h-12 rounded-xl bg-brand text-sm font-bold text-white">Confirmer</button></div></div> : <button type="button" disabled={!usable} onClick={() => setConfirmNext(snapshot?.version ?? null)} className="flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-line bg-white text-sm font-bold text-brand transition-colors hover:bg-blue-50 focus-visible:outline-3 focus-visible:outline-brand disabled:text-slate-400"><SkipNextRounded />Passage suivant</button>}
         <p role="status" aria-live="polite" className="min-h-8 text-center text-xs leading-relaxed text-muted">{invalid && <LinkOffRounded className="mr-1" fontSize="inherit" />}{message || (snapshot?.blocked ? 'Fermez la fenêtre sur l’ordinateur pour reprendre le contrôle.' : 'Les commandes sont appliquées sur l’ordinateur.')}</p>
       </section>
+      <CompanionInstall />
+      {storageNotice && <p role="note" className="text-center text-xs leading-relaxed text-amber-800">{storageNotice}</p>}
+      {connection && <button type="button" onClick={() => {
+        try { localStorage.removeItem(COMPANION_PAIRING_KEY); } catch { /* Clear the current page even when storage is blocked. */ }
+        location.replace('/remote');
+      }} className="min-h-11 rounded-xl text-xs font-semibold text-muted underline decoration-slate-300 underline-offset-4 focus-visible:outline-2 focus-visible:outline-brand">Oublier cette équipe sur ce téléphone</button>}
       <footer className="flex shrink-0 items-center justify-center gap-1.5 pb-1 text-[10px] text-muted"><ShieldOutlined fontSize="inherit" />Lien privé · aucun téléchargement{connection?.transport === 'instance' ? ' · serveur unique' : ''}</footer>
     </div>
   </div>;

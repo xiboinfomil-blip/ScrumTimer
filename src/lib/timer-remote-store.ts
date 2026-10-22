@@ -1,5 +1,6 @@
 import 'server-only';
 import { createHash, randomBytes } from 'node:crypto';
+import { authorizeTimerRemoteControl, timerRemoteAccess, timerRemoteSecret, timerRemoteTeamId } from './timer-remote-access.ts';
 import {
   authorizeRemote, commandRemoteEntry, pendingRemoteCommand, publicRemoteState, RemoteError,
   REMOTE_COMMAND_TTL, REMOTE_HOST_FRESH, REMOTE_HOST_LEASE, REMOTE_MAX_ENTRIES, REMOTE_PAIR_TTL, syncRemoteEntry,
@@ -34,11 +35,16 @@ export function hashRemoteToken(token: string): string {
 const operationScript = `
 local clock=redis.call('TIME')
 local now=tonumber(clock[1])*1000+math.floor(tonumber(clock[2])/1000)
-local raw=redis.call('GET',KEYS[1])
-if not raw then return cjson.encode({error=404}) end
-local e=cjson.decode(raw)
-if e.expiresAt<=now then redis.call('DEL',KEYS[1]); return cjson.encode({error=404}) end
 local op=ARGV[1]
+local function missing()
+  if op=='read' then return cjson.encode({snapshot=cjson.null,status='waiting',serverNow=now}) end
+  if op=='command' then return cjson.encode({error=409}) end
+  return cjson.encode({error=401})
+end
+local raw=redis.call('GET',KEYS[1])
+if not raw then return missing() end
+local e=cjson.decode(raw)
+if e.expiresAt<=now then redis.call('DEL',KEYS[1]); return missing() end
 local expected=e.controlHash
 if op=='sync' or op=='revoke' then expected=e.ownerHash end
 if expected~=ARGV[2] then return cjson.encode({error=401}) end
@@ -50,7 +56,7 @@ local function pending()
 end
 local function status()
   if not has(e.hostSeenAt) or not has(e.snapshot) then return 'waiting' end
-  if now<=e.leaseUntil and now-e.hostSeenAt<=${REMOTE_HOST_FRESH} then return 'online' end
+  if now<e.leaseUntil and now-e.hostSeenAt<=${REMOTE_HOST_FRESH} then return 'online' end
   return 'stale'
 end
 if op=='sync' then
@@ -76,6 +82,7 @@ end
 if op=='sync' or op=='command' then redis.call('SET',KEYS[1],cjson.encode(e),'KEEPTTL') end
 if op=='command' then return cjson.encode({accepted=true,command=e.pending,serverNow=now}) end
 local result={snapshot=e.snapshot,status=status(),serverNow=now}
+if op=='read' and e.leaseUntil<=now then result.snapshot=cjson.null; result.status='waiting' end
 if op=='sync' then result.command=pending(); result.consumedVersion=e.lastCommandVersion end
 return cjson.encode(result)
 `;
@@ -83,9 +90,15 @@ return cjson.encode(result)
 const createScript = `
 local clock=redis.call('TIME')
 local now=tonumber(clock[1])*1000+math.floor(tonumber(clock[2])/1000)
+local raw=redis.call('GET',KEYS[1])
+if raw then
+  local previous=cjson.decode(raw)
+  if previous.expiresAt>now and previous.leaseUntil>now then return cjson.encode({error=409}) end
+end
 local e=cjson.decode(ARGV[1])
 e.expiresAt=now+${REMOTE_PAIR_TTL}
-if not redis.call('SET',KEYS[1],cjson.encode(e),'PX',${REMOTE_PAIR_TTL},'NX') then return cjson.encode({error=409}) end
+e.leaseUntil=now+${REMOTE_HOST_LEASE}
+redis.call('SET',KEYS[1],cjson.encode(e),'PX',${REMOTE_PAIR_TTL})
 return cjson.encode({expiresAt=e.expiresAt,serverNow=now})
 `;
 
@@ -114,37 +127,48 @@ function prune(now: number) {
 }
 
 export async function createTimerRemote(teamId: string) {
+  const { id, control } = timerRemoteAccess(teamId, timerRemoteSecret(process.env));
   const transport = timerRemoteTransport();
-  const id = randomBytes(32).toString('base64url');
   const owner = randomBytes(32).toString('base64url');
-  const control = randomBytes(32).toString('base64url');
   const now = Date.now();
   const entry: RemoteEntry = { teamId, ownerHash: hashRemoteToken(owner), controlHash: hashRemoteToken(control),
-    expiresAt: now + REMOTE_PAIR_TTL, hostSeenAt: null, leaseUntil: 0, snapshot: null,
+    expiresAt: now + REMOTE_PAIR_TTL, hostSeenAt: null, leaseUntil: now + REMOTE_HOST_LEASE, snapshot: null,
     pending: null, lastCommandId: null, lastCommandVersion: null };
   let timing: { expiresAt: number; serverNow: number };
   if (transport === 'shared') {
     timing = await redisEval(createScript, id, JSON.stringify(entry)) as unknown as typeof timing;
   } else {
     prune(now);
+    const previous = entries.get(id);
+    if (previous && previous.leaseUntil > now) throw new RemoteError(409);
     // Refuse new pairs rather than silently evicting a still-live host.
-    if (entries.size >= REMOTE_MAX_ENTRIES) throw new RemoteError(503);
-    if (entries.has(id)) throw new RemoteError(409);
+    if (!previous && entries.size >= REMOTE_MAX_ENTRIES) throw new RemoteError(503);
     entries.set(id, entry);
     timing = { expiresAt: entry.expiresAt, serverNow: now };
   }
-  return { id, owner, control, ...timing, transport };
+  return { id, owner, control, ...timing, transport, reusable: true };
 }
 
 type Operation = 'read' | 'sync' | 'command' | 'revoke';
 async function operate(op: Operation, id: string, token: string, input?: { snapshot: RemoteSnapshot; ack?: string } | RemoteCommandPayload) {
+  const isControl = op === 'read' || op === 'command';
+  // Always verify against the current stable secret BEFORE trusting any stored hash.
+  if (isControl) authorizeTimerRemoteControl(id, token, timerRemoteSecret(process.env));
+  else timerRemoteTeamId(id);
   const transport = timerRemoteTransport();
   const hash = hashRemoteToken(token);
   if (transport === 'shared') return { ...await redisEval(operationScript, id, op, hash, JSON.stringify(input ?? {})), transport };
   // No await between lookup/auth/transition/write: atomic within this process, including HMR bundles.
   const now = Date.now();
   prune(now);
-  const entry = authorizeRemote(entries.get(id) ?? null, hash, op === 'sync' || op === 'revoke' ? 'owner' : 'control', now);
+  const stored = entries.get(id);
+  if (!stored) {
+    if (op === 'read') return { snapshot: null, status: 'waiting', serverNow: now, transport };
+    throw new RemoteError(op === 'command' ? 409 : 401);
+  }
+  const entry = authorizeRemote(stored, hash, isControl ? 'control' : 'owner', now);
+  if (op === 'read' && entry.leaseUntil <= now) return { snapshot: null, status: 'waiting', serverNow: now, transport };
+  if (op === 'command' && entry.leaseUntil <= now) throw new RemoteError(409);
   if (op === 'revoke') {
     entries.delete(id);
     return { revoked: true, transport };

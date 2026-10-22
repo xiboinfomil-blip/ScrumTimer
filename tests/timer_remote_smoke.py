@@ -38,6 +38,8 @@ class MockAPIs:
         self.acks = []
         self.deletes = []
         self.calls = []
+        self.creates = []
+        self.reads = []
         self.revision = 1
         self.team = team_fixture(['Alice <safe>', 'Bob', 'Charlie'])
         for person in self.team['roster']:
@@ -77,22 +79,41 @@ class MockAPIs:
 
         if operation == 'create':
             assert request.headers.get('x-team-id') == TEAM_ID
-            assert PAIR_ID not in self.entries, 'Unexpected duplicate create'
+            previous = self.entries.get(PAIR_ID)
+            if previous and previous['leaseUntil'] > now and previous['expiresAt'] > now:
+                reply({'error': 'Host lease already held'}, 409)
+                return
+            owner = chr(ord('o') + len(self.creates)) * 43
             self.entries[PAIR_ID] = {
                 'snapshot': None, 'hostSeenAt': None, 'leaseUntil': 0,
                 'expiresAt': now + 14400000, 'pending': None,
                 'lastCommandId': None, 'lastCommandVersion': None,
+                'owner': owner,
             }
-            reply({'id': PAIR_ID, 'owner': OWNER, 'control': CONTROL,
-                   'expiresAt': now + 14400000, 'serverNow': now, 'transport': 'shared'}, 201)
+            self.entries[PAIR_ID]['leaseUntil'] = now + 10000
+            pair = {'id': PAIR_ID, 'owner': owner, 'control': CONTROL,
+                    'expiresAt': now + 14400000, 'serverNow': now,
+                    'transport': 'shared', 'reusable': True}
+            self.creates.append(deepcopy(pair))
+            reply(pair, 201)
             return
         assert operation in ('GET', 'DELETE', 'sync', 'command'), operation
         pair_id = parse_qs(urlsplit(request.url).query).get('id', [None])[0] if method == 'GET' else body.get('id')
         entry = self.entries.get(pair_id)
-        if not entry or entry['expiresAt'] <= now:
-            reply({'error': 'Télécommande indisponible.'}, 404)
+        # Permanent control capabilities remain valid without an active host.
+        # Authenticate BEFORE the missing-entry branch (never accept arbitrary scans).
+        if operation in ('GET', 'command') and (pair_id != PAIR_ID or
+                request.headers.get('authorization') != f'Bearer {CONTROL}'):
+            reply({'error': 'Télécommande indisponible.'}, 401)
             return
-        token = OWNER if operation in ('sync', 'DELETE') else CONTROL
+        if not entry or entry['expiresAt'] <= now:
+            if operation == 'GET':
+                self.reads.append({'status': 'waiting', 'snapshot': None, 'http': 200})
+                reply({'snapshot': None, 'status': 'waiting', 'serverNow': now, 'transport': 'shared'})
+            else:
+                reply({'error': 'Télécommande indisponible.'}, 409 if operation == 'command' else 401)
+            return
+        token = entry['owner'] if operation in ('sync', 'DELETE') else CONTROL
         if request.headers.get('authorization') != f'Bearer {token}':
             reply({'error': 'Télécommande indisponible.'}, 401)
             return
@@ -128,9 +149,15 @@ class MockAPIs:
             self.commands.append(deepcopy(entry['pending']))
             reply({'accepted': True, 'command': entry['pending'], 'serverNow': now, 'transport': 'shared'})
             return
-        reply({'snapshot': entry['snapshot'], 'status': self.status(entry, now),
+        waiting = operation == 'GET' and entry['leaseUntil'] <= now
+        state = {'snapshot': None if waiting else entry['snapshot'],
+                 'status': 'waiting' if waiting else self.status(entry, now)}
+        if operation == 'GET':
+            self.reads.append({**deepcopy(state), 'http': 200})
+        reply({**state,
                'serverNow': now, 'transport': 'shared',
-               **({'command': self.pending(entry, now)} if operation == 'sync' else {})})
+               **({'command': self.pending(entry, now), 'consumedVersion': entry['lastCommandVersion']}
+                  if operation == 'sync' else {})})
 
     def register(self, context):
         context.route('**/api/timer-remote*', self.remote)
@@ -198,10 +225,11 @@ def main():
     print(f'Screenshots: {screenshots}', flush=True)
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        for motion in ('reduce', 'no-preference'):
+        for motion, phone_size in ((motion, size) for motion in ('reduce', 'no-preference')
+                       for size in ((320, 568), (390, 844))):
             api = MockAPIs()
             host_context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion=motion, service_workers='block')
-            phone_context = browser.new_context(viewport={'width': 390, 'height': 844}, reduced_motion=motion, service_workers='block')
+            phone_context = browser.new_context(viewport={'width': phone_size[0], 'height': phone_size[1]}, reduced_motion=motion, service_workers='block')
             host_guard = install_browser_bootstrap(host_context)
             # No automatic dismissal on phone: overlays must genuinely be absent.
             phone_guard = install_browser_bootstrap(phone_context, intro=False, fullscreen=False)
@@ -209,6 +237,9 @@ def main():
             api.register(phone_context)
             errors = []
             host, phone = host_context.new_page(), phone_context.new_page()
+            phone_calls = []
+            phone.on('request', lambda request: phone_calls.append(request.method)
+                     if urlsplit(request.url).path == '/api/timer-remote' else None)
             for page in (host, phone):
                 page.on('pageerror', lambda error: errors.append(str(error)))
             try:
@@ -218,8 +249,9 @@ def main():
                 first = host.locator('#speaker-name').inner_text()
                 host.get_by_role('button', name='Télécommande mobile', exact=True).click()
                 pairing = host.get_by_role('dialog', name='Votre téléphone, aux commandes', exact=True)
-                pairing.get_by_role('button', name='Créer mon QR code', exact=True).click()
+                pairing.get_by_role('button', name='Activer le QR de l’équipe', exact=True).click()
                 expect(pairing.locator('[data-testid="remote-qr"] svg')).to_be_visible()
+                qr_path = pairing.locator('[data-testid="remote-qr"] svg').inner_html()
                 expect(pairing.locator('[data-testid="remote-qr"] svg title')).to_have_text('Scanner pour ouvrir la télécommande')
                 # react-qr-code's SVG title is an accessible label, not the URL.
                 assert len(PAIR_ID) == len(CONTROL) == 43
@@ -260,7 +292,7 @@ def main():
                 expect(pause).to_be_enabled()
                 expect(host.locator('#start-button')).to_contain_text('Pause')
 
-                for width, height in SIZES:
+                for width, height in (SIZES if phone_size[0] == 390 else [phone_size]):
                     phone.set_viewport_size({'width': width, 'height': height})
                     geometry(phone, (motion, width, height), failures)
                     if width in (390, 1366):
@@ -279,28 +311,82 @@ def main():
                 expect(phone.get_by_text('Connectée', exact=True)).to_be_visible()
                 expect(pause).to_be_enabled()
 
+                phone.set_viewport_size({'width': phone_size[0], 'height': phone_size[1]})
                 host.get_by_role('button', name='Télécommande mobile', exact=True).click()
                 pairing.get_by_role('button', name='Désactiver', exact=True).click()
-                expect(phone.get_by_text('Lien indisponible', exact=True)).to_be_visible()
-                expect(phone.get_by_role('status')).to_contain_text('expiré ou a été désactivé')
+                expect(phone.get_by_text('En attente de connexion', exact=True)).to_be_visible()
+                expect(phone.get_by_role('status')).to_contain_text('Votre équipe est associée')
                 expect(phone.get_by_role('button', name='Démarrer / reprendre', exact=True)).to_be_disabled()
                 expect(next_button).to_be_disabled()
                 assert api.deletes == [PAIR_ID], api.deletes
                 assert not api.entries
+                assert api.reads[-1] == {'status': 'waiting', 'snapshot': None, 'http': 200}
+                geometry(phone, (motion, phone_size, 'disabled-waiting'), failures)
+                # Keep the same phone document open: polling must recover unaided.
+                phone_document = phone.evaluate('performance.timeOrigin')
+                pairing.get_by_role('button', name='Activer le QR de l’équipe', exact=True).click()
+                expect(pairing.locator('[data-testid="remote-qr"] svg')).to_be_visible()
+                assert pairing.locator('[data-testid="remote-qr"] svg').inner_html() == qr_path
+                assert len(api.creates) == 2
+                old, new = api.creates
+                assert old['id'] == new['id'] == PAIR_ID
+                assert old['control'] == new['control'] == CONTROL
+                assert old['owner'] != new['owner']
+                rejected = host.evaluate("""async pair => {
+                    const response = await fetch('/api/timer-remote', {method:'DELETE',
+                        headers:{'Content-Type':'application/json', Authorization:`Bearer ${pair.owner}`},
+                        body:JSON.stringify({id:pair.id})});
+                    return response.status;
+                }""", old)
+                assert rejected == 401, 'Old host owner must not revoke the new lease'
                 pairing.get_by_role('button', name='Revenir au minuteur', exact=True).click()
+                expect(phone.get_by_text('Connectée', exact=True)).to_be_visible()
+                expect(pause).to_be_enabled()
+                assert phone.evaluate('performance.timeOrigin') == phone_document
+                pause.click()
+                expect(host.locator('#start-button')).to_contain_text(re.compile('Démarrer|Reprendre'))
+                expect(start).to_be_enabled()
 
-                before = len(api.calls)
+                saved = phone.evaluate("localStorage.getItem('standup.companion.team.v1')")
+                assert saved == f'{PAIR_ID}.{CONTROL}'
+                phone.goto(BASE + '/remote')
+                expect(phone.get_by_text('Connectée', exact=True)).to_be_visible()
+                assert not urlsplit(phone.url).fragment
+                expect(start).to_be_enabled()
+                start.click()
+                expect(host.locator('#start-button')).to_contain_text('Pause')
+                expect(pause).to_be_enabled()
+
                 phone.goto(BASE + '/remote#invalid.link')
                 expect(phone.get_by_role('status')).to_contain_text('Ce lien est incomplet')
                 expect(phone.get_by_role('button', name='Démarrer / reprendre', exact=True)).to_be_disabled()
-                assert len(api.calls) == before, 'Malformed fragment must not call remote API'
-                assert [c['action'] for c in api.commands] == ['start', 'pause', 'next'], api.commands
+                before = len(phone_calls)
+                phone.wait_for_timeout(1200)  # Include at least one normal polling period.
+                assert len(phone_calls) == before, 'Malformed fragment must not call remote API'
+                assert phone.evaluate("localStorage.getItem('standup.companion.team.v1')") == saved
+                phone.goto(BASE + '/remote')
+                expect(phone.get_by_text('Connectée', exact=True)).to_be_visible()
+                expect(pause).to_be_enabled()
+                phone.get_by_role('button', name='Oublier cette équipe sur ce téléphone', exact=True).click()
+                expect(phone.get_by_role('status')).to_contain_text('Ce lien est incomplet')
+                assert phone.evaluate("localStorage.getItem('standup.companion.team.v1')") is None
+                assert urlsplit(phone.url).path == '/remote' and not urlsplit(phone.url).fragment, phone.url
+                after_forget = len(phone_calls)
+                phone.wait_for_timeout(1200)
+                assert len(phone_calls) == after_forget, 'Forgotten pairing must stop polling'
+                expect(phone.get_by_role('button', name='Oublier cette équipe sur ce téléphone', exact=True)).to_have_count(0)
+                phone.goto(BASE + '/remote')
+                expect(phone.get_by_role('status')).to_contain_text('Ce lien est incomplet')
+                assert [c['action'] for c in api.commands] == ['start', 'pause', 'next', 'pause', 'start'], api.commands
+                deadline = time.monotonic() + 5
+                while not all(c['id'] in api.acks for c in api.commands) and time.monotonic() < deadline:
+                    host.wait_for_timeout(100)
                 assert all(c['id'] in api.acks for c in api.commands), (api.commands, api.acks)
-                assert len({c['version'] for c in api.commands}) == 3, api.commands
+                assert len({c['version'] for c in api.commands}) == 5, api.commands
                 assert not errors, errors
                 host_guard.assert_no_unexpected_api()
                 phone_guard.assert_no_unexpected_api()
-                print(f'PASS {motion}: pairing, separate-context start/pause/next/cancel, stale/recovery, revoke, invalid link; six viewports', flush=True)
+                print(f'PASS {motion} {phone_size}: start/pause/next/cancel, stale/recovery, permanent QR waiting/re-enable/fresh owner, remembered pairing/invalid explicit/forget', flush=True)
             except Exception:
                 for label, page in (('host', host), ('phone', phone)):
                     image = screenshots / f'failure-{motion}-{label}.png'
@@ -314,7 +400,7 @@ def main():
     for failure in failures:
         print(f'GEOMETRY BUG: {failure}', flush=True)
     assert not failures, f'{len(failures)} geometry failures; see reports above'
-    print('PASS: timer remote DEV smoke, 12 viewport/motion combinations; mocked APIs only, no Neon writes', flush=True)
+    print('PASS: timer remote DEV smoke, 4 phone lifecycle cases + 12 viewport/motion geometry combinations; mocked APIs only, no Neon writes', flush=True)
 
 
 if __name__ == '__main__':

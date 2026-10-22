@@ -16,7 +16,7 @@ const snapshot: RemoteSnapshot = { speaker: '<Alice>', nextSpeaker: 'Bob', teamN
   running: false, remaining: 30, deadline: 0, completed: 0, total: 2, version: 'v1', blocked: false };
 const payload: RemoteCommandPayload = { requestId, action: 'start', version: 'v1' };
 function entry(): RemoteEntry {
-  return { teamId: 'team-a', ownerHash: 'a'.repeat(64), controlHash: 'b'.repeat(64), expiresAt: now + REMOTE_PAIR_TTL,
+  return { teamId: 'a'.repeat(64), ownerHash: 'a'.repeat(64), controlHash: 'b'.repeat(64), expiresAt: now + REMOTE_PAIR_TTL,
     hostSeenAt: now, leaseUntil: now + REMOTE_HOST_LEASE, snapshot: { ...snapshot }, pending: null,
     lastCommandId: null, lastCommandVersion: null };
 }
@@ -162,20 +162,27 @@ test('public reads reveal only snapshot, host status and server clock', () => {
   assert.equal(JSON.stringify(publicState).includes(requestId), false);
 });
 
-test('actual instance store: hashes only, pairing scope, races, revoke, hard TTL and bounded global fallback', () => {
+test('actual instance store: reusable links, owner leases, races, rotation, downtime and bounded state', () => {
   // server-only's official react-server condition allows Node testing without modifying dependencies.
   const storeUrl = new URL('../src/lib/timer-remote-store.ts', import.meta.url).href;
   const script = `
     import assert from 'node:assert/strict';
     delete process.env.UPSTASH_REDIS_REST_URL;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    process.env.TIMER_REMOTE_SECRET = 'timer-remote-test-only-secret-32-bytes-minimum';
+    delete process.env.PARTICIPANT_PORTAL_SECRET;
     const store = await import(${JSON.stringify(storeUrl)});
     const map = globalThis.__standupTimerRemote;
     const snapshot = ${JSON.stringify(snapshot)};
     const command = ${JSON.stringify(payload)};
-    const a = await store.createTimerRemote('team-a');
-    const b = await store.createTimerRemote('team-b');
+    const teamA = 'a'.repeat(64);
+    const teamB = 'b'.repeat(64);
+    const a = await store.createTimerRemote(teamA);
+    const b = await store.createTimerRemote(teamB);
     assert.equal(a.transport, 'instance');
+    assert.equal(a.reusable, true);
+    assert.equal(a.id, Buffer.from(teamA, 'hex').toString('base64url'));
+    await assert.rejects(store.createTimerRemote(teamA), e => e.status === 409);
     assert.equal(Buffer.from(a.owner, 'base64url').length, 32);
     assert.equal(Buffer.from(a.control, 'base64url').length, 32);
     assert.notEqual(a.owner, a.control);
@@ -187,6 +194,11 @@ test('actual instance store: hashes only, pairing scope, races, revoke, hard TTL
     await assert.rejects(store.readTimerRemote(a.id, b.control), e => e.status === 401);
     await assert.rejects(store.syncTimerRemote(a.id, a.control, snapshot), e => e.status === 401);
     await store.syncTimerRemote(a.id, a.owner, snapshot);
+    await assert.rejects(store.createTimerRemote(teamA), e => e.status === 409);
+    process.env.TIMER_REMOTE_SECRET += '-rotated';
+    await assert.rejects(store.readTimerRemote(a.id, a.control), e => e.status === 401);
+    await assert.rejects(store.commandTimerRemote(a.id, a.control, command), e => e.status === 401);
+    process.env.TIMER_REMOTE_SECRET = 'timer-remote-test-only-secret-32-bytes-minimum';
     const race = await Promise.allSettled([
       store.commandTimerRemote(a.id, a.control, command),
       store.commandTimerRemote(a.id, a.control, { ...command, requestId: '22345678-1234-4234-8234-123456789abc' }),
@@ -201,15 +213,57 @@ test('actual instance store: hashes only, pairing scope, races, revoke, hard TTL
     assert.equal(sync.command, null);
     await assert.rejects(store.revokeTimerRemote(a.id, a.control), e => e.status === 401);
     assert.equal((await store.revokeTimerRemote(a.id, a.owner)).revoked, true);
-    await assert.rejects(store.readTimerRemote(a.id, a.control), e => e.status === 404);
+    const waiting = await store.readTimerRemote(a.id, a.control);
+    assert.deepEqual(waiting, { snapshot: null, status: 'waiting', serverNow: waiting.serverNow, transport: 'instance' });
+    await assert.rejects(store.commandTimerRemote(a.id, a.control, command), e => e.status === 409);
+    await assert.rejects(store.readTimerRemote(a.id, b.control), e => e.status === 401);
+    const restarted = await store.createTimerRemote(teamA);
+    assert.equal(restarted.id, a.id);
+    assert.equal(restarted.control, a.control);
+    assert.notEqual(restarted.owner, a.owner);
+    await assert.rejects(store.syncTimerRemote(a.id, a.owner, snapshot), e => e.status === 401);
+    await assert.rejects(store.revokeTimerRemote(a.id, a.owner), e => e.status === 401);
+    await store.syncTimerRemote(a.id, restarted.owner, snapshot);
+    const realNow = Date.now;
+    const staleNow = map.get(a.id).leaseUntil + 1;
+    Date.now = () => staleNow;
+    assert.equal((await store.readTimerRemote(a.id, a.control)).status, 'waiting');
+    assert.equal((await store.readTimerRemote(a.id, a.control)).snapshot, null);
+    await assert.rejects(store.commandTimerRemote(a.id, a.control, command), e => e.status === 409);
+    const takeover = await Promise.allSettled([store.createTimerRemote(teamA), store.createTimerRemote(teamA)]);
+    Date.now = realNow;
+    assert.equal(takeover.filter(r => r.status === 'fulfilled').length, 1);
+    assert.equal(takeover.find(r => r.status === 'rejected').reason.status, 409);
+    const replacement = takeover.find(r => r.status === 'fulfilled').value;
+    assert.equal(replacement.control, a.control);
+    assert.notEqual(replacement.owner, restarted.owner);
+    await assert.rejects(store.syncTimerRemote(a.id, restarted.owner, snapshot), e => e.status === 401);
+    await store.revokeTimerRemote(a.id, replacement.owner);
     map.get(b.id).expiresAt = Date.now() - 1;
-    await assert.rejects(store.readTimerRemote(b.id, b.control), e => e.status === 404);
+    assert.equal((await store.readTimerRemote(b.id, b.control)).status, 'waiting');
+    await assert.rejects(store.commandTimerRemote(b.id, b.control, command), e => e.status === 409);
+    await assert.rejects(store.syncTimerRemote(b.id, b.owner, snapshot), e => e.status === 401);
     assert.equal(map.size, 0);
-    for (let i = 0; i < 512; i++) await store.createTimerRemote('team');
-    await assert.rejects(store.createTimerRemote('overflow'), e => e.status === 503);
+    // Process restart loses host state, never the reusable capability.
+    const reloaded = await store.createTimerRemote(teamA);
+    assert.equal(reloaded.control, a.control);
+    map.clear();
+    const independent = await import(${JSON.stringify(storeUrl)} + '?independent-bundle');
+    assert.equal((await independent.readTimerRemote(a.id, a.control)).status, 'waiting');
+    assert.equal((await independent.createTimerRemote(teamA)).control, a.control);
+    map.clear();
+    delete process.env.TIMER_REMOTE_SECRET;
+    await assert.rejects(store.createTimerRemote(teamA), e => e.status === 503);
+    await assert.rejects(store.readTimerRemote(a.id, a.control), e => e.status === 503);
+    assert.equal(map.size, 0);
+    process.env.PARTICIPANT_PORTAL_SECRET = 'timer-remote-test-only-secret-32-bytes-minimum';
+    assert.equal((await store.createTimerRemote(teamA)).control, a.control);
+    map.clear();
+    for (let i = 0; i < 512; i++) await store.createTimerRemote(i.toString(16).padStart(64, '0'));
+    await assert.rejects(store.createTimerRemote('f'.repeat(64)), e => e.status === 503);
     assert.equal(map.size, 512);
     map.values().next().value.expiresAt = Date.now() - 1;
-    await store.createTimerRemote('replacement');
+    await store.createTimerRemote('f'.repeat(64));
     assert.equal(map.size, 512);
     process.env.UPSTASH_REDIS_REST_URL = 'http://insecure.invalid';
     process.env.UPSTASH_REDIS_REST_TOKEN = 'test-only';
@@ -219,9 +273,10 @@ test('actual instance store: hashes only, pairing scope, races, revoke, hard TTL
     assert.throws(() => store.timerRemoteTransport(), e => e.status === 503);
     process.env.UPSTASH_REDIS_REST_TOKEN = 'test-only';
     const calls = [];
+    let reply = {snapshot: null, status: 'waiting', serverNow: 1};
     globalThis.fetch = async (url, init) => {
       calls.push({url, init});
-      return Response.json({result: JSON.stringify({snapshot: null, status: 'waiting', serverNow: 1})});
+      return Response.json({result: JSON.stringify(reply)});
     };
     assert.equal((await store.readTimerRemote(b.id, b.control)).transport, 'shared');
     const args = JSON.parse(calls[0].init.body);
@@ -232,6 +287,31 @@ test('actual instance store: hashes only, pairing scope, races, revoke, hard TTL
     assert.equal(args[5], store.hashRemoteToken(b.control));
     assert.equal(calls[0].init.body.includes(b.control), false);
     assert.equal(calls[0].init.redirect, 'error');
+    const callsBeforeInvalid = calls.length;
+    await assert.rejects(store.readTimerRemote(b.id, a.control), e => e.status === 401);
+    await assert.rejects(store.commandTimerRemote(b.id, a.control, command), e => e.status === 401);
+    assert.equal(calls.length, callsBeforeInvalid);
+    process.env.PARTICIPANT_PORTAL_SECRET += '-rotated';
+    await assert.rejects(store.readTimerRemote(b.id, b.control), e => e.status === 401);
+    assert.equal(calls.length, callsBeforeInvalid);
+    process.env.PARTICIPANT_PORTAL_SECRET = 'timer-remote-test-only-secret-32-bytes-minimum';
+    reply = {expiresAt: 123456, serverNow: 1};
+    const shared = await store.createTimerRemote(teamA);
+    assert.equal(shared.control, a.control);
+    assert.equal(shared.id, a.id);
+    assert.equal(shared.expiresAt, 123456);
+    assert.equal(shared.reusable, true);
+    const createArgs = JSON.parse(calls.at(-1).init.body);
+    const sharedEntry = JSON.parse(createArgs[4]);
+    assert.equal(sharedEntry.ownerHash, store.hashRemoteToken(shared.owner));
+    assert.equal(sharedEntry.controlHash, store.hashRemoteToken(a.control));
+    assert.equal(calls.at(-1).init.body.includes(shared.owner), false);
+    reply = {error: 409};
+    await assert.rejects(store.createTimerRemote(teamA), e => e.status === 409);
+    await assert.rejects(store.commandTimerRemote(b.id, b.control, command), e => e.status === 409);
+    reply = {error: 401};
+    await assert.rejects(store.syncTimerRemote(a.id, a.owner, snapshot), e => e.status === 401);
+    await assert.rejects(store.revokeTimerRemote(a.id, a.owner), e => e.status === 401);
     globalThis.fetch = async () => Response.json({result: JSON.stringify({error: 401})});
     await assert.rejects(store.readTimerRemote(b.id, b.control), e => e.status === 401);
     globalThis.fetch = async () => { throw new Error('secret upstream detail'); };
@@ -254,5 +334,12 @@ test('route/store security invariants: bounded JSON, no-store, selected-team cre
   assert.match(store, /redis.call\('TIME'\)/);
   assert.match(store, /'KEEPTTL'/);
   assert.match(store, /expected~=ARGV\[2\]/);
+  assert.match(store, /previous\.expiresAt>now and previous\.leaseUntil>now then return cjson.encode\(\{error=409\}\)/);
+  assert.match(store, /e\.leaseUntil=now\+\$\{REMOTE_HOST_LEASE\}/);
+  assert.doesNotMatch(store, /'NX'/);
+  assert.match(store, /if op=='read' then return cjson.encode\(\{snapshot=cjson.null,status='waiting',serverNow=now\}\)/);
+  assert.match(store, /if op=='command' then return cjson.encode\(\{error=409\}\)/);
+  assert.match(store, /op=='read' and e\.leaseUntil<=now/);
+  assert.ok(store.indexOf('authorizeTimerRemoteControl(id, token') < store.indexOf('const hash = hashRemoteToken(token)'));
   assert.doesNotMatch(store, /live-session|@\/lib\/database|drizzle|neon/i);
 });

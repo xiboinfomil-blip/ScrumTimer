@@ -66,7 +66,10 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
       try {
         const response = await fetch('/api/timer-remote', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId! }, body: JSON.stringify({ operation: 'create' }), signal: AbortSignal.timeout(8000) });
         const body = await response.json();
-        if (!response.ok) throw new Error();
+        if (!response.ok) {
+          if (!cancelled) setStatus(response.status === 409 ? 'Un autre ordinateur contrôle déjà cette équipe. Désactivez-le ou attendez dix secondes après sa déconnexion.' : 'Activation impossible. Vérifiez le secret serveur TIMER_REMOTE_SECRET (32 octets minimum) et le transport partagé, puis réessayez.');
+          return;
+        }
         credentials = body;
         if (cancelled) { revoke(body); return; }
         setPair(body); void sync();
