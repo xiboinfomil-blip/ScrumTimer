@@ -20,6 +20,9 @@ import { useViewMotion } from '@/hooks/use-view-motion';
 import { useDailyHints } from '@/hooks/use-daily-hints';
 import { roundSpeakers } from '@/lib/timer-completion';
 import { LateCheckinDialog } from './late-checkin-dialog';
+import { useTimerRemote } from '@/hooks/use-timer-remote';
+import { RemotePairingDialog } from './remote-pairing-dialog';
+import SmartphoneRounded from '@mui/icons-material/SmartphoneRounded';
 
 export type StandupTimer = ReturnType<typeof useStandupTimer>;
 
@@ -30,6 +33,7 @@ export function TimerPage() {
   const [view, setView] = useState<'timer' | 'prompts'>('timer');
   const [lineupOpen, setLineupOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [remoteOpen, setRemoteOpen] = useState(false);
   const panels = useViewMotion(`${view}-${timer.focusMode}`);
   const { activeTeamId, activeTeamName } = useTeam();
   const notes = useDailyHints(activeTeamId);
@@ -40,6 +44,12 @@ export function TimerPage() {
   const presentation = usePresentation(target);
   const index = timer.people.findIndex(person => person.id === timer.activeId);
   const following = [...timer.people.slice(index + 1), ...timer.people.slice(0, Math.max(0, index))].find(person => !person.done && !person.postponed);
+  const remote = useTimerRemote(allowed ? activeTeamId : null, {
+    speaker: timer.person?.name ?? '', nextSpeaker: following?.name ?? '', teamName: activeTeamName,
+    activeId: timer.activeId, running: timer.running, remaining: timer.remaining, deadline: timer.deadline,
+    completed: timer.people.filter(person => person.done).length, total: timer.people.length,
+    blocked: timer.managing || timer.lateChecking || lineupOpen || remoteOpen || sharing,
+  }, { toggle: timer.toggle, next: timer.next });
   const broadcast = useLiveBroadcast(allowed ? activeTeamId : null, {
     speaker: timer.person?.name ?? '', nextSpeaker: following?.name ?? '', teamName: activeTeamName,
     running: timer.running, remaining: timer.remaining, deadline: timer.deadline,
@@ -55,6 +65,7 @@ export function TimerPage() {
 
   return (
     <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-1 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh max-w-none! bg-slate-50 p-3 sm:p-6' : 'mx-auto w-full'} overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
+      <RemotePairingDialog open={remoteOpen} onClose={() => setRemoteOpen(false)} remote={remote} />
       <Dialog open={lineupOpen && !timer.lateChecking} onClose={() => setLineupOpen(false)} aria-labelledby="lineup-dialog-title" fullWidth maxWidth="sm" slotProps={{ paper: { sx: { height: 'min(640px, calc(100dvh - 32px))', m: 2, width: 'calc(100% - 32px)', borderRadius: '24px' } } }}>
         <DialogTitle id="lineup-dialog-title">Le tour de parole</DialogTitle>
         <DialogContent className="flex min-h-0 flex-1 flex-col"><p className="mb-3 shrink-0 text-xs text-muted">{timer.focusMode ? 'Votre passage reste sélectionné. Reprenez le minuteur une fois prêt.' : 'Choisissez la personne qui ouvrira le point.'}</p>{lineupOpen && <TeamLineup timer={timer} className="flex-1" />}</DialogContent>
@@ -80,6 +91,7 @@ export function TimerPage() {
       <header className="flex shrink-0 items-center justify-between gap-3 px-1">
         <div className="min-w-0"><h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-ink"><span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${timer.running ? 'bg-success' : 'bg-accent'}`} />Minuteur</h1><p id="overview-people" className="mt-1 truncate text-xs text-muted">{timer.people.length} personnes · {perPerson} chacun</p></div>
         <div className="flex shrink-0 items-center gap-2">
+        <button type="button" onClick={() => setRemoteOpen(true)} aria-label="Télécommande mobile" aria-pressed={remote.enabled} className={`inline-flex size-11 shrink-0 items-center justify-center rounded-xl border ${remote.enabled ? 'border-brand bg-blue-50 text-brand' : 'border-line bg-white text-brand'} hover:bg-blue-50`}><SmartphoneRounded fontSize="small" /></button>
         <button type="button" onClick={() => { if (timer.running) timer.toggle(); setLineupOpen(true); }} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand" aria-label="Voir le tour de parole"><span className="max-[650px]:hidden">Participants</span><span className="tabular-nums">{timer.people.filter(person => person.done).length}/{timer.people.length}</span></button>
         <button type="button" onClick={() => presentation.presenting ? void presentation.toggle() : setSharing(true)} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand hover:border-brand/30 hover:bg-blue-50">{broadcast.enabled && <span aria-hidden="true" className="size-1.5 rounded-full bg-success" />}{presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'}</button>
         </div>

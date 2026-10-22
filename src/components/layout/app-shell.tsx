@@ -37,6 +37,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     const legacy = { '#participants': '/participants', '#mood': '/mood', '#timer': '/timer' }[location.hash];
     if (legacy) router.replace(legacy);
   }, [pathname, router]);
+  // The phone pairs by capability, not by the desktop's Neon/team hydration.
+  // It must remain usable even if the unrelated team provider is unavailable.
+  if (pathname === '/remote') return <MotionConfig reducedMotion="user"><main id="main-content" className="flex min-h-0 flex-1 flex-col">{children}</main></MotionConfig>;
   return <MotionConfig reducedMotion="user" transition={{ type: 'spring', stiffness: 420, damping: 28 }}>
     {introOpen && pathname !== '/spectator' && <WelcomeEntrance onClose={closeIntro} />}
     <div className="contents" inert={introOpen && pathname !== '/spectator'} aria-hidden={introOpen && pathname !== '/spectator' ? true : undefined}>
