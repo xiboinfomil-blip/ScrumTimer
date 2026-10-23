@@ -14,7 +14,10 @@ const keyPrefix = 'standup:timer-remote:';
 export function timerRemoteTransport(): RemoteTransport {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url && !token) return 'instance';
+  if (!url && !token) {
+    if (process.env.VERCEL === '1') throw new RemoteError(503);
+    return 'instance';
+  }
   // A partial/broken shared configuration must not silently split clients across instances.
   if (!url || !token) throw new RemoteError(503);
   try {
@@ -73,7 +76,9 @@ elseif op=='command' then
   local s=e.snapshot
   if status()~='online' or not has(s) or s.blocked or not has(s.activeId) or s.activeId=='' or s.completed>=s.total or s.version~=input.version then return cjson.encode({error=409}) end
   if (input.action=='start' and s.running) or (input.action=='pause' and not s.running) then return cjson.encode({error=409}) end
-  if input.action~='start' and input.action~='pause' and input.action~='next' then return cjson.encode({error=409}) end
+  if s.blackScreen==true and input.action~='black-screen' then return cjson.encode({error=409}) end
+  if input.action=='penalty' and (s.manualPenalty or 0)>999950 then return cjson.encode({error=409}) end
+  if input.action~='start' and input.action~='pause' and input.action~='next' and input.action~='restart' and input.action~='penalty' and input.action~='black-screen' then return cjson.encode({error=409}) end
   if has(pending()) or e.lastCommandId==input.requestId or e.lastCommandVersion==input.version then return cjson.encode({error=409}) end
   e.pending={id=input.requestId,action=input.action,version=input.version,createdAt=now}
   e.lastCommandId=input.requestId

@@ -11,11 +11,13 @@ export interface RemoteSnapshot {
   total: number;
   version: string;
   blocked: boolean;
+  blackScreen?: boolean;
+  manualPenalty?: number;
 }
 
 export interface RemoteCommand {
   id: string;
-  action: 'start' | 'pause' | 'next';
+  action: 'start' | 'pause' | 'next' | 'restart' | 'penalty' | 'black-screen';
   version: string;
   createdAt: number;
 }
@@ -88,7 +90,8 @@ function version(value: unknown): value is string {
 }
 
 export function validateRemoteSnapshot(value: unknown): RemoteSnapshot {
-  const data = remoteObject(value, ['speaker', 'nextSpeaker', 'teamName', 'activeId', 'running', 'remaining', 'deadline', 'completed', 'total', 'version', 'blocked']);
+  const data = remoteObject(value, ['speaker', 'nextSpeaker', 'teamName', 'activeId', 'running', 'remaining', 'deadline', 'completed', 'total', 'version', 'blocked', 'blackScreen', 'manualPenalty']);
+  if ((data.blackScreen !== undefined && typeof data.blackScreen !== 'boolean') || (data.manualPenalty !== undefined && (!finite(data.manualPenalty) || !Number.isInteger(data.manualPenalty) || data.manualPenalty < 0 || data.manualPenalty > 1_000_000))) throw new RemoteError(400);
   if (!text(data.speaker, 100) || !text(data.nextSpeaker, 100) || !text(data.teamName, 100)
     || !(data.activeId === null || text(data.activeId, 128, false))
     || typeof data.running !== 'boolean' || typeof data.blocked !== 'boolean' || !version(data.version)
@@ -110,7 +113,7 @@ export function validateRemoteRequestId(value: unknown): string {
 export function validateRemoteCommand(value: unknown): RemoteCommandPayload {
   const data = remoteObject(value, ['requestId', 'action', 'version']);
   const requestId = validateRemoteRequestId(data.requestId);
-  if (!version(data.version) || !['start', 'pause', 'next'].includes(data.action as string)) throw new RemoteError(400);
+  if (!version(data.version) || !['start', 'pause', 'next', 'restart', 'penalty', 'black-screen'].includes(data.action as string)) throw new RemoteError(400);
   return { requestId, action: data.action as RemoteCommand['action'], version: data.version };
 }
 
@@ -142,10 +145,14 @@ export function normalizeRemoteSnapshot(snapshot: RemoteSnapshot, now: number): 
 
 export function isCommandAllowed(snapshot: RemoteSnapshot | null, command: Pick<RemoteCommand, 'action' | 'version'>): boolean {
   if (!snapshot || snapshot.blocked || !snapshot.activeId || snapshot.completed >= snapshot.total || snapshot.version !== command.version) return false;
+  if (snapshot.blackScreen) return command.action === 'black-screen';
   switch (command.action) {
     case 'start': return !snapshot.running;
     case 'pause': return snapshot.running;
     case 'next': return true;
+    case 'restart': return true;
+    case 'penalty': return (snapshot.manualPenalty ?? 0) <= 999_950;
+    case 'black-screen': return true;
     default: return false;
   }
 }

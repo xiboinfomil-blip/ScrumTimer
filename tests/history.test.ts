@@ -116,6 +116,16 @@ test('exactly the full time budget remains on time across historical summaries',
   assert.equal(summarizeDays([overtime], now)[4].withinTime, 0);
   assert.equal(historyLeaderboard([overtime], now)[0].withinTime, 0);
 });
+
+test('archive stores the penalized final score without needing penalty or retry schema fields', () => {
+  const result = completedRound('manual-penalty-round', [{ id: 'a', name: 'Alice', mood: 1, present: true, moodUpdatedAt: null, done: true, started: true, speakingSeconds: 270, budgetSeconds: 120, timeUp: true, attempts: 3, manualPenalty: 50 }]);
+  assert.equal(result.people[0].score, 75);
+  assert.equal('manualPenalty' in result.people[0], false);
+  assert.equal('attempts' in result.people[0], false);
+  const restored = normalizeHistory([JSON.parse(JSON.stringify(result))]);
+  assert.equal(restored[0].people[0].score, 75);
+  assert.equal(historyLeaderboard(restored)[0].averageScore, 75);
+});
 test('automatic meter selection never reuses a used deck but manual ids remain available', () => {
   const decks: MoodMeterDeck[] = [{ title: 'A', remoteId: 'a', slides: [] }, { title: 'B', remoteId: 'b', slides: [] }];
   assert.equal(chooseUnusedDeck(decks, ['a']), 1);

@@ -8,11 +8,17 @@ import { commandTimerRemote, createTimerRemote, readTimerRemote, revokeTimerRemo
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const headers = { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' };
-const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers });
+const json = (body: unknown, status = 200, startedAt?: number) => NextResponse.json(body, {
+  status,
+  headers: {
+    ...headers,
+    ...(startedAt === undefined ? {} : { 'Server-Timing': `remote;dur=${(performance.now() - startedAt).toFixed(2)}` }),
+  },
+});
 
-function failure(error: unknown) {
+function failure(error: unknown, startedAt?: number) {
   const status = error instanceof RemoteError ? error.status : 503;
-  return json({ error: 'Télécommande indisponible.' }, status);
+  return json({ error: 'Télécommande indisponible.' }, status, startedAt);
 }
 
 /** Keep the existing JSON parser, but cap the actual stream (including whitespace) at 8 KiB. */
@@ -42,33 +48,36 @@ async function smallJson(request: Request): Promise<unknown> {
 }
 
 export async function GET(request: Request) {
+  const startedAt = performance.now();
   try {
     const token = remoteBearer(request.headers.get('authorization'));
     const query = new URL(request.url).searchParams;
     if ([...query.keys()].some(key => key !== 'id') || query.getAll('id').length !== 1) throw new RemoteError(400);
-    return json(await readTimerRemote(validateRemoteId(query.get('id')), token));
-  } catch (error) { return failure(error); }
+    return json(await readTimerRemote(validateRemoteId(query.get('id')), token), 200, startedAt);
+  } catch (error) { return failure(error, startedAt); }
 }
 
 export async function POST(request: Request) {
-  if (!sameOrigin(request)) return json({ error: 'Télécommande indisponible.' }, 403);
+  const startedAt = performance.now();
+  if (!sameOrigin(request)) return json({ error: 'Télécommande indisponible.' }, 403, startedAt);
   try {
     const body = validateRemotePost(await smallJson(request));
     if (body.operation === 'create') {
       // This is the only database interaction: resolve the existing selected team, never persist timer data.
-      return json(await createTimerRemote(await selectedTeam(request)), 201);
+      return json(await createTimerRemote(await selectedTeam(request)), 201, startedAt);
     }
     const token = remoteBearer(request.headers.get('authorization'));
-    if (body.operation === 'sync') return json(await syncTimerRemote(body.id, token, body.snapshot, body.ack));
-    return json(await commandTimerRemote(body.id, token, body.command));
-  } catch (error) { return failure(error); }
+    if (body.operation === 'sync') return json(await syncTimerRemote(body.id, token, body.snapshot, body.ack), 200, startedAt);
+    return json(await commandTimerRemote(body.id, token, body.command), 200, startedAt);
+  } catch (error) { return failure(error, startedAt); }
 }
 
 export async function DELETE(request: Request) {
-  if (!sameOrigin(request)) return json({ error: 'Télécommande indisponible.' }, 403);
+  const startedAt = performance.now();
+  if (!sameOrigin(request)) return json({ error: 'Télécommande indisponible.' }, 403, startedAt);
   try {
     const token = remoteBearer(request.headers.get('authorization'));
     const body = remoteObject(await smallJson(request), ['id']);
-    return json(await revokeTimerRemote(validateRemoteId(body.id), token));
-  } catch (error) { return failure(error); }
+    return json(await revokeTimerRemote(validateRemoteId(body.id), token), 200, startedAt);
+  } catch (error) { return failure(error, startedAt); }
 }

@@ -10,7 +10,7 @@ from urllib.parse import urljoin, urlsplit
 
 from playwright.sync_api import expect, sync_playwright
 from browser_bootstrap import install_browser_bootstrap
-from timer_remote_smoke import BASE, geometry
+from timer_remote_smoke import BASE
 
 
 def isolated_context(context):
@@ -58,6 +58,49 @@ PROMPT = """outcome => {
     window.dispatchEvent(event);
     return event.defaultPrevented;
 }"""
+
+PREFERENCE_KEY = 'standup.companion.install.hidden.v1'
+PAIRING_KEY = 'standup.companion.team.v1'
+
+
+def install_dialog(page):
+    return page.get_by_role('dialog', name='Installer la télécommande', exact=True)
+
+
+def close_install_dialog(page):
+    install_dialog(page).get_by_role('button', name='Continuer dans le navigateur', exact=True).click()
+    expect(install_dialog(page)).to_have_count(0)
+
+
+def reopen_install_dialog(page):
+    page.get_by_role('button', name='Ajouter l’application', exact=True).click()
+    expect(install_dialog(page)).to_be_visible()
+
+
+def geometry(page, label, failures):
+    # The incomplete-link fixture has no countdown. Check the actual portalled
+    # dialog, including its scrollable content and reachable footer, instead.
+    dialog = install_dialog(page)
+    report = dialog.evaluate("""root => {
+        const b = root.getBoundingClientRect();
+        return {left:b.left, right:b.right, top:b.top, bottom:b.bottom,
+            width:innerWidth, height:innerHeight, scroll:root.scrollWidth,
+            client:root.clientWidth,
+            buttons:[...root.querySelectorAll('button')].map(el => {
+                const b = el.getBoundingClientRect();
+                return {name:el.textContent, width:b.width, height:b.height};
+            })};
+    }""")
+    if (report['left'] < -1 or report['right'] > report['width'] + 1
+            or report['top'] < -1 or report['bottom'] > report['height'] + 1
+            or report['scroll'] > report['client'] + 1):
+        failures.append((label, 'dialog overflow', report))
+    for button in report['buttons']:
+        if button['width'] < 43.99 or button['height'] < 43.99:
+            failures.append((label, 'touch target', button))
+    dialog.get_by_role('checkbox', name='Ne plus afficher automatiquement').scroll_into_view_if_needed()
+    expect(dialog.get_by_role('checkbox', name='Ne plus afficher automatiquement')).to_be_in_viewport()
+    expect(dialog.get_by_role('button', name='Continuer dans le navigateur')).to_be_in_viewport()
 
 
 def worker_contract(page, source):
@@ -156,7 +199,9 @@ def main():
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(BASE + '/remote')
             card = page.get_by_role('complementary', name='Installer la télécommande')
-            expect(card).to_be_visible()
+            dialog = install_dialog(page)
+            expect(dialog).to_be_visible()  # Automatic: no click or native event.
+            expect(dialog.get_by_role('button', name='Continuer dans le navigateur')).to_be_focused()
             expect(page.locator('link[rel="manifest"]')).to_have_attribute('href', '/remote/manifest.webmanifest')
             # Current Next emits the standardized capable flag, with Apple title/style.
             expect(page.locator('meta[name="mobile-web-app-capable"], meta[name="apple-mobile-web-app-capable"]')).to_have_attribute('content', 'yes')
@@ -173,37 +218,112 @@ def main():
             assert registration == {'scope': BASE + '/remote', 'script': BASE + '/remote/sw.js', 'caches': []}
             worker_contract(page, source)
             # Registration alone must never be reported as successful installation.
-            expect(card.get_by_role('button', name='Installer', exact=True)).to_have_count(0)
-            card.locator('summary').click()
-            expect(card.get_by_text('iPhone / iPad · Safari :', exact=True)).to_be_visible()
-            expect(card).to_contain_text('ouvrez Partager, puis « Sur l’écran d’accueil »')
-            expect(card).to_contain_text('La disponibilité dépend du navigateur')
+            expect(dialog.get_by_role('button', name='Installer', exact=True)).to_have_count(0)
+            expect(dialog.get_by_text('iPhone / iPad · Safari :', exact=True)).to_be_visible()
+            expect(dialog).to_contain_text('ouvrez Partager, puis « Sur l’écran d’accueil »')
+            expect(dialog).to_contain_text('La disponibilité dépend du navigateur')
             geometry(page, ('PWA browser tips', width, height), failures)
+            close_install_dialog(page)
+            expect(card.get_by_role('button', name='Ajouter l’application')).to_be_visible()
+            page.reload()
+            expect(page).to_have_url(BASE + '/remote')
+            expect(dialog).to_be_visible()  # Dismissal alone never persists.
+            close_install_dialog(page)
+            reopen_install_dialog(page)
+            page.keyboard.press('Escape')
+            expect(dialog).to_have_count(0)
+            expect(card.get_by_role('button', name='Ajouter l’application')).to_be_focused()
+            reopen_install_dialog(page)
             for outcome, message in (
                 ('dismissed', 'Installation annulée. Vous pouvez continuer dans le navigateur.'),
                 ('accepted', 'Demande d’installation acceptée par le navigateur.'),
             ):
                 assert page.evaluate(PROMPT, outcome), 'beforeinstallprompt must be prevented'
-                button = card.get_by_role('button', name='Installer', exact=True)
+                assert page.evaluate('window.installCalls') == 0, 'must require an explicit install click'
+                button = dialog.get_by_role('button', name='Installer', exact=True)
                 expect(button).to_be_visible()
                 geometry(page, ('PWA prompt', width, height, outcome), failures)
                 button.click()
-                expect(card.get_by_role('button', name='Ouverture…', exact=True)).to_be_disabled()
+                expect(dialog.get_by_role('button', name='Ouverture…', exact=True)).to_be_disabled()
                 assert page.evaluate('window.installCalls') == 1
                 page.evaluate('window.resolveInstallChoice()')
-                expect(card.get_by_role('status')).to_have_text(message)
+                expect(dialog.get_by_role('status')).to_have_text(message)
                 expect(button).to_have_count(0)
-                expect(card).to_be_visible()  # Accepted request is NOT installed.
+                expect(dialog).to_be_visible()  # Accepted request is NOT installed.
                 assert page.evaluate('window.installCalls') == 1
+
+            # Preference stores only a boolean, never touches the pairing key.
+            assert page.evaluate('(key) => localStorage.getItem(key)', PREFERENCE_KEY) is None
+            pairing = page.evaluate('(key) => localStorage.getItem(key)', PAIRING_KEY)
+            dialog.get_by_role('checkbox', name='Ne plus afficher automatiquement').check()
+            assert page.evaluate('(key) => localStorage.getItem(key)', PREFERENCE_KEY) == 'true'
+            assert page.evaluate('(key) => localStorage.getItem(key)', PAIRING_KEY) == pairing
+            close_install_dialog(page)
+            page.reload()
+            expect(page.get_by_role('button', name='Ajouter l’application')).to_be_visible()
+            expect(dialog).to_have_count(0)
+            reopen_install_dialog(page)
+            close_install_dialog(page)
+            assert page.evaluate(PROMPT, 'dismissed')
+            expect(dialog).to_have_count(0)  # Native availability must not defeat opt-out.
+            assert page.evaluate('window.installCalls') == 0
+            reopen_install_dialog(page)
+            expect(dialog.get_by_role('checkbox', name='Ne plus afficher automatiquement')).to_be_checked()
+            expect(dialog.get_by_role('button', name='Installer', exact=True)).to_be_visible()
+            dialog.get_by_role('checkbox', name='Ne plus afficher automatiquement').uncheck()
+            assert page.evaluate('(key) => localStorage.getItem(key)', PREFERENCE_KEY) is None
+            assert page.evaluate('(key) => localStorage.getItem(key)', PAIRING_KEY) == pairing
+            close_install_dialog(page)
+            page.reload()
+            expect(dialog).to_be_visible()
             page.evaluate("window.dispatchEvent(new Event('appinstalled'))")
+            expect(dialog).to_have_count(0)
             expect(card).to_have_count(0)
+            assert not page.evaluate(PROMPT, 'accepted'), 'installed app must ignore later prompts'
             assert page.evaluate('caches.keys()') == []
             assert not errors, errors
             guard.assert_no_unexpected_api()
-            print(f'PASS {width}x{height}: metadata, live worker /remote, browser/iOS tips, synthetic dismissed+accepted prompt once, appinstalled hides card', flush=True)
+            print(f'PASS {width}x{height}: automatic dialog, dismiss/reload/reopen/Escape, preference/reset/pairing isolation, explicit native prompt, appinstalled closes dialog', flush=True)
             page.evaluate("""async () => {
                 for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
             }""")
+            context.close()
+
+        for failure in ('read', 'write'):
+            context = browser.new_context(viewport={'width': 320, 'height': 568}, reduced_motion='reduce')
+            guard = isolated_context(context)
+            context.add_init_script("""(() => {
+                const failure = 'FAILURE_MODE';
+                const key = 'standup.companion.install.hidden.v1';
+                for (const method of (failure === 'read' ? ['getItem', 'setItem', 'removeItem'] : ['setItem', 'removeItem'])) {
+                    const original = Storage.prototype[method];
+                    Storage.prototype[method] = function(name, ...args) {
+                        if (name === key) throw new DOMException('blocked', 'SecurityError');
+                        return original.call(this, name, ...args);
+                    };
+                }
+            })();""".replace('FAILURE_MODE', failure))
+            page = context.new_page()
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            page.goto(BASE + '/remote')
+            dialog = install_dialog(page)
+            expect(dialog).to_be_visible()
+            checkbox = dialog.get_by_role('checkbox', name='Ne plus afficher automatiquement')
+            checkbox.check()
+            expect(checkbox).to_be_checked()
+            expect(dialog.get_by_role('alert').filter(has_text='Le stockage est indisponible')).to_be_visible()
+            close_install_dialog(page)
+            expect(page.get_by_role('alert').filter(has_text='Le stockage est indisponible')).to_be_visible()
+            reopen_install_dialog(page)
+            expect(checkbox).to_be_checked()  # In-memory fallback survives reopening.
+            close_install_dialog(page)
+            page.reload()
+            expect(dialog).to_be_visible()
+            expect(checkbox).not_to_be_checked()
+            assert not errors, errors
+            guard.assert_no_unexpected_api()
+            print(f'PASS blocked preference {failure}: visible notice, memory-only fallback, reopen and reload', flush=True)
             context.close()
 
         for mode in ('display-mode', 'ios-standalone'):
@@ -223,6 +343,8 @@ def main():
             page.goto(BASE + '/remote')
             expect(page.get_by_role('status')).to_contain_text('Ce lien est incomplet')
             expect(page.get_by_role('complementary', name='Installer la télécommande')).to_have_count(0)
+            expect(install_dialog(page)).to_have_count(0)
+            expect(page.get_by_role('button', name='Ajouter l’application')).to_have_count(0)
             assert not page.evaluate(PROMPT, 'accepted')
             expect(page.get_by_role('button', name='Installer', exact=True)).to_have_count(0)
             guard.assert_no_unexpected_api()

@@ -254,7 +254,8 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     hydrated.current = true;
     setTodayRound(null);
     setDailyReady(false);
-    window.history.replaceState(window.history.state, '', '/teams');
+    // The companion is capability-scoped and does not need a directory team.
+    if (window.location.pathname !== '/remote') window.history.replaceState(window.history.state, '', '/teams');
     setReady(true);
     setCloudStatus('saved');
   }, []);

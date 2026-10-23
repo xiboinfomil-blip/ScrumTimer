@@ -9,7 +9,7 @@ import type { Mood } from '@/types/team';
 import { completedRound } from '@/lib/history';
 import { finishWaitingRound, roundSpeakers } from '@/lib/timer-completion';
 import { createId } from '@/lib/team-storage';
-import { recoverTimer, type TimerState } from '@/lib/timer-checkpoint';
+import { penalizeCurrentTimer, recoverTimer, restartCurrentTimer, type TimerState } from '@/lib/timer-checkpoint';
 
 export function useStandupTimer() {
   const { state: team, activeTeamId, updateTeam, saveRound, getTimerCheckpoint, storeTimerCheckpoint } = useTeam();
@@ -22,7 +22,7 @@ export function useStandupTimer() {
     if (checkpoint) return recoverTimer(checkpoint.timer, Date.now());
     const people = team.session.flatMap(id => {
       const person = team.roster.find(p => p.id === id && p.present && (p.mood || team.postponed?.includes(id)));
-      return person ? [{ ...person, postponed: team.postponed?.includes(id) ?? false, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0 }] : [];
+      return person ? [{ ...person, postponed: team.postponed?.includes(id) ?? false, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0, manualPenalty: 0 }] : [];
     });
     return { people, activeId: people.find(p => !p.postponed)?.id ?? null, previousId: null, remaining: team.duration, turnTotal: team.duration, running: false, turnStarted: false, focusMode: false, managing: false, ended: false, warned: false, deadline: 0 };
   });
@@ -82,6 +82,20 @@ export function useStandupTimer() {
   useEffect(() => () => { audio.current?.dispose(); audio.current = null; }, []);
 
   const reset = useCallback(() => { if (!latest.current.focusMode || latest.current.managing) commit(cleared(latest.current)); }, [commit, cleared]);
+  const penalize = useCallback(() => {
+    const current = tick();
+    const penalized = penalizeCurrentTimer(current);
+    if (penalized === current) return;
+    commit(penalized);
+    notify('Pénalité manuelle : −50 points pour la personne en cours, avec un score minimum de 0.');
+  }, [tick, commit, notify]);
+  const restartCurrent = useCallback(() => {
+    const current = tick();
+    const restarted = restartCurrentTimer(current, preferences.current.duration);
+    if (restarted === current) return;
+    commit(restarted);
+    notify('Minuteur actuel remis à sa durée complète, en pause. Temps de parole et pénalités conservés ; le prochain démarrage compte comme une relance.');
+  }, [tick, commit, notify]);
   const toggle = useCallback(() => {
     let current = latest.current;
     if (!current.activeId) return;
@@ -123,7 +137,7 @@ export function useStandupTimer() {
   const newRound = useCallback(() => {
     const current = latest.current;
     roundId.current = null;
-    commit(cleared({ ...current, focusMode: false, managing: false, previousId: null, people: current.people.map(p => ({ ...p, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0 })), activeId: current.people.find(p => !p.postponed)?.id ?? null }));
+    commit(cleared({ ...current, focusMode: false, managing: false, previousId: null, people: current.people.map(p => ({ ...p, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0, manualPenalty: 0 })), activeId: current.people.find(p => !p.postponed)?.id ?? null }));
     notify('Un nouveau tour commence. Faisons le point.');
   }, [cleared, commit, notify]);
   const addTime = useCallback(() => {
@@ -202,5 +216,5 @@ export function useStandupTimer() {
     return () => document.removeEventListener('keydown', onKey);
   }, [toggle, next, reset]);
 
-  return { ...timer, lateChecking, closeLateCheckin, person: timer.people.find(p => p.id === timer.activeId), duration: team.duration, warning: team.warning, toggle, reset, next, select, newRound, addTime, setDuration, setWarning, manage, closeManage, postpone, rejoin, finishWithoutPostponed, openLateCheckin };
+  return { ...timer, lateChecking, closeLateCheckin, person: timer.people.find(p => p.id === timer.activeId), duration: team.duration, warning: team.warning, toggle, reset, penalize, restartCurrent, next, select, newRound, addTime, setDuration, setWarning, manage, closeManage, postpone, rejoin, finishWithoutPostponed, openLateCheckin };
 }

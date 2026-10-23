@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material';
 import { explainScore } from '@/lib/session-results';
 
-export function ScoreBreakdown({ person }: { person: { name: string; speakingSeconds: number; budgetSeconds: number; score: number | null; attempts?: number } }) {
+export function ScoreBreakdown({ person }: { person: { name: string; speakingSeconds: number; budgetSeconds: number; score: number | null; attempts?: number; manualPenalty?: number } }) {
   const [open, setOpen] = useState(false);
   return <>
     <Button size="small" variant="text" sx={{ minHeight: 44, minWidth: 44, px: 1, fontSize: 10, textTransform: 'none' }} aria-label={`Comprendre le score de ${person.name}`} onClick={() => setOpen(true)}>Détail du score</Button>

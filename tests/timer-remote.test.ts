@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
 import {
   authorizeRemote, commandRemoteEntry, isCommandAllowed, isRemoteToken, normalizeRemoteSnapshot,
   pendingRemoteCommand, publicRemoteState, remoteBearer, RemoteError, remoteStatus,
@@ -15,6 +17,7 @@ const requestId = '12345678-1234-4234-8234-123456789abc';
 const snapshot: RemoteSnapshot = { speaker: '<Alice>', nextSpeaker: 'Bob', teamName: 'Équipe', activeId: 'alice',
   running: false, remaining: 30, deadline: 0, completed: 0, total: 2, version: 'v1', blocked: false };
 const payload: RemoteCommandPayload = { requestId, action: 'start', version: 'v1' };
+const actions = ['start', 'pause', 'next', 'restart', 'penalty', 'black-screen'] as const;
 function entry(): RemoteEntry {
   return { teamId: 'a'.repeat(64), ownerHash: 'a'.repeat(64), controlHash: 'b'.repeat(64), expiresAt: now + REMOTE_PAIR_TTL,
     hostSeenAt: now, leaseUntil: now + REMOTE_HOST_LEASE, snapshot: { ...snapshot }, pending: null,
@@ -43,6 +46,25 @@ test('remote snapshots are exact, finite, bounded, safe text contracts without l
   for (const value of [null, [], false, 'snapshot']) rejectsStatus(() => validateRemoteSnapshot(value), 400);
   assert.equal(validateRemoteSnapshot({ ...snapshot, remaining: -100 }).remaining, -100);
   assert.equal(validateRemoteSnapshot({ ...snapshot, activeId: null, completed: 2 }).activeId, null);
+});
+
+test('optional black-screen and manual penalty snapshot fields preserve legacy wire compatibility', () => {
+  for (const blackScreen of [false, true]) {
+    for (const manualPenalty of [0, 1, 50, 999_950, 1_000_000]) {
+      const extended = { ...snapshot, blackScreen, manualPenalty };
+      assert.deepEqual(validateRemoteSnapshot(extended), extended);
+      assert.deepEqual(normalizeRemoteSnapshot(extended, now), extended);
+      assert.deepEqual(publicRemoteState({ ...entry(), snapshot: extended }, now).snapshot, extended);
+    }
+  }
+  assert.equal(Object.hasOwn(validateRemoteSnapshot(snapshot), 'blackScreen'), false);
+  assert.equal(Object.hasOwn(validateRemoteSnapshot(snapshot), 'manualPenalty'), false);
+  for (const blackScreen of [null, 0, 1, 'true', {}, []]) {
+    rejectsStatus(() => validateRemoteSnapshot({ ...snapshot, blackScreen }), 400);
+  }
+  for (const manualPenalty of [null, -1, 0.5, 1_000_001, NaN, Infinity, '50', true, {}, []]) {
+    rejectsStatus(() => validateRemoteSnapshot({ ...snapshot, manualPenalty }), 400);
+  }
 });
 
 test('opaque capabilities only come from Authorization and require the 32-byte base64url shape', () => {
@@ -74,14 +96,66 @@ test('operation envelopes and command requestId are strict; timestamps and token
 
 test('actions respect expected version, running, blocked, active speaker and completion', () => {
   for (const running of [false, true]) {
-    for (const action of ['start', 'pause', 'next'] as const) {
+    for (const action of actions) {
       const command = { action, version: 'v1' };
-      assert.equal(isCommandAllowed({ ...snapshot, running }, command), action === 'next' || (action === 'pause' ? running : !running));
+      assert.equal(isCommandAllowed({ ...snapshot, running }, command), action === 'start' ? !running : action === 'pause' ? running : true);
       for (const change of [{ blocked: true }, { activeId: null }, { completed: 2 }, { version: 'v2' }]) {
         assert.equal(isCommandAllowed({ ...snapshot, running, ...change }, command), false);
       }
       assert.equal(isCommandAllowed(null, command), false);
     }
+  }
+});
+
+test('all six actions have strict envelopes; caller-controlled amounts and targets are forbidden', () => {
+  const id = 'i'.repeat(43);
+  for (const action of actions) {
+    const command = { ...payload, action };
+    assert.deepEqual(validateRemoteCommand(command), command);
+    assert.deepEqual(validateRemotePost({ operation: 'command', id, command }), { operation: 'command', id, command });
+    for (const extra of [{ amount: 50 }, { manualPenalty: 0 }, { activeId: 'bob' }, { blackScreen: false }]) {
+      rejectsStatus(() => validateRemoteCommand({ ...command, ...extra }), 400);
+    }
+  }
+  for (const action of ['reset', 'restore', 'blackScreen', 'Restart', '', null, 50]) {
+    rejectsStatus(() => validateRemoteCommand({ ...payload, action }), 400);
+  }
+});
+
+test('black screen allows only its restore toggle, never bypassing freshness/version/dialog guards', () => {
+  for (const running of [false, true]) {
+    for (const action of actions) {
+      const command = { action, version: 'v1' };
+      const black = { ...snapshot, running, blackScreen: true, manualPenalty: 1_000_000 };
+      assert.equal(isCommandAllowed(black, command), action === 'black-screen');
+      for (const change of [{ blocked: true }, { activeId: null }, { completed: 2 }, { version: 'v2' }]) {
+        assert.equal(isCommandAllowed({ ...black, ...change }, command), false);
+      }
+    }
+  }
+  for (const manualPenalty of [undefined, 0, 999_949, 999_950, 999_951, 1_000_000]) {
+    assert.equal(isCommandAllowed({ ...snapshot, manualPenalty }, { action: 'penalty', version: 'v1' }),
+      (manualPenalty ?? 0) <= 999_950);
+  }
+});
+
+test('new commands are version-bound, single-use, acknowledged, and cannot replay after expiry', () => {
+  for (const action of ['restart', 'penalty', 'black-screen'] as const) {
+    const command = { ...payload, action };
+    const original = entry();
+    const queued = commandRemoteEntry(original, command, now);
+    assert.equal(queued.pending?.action, action);
+    assert.equal(original.pending, null);
+    assert.deepEqual(queued.snapshot, original.snapshot); // The host, not the server, applies effects.
+    const acked = syncRemoteEntry(queued, { ...snapshot, version: 'v2' }, requestId, now + 1);
+    assert.equal(acked.pending, null);
+    rejectsStatus(() => commandRemoteEntry(acked, command, now + 2), 409);
+    rejectsStatus(() => commandRemoteEntry(acked, { ...command, version: 'v2' }, now + 2), 409);
+    const expired = syncRemoteEntry(queued, snapshot, undefined, now + REMOTE_COMMAND_TTL + 1);
+    rejectsStatus(() => commandRemoteEntry(expired, { ...command, requestId: '22345678-1234-4234-8234-123456789abc' }, now + REMOTE_COMMAND_TTL + 2), 409);
+    const black = { ...entry(), snapshot: { ...snapshot, blackScreen: true } };
+    if (action === 'black-screen') assert.equal(commandRemoteEntry(black, command, now).pending?.action, action);
+    else rejectsStatus(() => commandRemoteEntry(black, command, now), 409);
   }
 });
 
@@ -167,6 +241,7 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
   const storeUrl = new URL('../src/lib/timer-remote-store.ts', import.meta.url).href;
   const script = `
     import assert from 'node:assert/strict';
+    delete process.env.VERCEL;
     delete process.env.UPSTASH_REDIS_REST_URL;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
     process.env.TIMER_REMOTE_SECRET = 'timer-remote-test-only-secret-32-bytes-minimum';
@@ -265,6 +340,26 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
     map.values().next().value.expiresAt = Date.now() - 1;
     await store.createTimerRemote('f'.repeat(64));
     assert.equal(map.size, 512);
+    process.env.VERCEL = '1';
+    try {
+      assert.throws(() => store.timerRemoteTransport(), e => e.status === 503);
+      await assert.rejects(store.createTimerRemote(teamA), e => e.status === 503);
+      await assert.rejects(store.readTimerRemote(a.id, a.control), e => e.status === 503);
+      await assert.rejects(store.syncTimerRemote(a.id, a.owner, snapshot), e => e.status === 503);
+      await assert.rejects(store.commandTimerRemote(a.id, a.control, command), e => e.status === 503);
+      await assert.rejects(store.revokeTimerRemote(a.id, a.owner), e => e.status === 503);
+      process.env.UPSTASH_REDIS_REST_URL = 'https://redis.invalid';
+      assert.throws(() => store.timerRemoteTransport(), e => e.status === 503);
+      process.env.UPSTASH_REDIS_REST_TOKEN = 'test-only';
+      assert.equal(store.timerRemoteTransport(), 'shared');
+      delete process.env.UPSTASH_REDIS_REST_URL;
+      assert.throws(() => store.timerRemoteTransport(), e => e.status === 503);
+    } finally {
+      delete process.env.VERCEL;
+      delete process.env.UPSTASH_REDIS_REST_URL;
+      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    }
+    assert.equal(store.timerRemoteTransport(), 'instance');
     process.env.UPSTASH_REDIS_REST_URL = 'http://insecure.invalid';
     process.env.UPSTASH_REDIS_REST_TOKEN = 'test-only';
     assert.throws(() => store.timerRemoteTransport(), e => e.status === 503);
@@ -287,6 +382,20 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
     assert.equal(args[5], store.hashRemoteToken(b.control));
     assert.equal(calls[0].init.body.includes(b.control), false);
     assert.equal(calls[0].init.redirect, 'error');
+    // Exercise the real shared adapter envelopes for every new command. These
+    // are mocked Redis replies; Lua authorization is asserted separately below.
+    for (const action of ['restart', 'penalty', 'black-screen']) {
+      const input = { ...command, action };
+      reply = {accepted: true, serverNow: 1};
+      assert.equal((await store.commandTimerRemote(b.id, b.control, input)).accepted, true);
+      const wire = JSON.parse(calls.at(-1).init.body);
+      assert.equal(wire[0], 'EVAL');
+      assert.equal(wire[2], 1);
+      assert.equal(wire[4], 'command');
+      assert.equal(wire[5], store.hashRemoteToken(b.control));
+      assert.deepEqual(JSON.parse(wire[6]), input);
+      assert.equal(calls.at(-1).init.body.includes(b.control), false);
+    }
     const callsBeforeInvalid = calls.length;
     await assert.rejects(store.readTimerRemote(b.id, a.control), e => e.status === 401);
     await assert.rejects(store.commandTimerRemote(b.id, a.control, command), e => e.status === 401);
@@ -322,6 +431,86 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
   assert.match(output, /adapter assertions passed/);
 });
 
+test('remote handlers time every success and failure from entry with only a monotonic duration', async () => {
+  const source = readFileSync(new URL('../src/app/api/timer-remote/route.ts', import.meta.url), 'utf8');
+  const remote = await import('../src/lib/timer-remote.ts');
+  let clock = 100;
+  let storeError: unknown;
+  const storeOperation = async () => {
+    clock += 11;
+    if (storeError) throw storeError;
+    return { transport: 'shared' };
+  };
+  const modules: Record<string, unknown> = {
+    'next/server': { NextResponse: { json: Response.json } },
+    '@/lib/database': {
+      sameOrigin: (request: Request) => { clock += 2; return request.headers.get('origin') === 'https://remote.example'; },
+      readJson: async (request: Request) => { clock += 7; return request.json(); },
+      selectedTeam: async () => { clock += 5; return 'a'.repeat(64); },
+    },
+    '@/lib/timer-remote': remote,
+    '@/lib/timer-remote-store': {
+      readTimerRemote: storeOperation, createTimerRemote: storeOperation, syncTimerRemote: storeOperation,
+      commandTimerRemote: storeOperation, revokeTimerRemote: storeOperation,
+    },
+  };
+  const handlers: Record<string, (request: Request) => Promise<Response>> = {};
+  // Execute the actual handlers with deterministic dependencies, no database or Redis access.
+  runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
+    exports: handlers,
+    require: (name: string) => {
+      assert.ok(Object.hasOwn(modules, name));
+      return modules[name];
+    },
+    Request, ReadableStream, URL,
+    performance: { now: () => clock },
+    Date: { now: () => { throw new Error('Timing must not use the wall clock'); } },
+  });
+  const id = 'i'.repeat(43);
+  const token = 'x'.repeat(43);
+  async function check(method: string, body: unknown, status: number, duration: number, options: { origin?: string; auth?: boolean; query?: string; raw?: string } = {}) {
+    clock = 100;
+    const request = new Request(`https://remote.example/api/timer-remote${options.query ?? `?id=${id}`}`, {
+      method,
+      headers: {
+        origin: options.origin ?? 'https://remote.example',
+        ...(options.auth === false ? {} : { authorization: `Bearer ${token}` }),
+      },
+      ...(method === 'GET' ? {} : { body: options.raw ?? JSON.stringify(body) }),
+    });
+    const response = await handlers[method](request);
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get('server-timing'), `remote;dur=${duration.toFixed(2)}`);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+    if (status >= 400) assert.deepEqual(await response.json(), { error: 'Télécommande indisponible.' });
+  }
+  await check('GET', null, 200, 11);
+  await check('POST', { operation: 'create' }, 201, 25);
+  await check('POST', { operation: 'sync', id, snapshot }, 200, 20);
+  await check('POST', { operation: 'command', id, command: payload }, 200, 20);
+  for (const action of ['restart', 'penalty', 'black-screen']) {
+    await check('POST', { operation: 'command', id, command: { ...payload, action } }, 200, 20);
+  }
+  await check('POST', { operation: 'sync', id, snapshot: { ...snapshot, blackScreen: true, manualPenalty: 50 } }, 200, 20);
+  await check('DELETE', { id }, 200, 20);
+  await check('GET', null, 401, 0, { auth: false });
+  await check('GET', null, 400, 0, { query: `?id=${id}&extra=1` });
+  for (const method of ['POST', 'DELETE']) {
+    await check(method, { id }, 403, 2, { origin: 'https://other.example' });
+    await check(method, { id }, 400, 9, { raw: '{' });
+    await check(method, { id }, 400, 9, { raw: ' '.repeat(8193) });
+  }
+  for (const error of [new RemoteError(503), new Error('private upstream details')]) {
+    storeError = error;
+    await check('GET', null, 503, 11);
+    await check('POST', { operation: 'create' }, 503, 25);
+    await check('POST', { operation: 'sync', id, snapshot }, 503, 20);
+    await check('POST', { operation: 'command', id, command: payload }, 503, 20);
+    await check('DELETE', { id }, 503, 20);
+  }
+});
+
 test('route/store security invariants: bounded JSON, no-store, selected-team creation only, single-key atomic Redis', () => {
   const route = readFileSync(new URL('../src/app/api/timer-remote/route.ts', import.meta.url), 'utf8');
   const store = readFileSync(new URL('../src/lib/timer-remote-store.ts', import.meta.url), 'utf8');
@@ -340,6 +529,19 @@ test('route/store security invariants: bounded JSON, no-store, selected-team cre
   assert.match(store, /if op=='read' then return cjson.encode\(\{snapshot=cjson.null,status='waiting',serverNow=now\}\)/);
   assert.match(store, /if op=='command' then return cjson.encode\(\{error=409\}\)/);
   assert.match(store, /op=='read' and e\.leaseUntil<=now/);
+  // The shared Lua transport must enforce the same six-action guard as the pure
+  // instance transition BEFORE writing the pending slot (no live Redis required).
+  const commandBranch = store.slice(store.indexOf("elseif op=='command' then"), store.indexOf("if op=='sync' or op=='command' then redis.call"));
+  assert.match(commandBranch, /s\.blackScreen==true and input\.action~='black-screen'/);
+  assert.match(commandBranch, /input\.action=='penalty' and \(s\.manualPenalty or 0\)>999950/);
+  assert.match(commandBranch, /s\.version~=input\.version/);
+  assert.match(commandBranch, /has\(pending\(\)\) or e\.lastCommandId==input\.requestId or e\.lastCommandVersion==input\.version/);
+  for (const action of actions) assert.ok(commandBranch.includes(`input.action~='${action}'`), action);
+  const pendingWrite = commandBranch.indexOf('e.pending={');
+  assert.ok(pendingWrite > commandBranch.indexOf('s.blackScreen==true'));
+  assert.ok(pendingWrite > commandBranch.indexOf("input.action=='penalty'"));
+  assert.match(commandBranch, /e\.pending=\{id=input\.requestId,action=input\.action,version=input\.version,createdAt=now\}/);
+  assert.doesNotMatch(commandBranch, /s\.manualPenalty\s*=|s\.blackScreen\s*=\s*[^=]|s\.remaining\s*=/);
   assert.ok(store.indexOf('authorizeTimerRemoteControl(id, token') < store.indexOf('const hash = hashRemoteToken(token)'));
   assert.doesNotMatch(store, /live-session|@\/lib\/database|drizzle|neon/i);
 });

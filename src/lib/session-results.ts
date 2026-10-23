@@ -1,6 +1,12 @@
 import type { Person } from '../types/team.ts';
 
-export type SessionSpeaker = Person & { done: boolean; started: boolean; speakingSeconds: number; budgetSeconds: number; timeUp: boolean; attempts: number };
+export type SessionSpeaker = Person & { done: boolean; started: boolean; speakingSeconds: number; budgetSeconds: number; timeUp: boolean; attempts: number; manualPenalty?: number };
+
+export const MANUAL_PENALTY_STEP = 50;
+export const MAX_MANUAL_PENALTY = 1_000_000;
+export function validManualPenalty(value: unknown): value is number | undefined {
+  return value === undefined || (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_MANUAL_PENALTY);
+}
 
 export type ScoreZone = 'waiting' | 'building' | 'optimal' | 'closing' | 'overtime';
 
@@ -18,7 +24,7 @@ export function timeScore(speakingSeconds: number, budgetSeconds: number) {
   return { ratio, zone, points: elapsed <= 5 ? 0 : Math.round(Math.max(125, Math.min(1000, base))) };
 }
 
-export function explainScore(person: { speakingSeconds: number; budgetSeconds: number; score: number | null; attempts?: number }) {
+export function explainScore(person: { speakingSeconds: number; budgetSeconds: number; score: number | null; attempts?: number; manualPenalty?: number }) {
   if (person.score === null || person.speakingSeconds < 1 || person.budgetSeconds <= 0) return ['Passage non mesuré : aucun score attribué (moins d’une seconde de parole ou aucun budget mesurable).'];
   const { ratio, zone, points } = timeScore(person.speakingSeconds, person.budgetSeconds);
   const number = (value: number) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(value);
@@ -31,20 +37,22 @@ export function explainScore(person: { speakingSeconds: number; budgetSeconds: n
         : `Après 120 s : max(125, 850 − 50 × ${Math.floor((elapsed - 120) / 10)}) = ${points} pts. Retrait de 50 pts par tranche complète de 10 s, plancher 125.`;
   if (person.attempts !== undefined) {
     const penalty = Math.min(200, Math.max(0, person.attempts - 1) * 100);
-    lines.push(calculation, `Relances après réinitialisation : ${Math.max(0, person.attempts - 1)} ; pénalité de ${penalty} pts (100 par relance, plafond 200). Pause/reprise sans pénalité.`, elapsed <= 5 ? `Total : 0 pt pendant les 5 premières secondes.` : `Total : max(125, ${points} − ${penalty}) = ${person.score} pts.`);
+    const afterRetries = points === 0 ? 0 : Math.max(125, points - penalty);
+    lines.push(calculation, `Relances après réinitialisation : ${Math.max(0, person.attempts - 1)} ; pénalité de ${penalty} pts (100 par relance, plafond 200). Pause/reprise sans pénalité.`, elapsed <= 5 ? 'Avant pénalité manuelle : 0 pt pendant les 5 premières secondes.' : `Avant pénalité manuelle : max(125, ${points} − ${penalty}) = ${afterRetries} pts.`, `Pénalité manuelle cumulée : ${person.manualPenalty ?? 0} pts (50 par clic), déduite après le plancher de 125 ; le total peut descendre jusqu’à 0.`, `Total : max(0, ${afterRetries} − ${person.manualPenalty ?? 0}) = ${person.score} pts.`);
   } else {
-    lines.push(`Comparaison avec le barème actuel : ${calculation}`, `Score enregistré : ${person.score} pts. Écart avec le score de temps actuel : ${number(person.score - points)} pts.`, 'Cette archive conserve le total, pas le nombre de relances ni la version du barème. Cet écart ne peut donc pas être attribué avec certitude à des relances ou à un ancien barème. Le score enregistré n’est pas recalculé.');
+    lines.push(`Comparaison avec le barème actuel : ${calculation}`, `Score enregistré : ${person.score} pts. Écart avec le score de temps actuel : ${number(person.score - points)} pts.`, 'Cette archive conserve le total, pas le nombre de relances, les pénalités manuelles ni la version du barème. Cet écart ne peut donc pas être attribué avec certitude à des relances, à des pénalités manuelles ou à un ancien barème. Le score enregistré n’est pas recalculé.');
   }
   lines.push('Ce score ludique mesure uniquement la gestion du temps : ni la qualité du travail, ni la productivité, ni l’humeur.');
   return lines;
 }
 
-// One formula for final results and explanations. Never displayed during a turn.
+// Shared live/final formula: the retry floor applies BEFORE manual deductions.
 export function speakerScoreProgress(person: SessionSpeaker): { score: number | null; zone: ScoreZone } {
   if (!person.started || !Number.isFinite(person.speakingSeconds) || !Number.isFinite(person.budgetSeconds) || person.budgetSeconds <= 0) return { score: null, zone: 'waiting' };
   const { zone, points } = timeScore(person.speakingSeconds, person.budgetSeconds);
   const retries = Math.min(200, Math.max(0, person.attempts - 1) * 100);
-  return { score: points === 0 ? 0 : Math.max(125, points - retries), zone };
+  const afterRetries = points === 0 ? 0 : Math.max(125, points - retries);
+  return { score: Math.max(0, afterRetries - (person.manualPenalty ?? 0)), zone };
 }
 
 export function scoreSpeaker(person: SessionSpeaker): number | null {

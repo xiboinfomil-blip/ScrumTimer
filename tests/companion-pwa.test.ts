@@ -127,10 +127,11 @@ test('install component defers native prompt to a real click, cleans listeners a
   assert.match(component, /displayMode\.removeEventListener\('change'/);
   assert.match(component, /\(display-mode: standalone\)/);
   assert.match(component, /standalone === true/);
-  assert.match(component, /if \(installed && !workerError\) return null/);
+  assert.match(component, /if \(installed && !workerError && !storageError\) return null/);
   assert.match(component, /\{!installed &&/);
   assert.match(component, /\{deferredPrompt &&/);
-  assert.match(component, /\{!deferredPrompt &&/);
+  // Manual platform guidance remains available even with a native prompt.
+  assert.match(component, /<Dialog open=\{open\}/);
   assert.match(component, /onClick=\{\(\) => void install\(\)\}/);
   assert.match(component, /await prompt\.prompt\(\)/);
   assert.match(component, /await prompt\.userChoice/);
@@ -140,7 +141,37 @@ test('install component defers native prompt to a real click, cleans listeners a
   assert.match(component, /register\('\/remote\/sw\.js', \{\s*scope: '\/remote',\s*updateViaCache: 'none'/);
   assert.match(component, /catch \{\s*if \(mounted.current\) \{\s*setWorkerError/);
   assert.match(component, /role="alert"/);
-  assert.doesNotMatch(component, /localStorage|sessionStorage|indexedDB|document\.cookie|location\.(hash|search)|caches\./);
+  assert.doesNotMatch(component, /sessionStorage|indexedDB|document\.cookie|location\.(hash|search)|caches\./);
+});
+
+test('install dialog opens after hydration unless opted out or standalone, and stays manually reopenable', () => {
+  assert.match(component, /const \[open, setOpen\] = useState\(false\)/);
+  assert.match(component, /setOpen\(!isStandalone\(\) && !hidden\)/);
+  assert.match(component, /setDoNotShowAgain\(hidden\)/);
+  assert.match(component, /installedRef\.current = true;\s*setInstalled\(true\);\s*setOpen\(false\)/);
+  assert.match(component, /if \(installedRef\.current\) \{\s*setDeferredPrompt\(null\);\s*setOpen\(false\)/);
+  assert.match(component, /installedRef\.current \|\| isStandalone\(\)/);
+  assert.match(component, /<Button size="small" onClick=\{\(\) => setOpen\(true\)\} aria-haspopup="dialog"/);
+  assert.match(component, /Ajouter l’application/);
+  assert.match(component, /onClose=\{\(\) => setOpen\(false\)\}/);
+  assert.match(component, /aria-labelledby="companion-install-title" aria-describedby="companion-install-description"/);
+  assert.match(component, /<DialogTitle id="companion-install-title">Installer la télécommande/);
+  assert.match(component, /<DialogActions>/);
+  assert.match(component, /<Button autoFocus onClick=\{\(\) => setOpen\(false\)\}/);
+});
+
+test('only a non-sensitive installation opt-out is stored, with in-page fallback on blocked storage', () => {
+  assert.match(component, /const INSTALL_PREFERENCE_KEY = 'standup\.companion\.install\.hidden\.v1'/);
+  assert.match(component, /try \{\s*hidden = window\.localStorage\.getItem\(INSTALL_PREFERENCE_KEY\) === 'true';\s*\} catch \{/);
+  assert.match(component, /if \(hidden\) window\.localStorage\.setItem\(INSTALL_PREFERENCE_KEY, 'true'\);\s*else window\.localStorage\.removeItem\(INSTALL_PREFERENCE_KEY\);/);
+  assert.match(component, /setDoNotShowAgain\(hidden\);\s*try \{/);
+  assert.match(component, /<Checkbox checked=\{doNotShowAgain\}/);
+  assert.match(component, /onChange=\{event => updatePreference\(event\.target\.checked\)\}/);
+  assert.match(component, /Ne plus afficher automatiquement/);
+  assert.match(component, /Le stockage est indisponible/);
+  assert.match(component, /\{storageError && !open && <p role="alert"/);
+  assert.equal((component.match(/window\.localStorage\./g) ?? []).length, 3);
+  assert.doesNotMatch(component, /standup\.companion\.team|JSON\.stringify|localStorage\.clear|controlToken|ownerToken/);
 });
 
 test('install UI provides French platform guidance, accessible status and 44px branded controls', () => {
@@ -148,10 +179,10 @@ test('install UI provides French platform guidance, accessible status and 44px b
     assert.ok(component.includes(text), text);
   }
   assert.match(component, /min-h-11 min-w-11 focus-visible:/);
-  assert.match(component, /<summary className="[^"]*min-h-11/);
+  assert.match(component, /sx=\{\{ minHeight: 44, minWidth: 44/);
   assert.match(component, /disabled=\{pending\}/);
   assert.match(component, /role="status"/);
-  assert.match(component, /border-accent/);
+  assert.match(component, /border-slate-200/);
   assert.match(component, /text-brand/);
 });
 

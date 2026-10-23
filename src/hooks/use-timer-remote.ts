@@ -6,35 +6,43 @@ import { isCommandAllowed, type RemoteCommand, type RemoteSnapshot, type RemoteT
 interface Pair { id: string; owner: string; control: string; expiresAt: number; transport: RemoteTransport }
 type HostSnapshot = Omit<RemoteSnapshot, 'version'>;
 
-export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, actions: { toggle: () => void; next: () => void }) {
+export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, actions: { toggle: () => void; next: () => void; restart: () => void; penalty: () => void; blackScreen: () => void }) {
   const [enabled, setEnabled] = useState(false);
   const [pair, setPair] = useState<Pair | null>(null);
   const [status, setStatus] = useState('');
+  const publishNow = useRef<() => void>(() => {});
   const latest = useRef({ snapshot: { ...snapshot, version: '0' }, actions, signature: '', revision: 0 });
   useEffect(() => {
     // A tick must not invalidate a button; every semantic timer change must.
-    const signature = JSON.stringify([snapshot.activeId, snapshot.running, snapshot.deadline, snapshot.completed, snapshot.total, snapshot.blocked, snapshot.speaker, snapshot.nextSpeaker, snapshot.running ? null : snapshot.remaining]);
-    if (signature !== latest.current.signature) latest.current.revision++;
+    const signature = JSON.stringify([snapshot.activeId, snapshot.running, snapshot.deadline, snapshot.completed, snapshot.total, snapshot.blocked, snapshot.speaker, snapshot.nextSpeaker, snapshot.running ? null : snapshot.remaining, snapshot.blackScreen, snapshot.manualPenalty]);
+    const changed = signature !== latest.current.signature;
+    if (changed) latest.current.revision++;
     latest.current = { snapshot: { ...snapshot, version: String(latest.current.revision) }, actions, signature, revision: latest.current.revision };
+    if (changed) publishNow.current();
   }, [snapshot, actions]);
 
   useEffect(() => {
     if (!enabled || !teamId) return;
     let cancelled = false;
     let busy = false;
+    let queued = false;
+    let immediate: ReturnType<typeof setTimeout> | undefined;
     let credentials: Pair | null = null;
     let ack: string | undefined;
     const handled = new Set<string>();
     const controller = new AbortController();
     const revoke = (value: Pair) => { void fetch('/api/timer-remote', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${value.owner}` }, body: JSON.stringify({ id: value.id }), keepalive: true }).catch(() => {}); };
     async function sync() {
-      if (busy || cancelled || !credentials) return;
+      if (cancelled || !credentials) return;
+      if (busy) { queued = true; return; }
       busy = true;
+      queued = false;
       try {
         const sentAt = performance.now();
         const current = latest.current.snapshot;
         const blocked = current.blocked || document.hidden || Boolean(document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]'));
-        const response = await fetch('/api/timer-remote', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${credentials.owner}` }, body: JSON.stringify({ operation: 'sync', id: credentials.id, snapshot: { ...current, blocked, running: blocked ? false : current.running }, ...(ack ? { ack } : {}) }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(4000)]) });
+        const remaining = current.running ? (current.deadline - Date.now()) / 1000 : current.remaining;
+        const response = await fetch('/api/timer-remote', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${credentials.owner}` }, body: JSON.stringify({ operation: 'sync', id: credentials.id, snapshot: { ...current, remaining, blocked, running: blocked ? false : current.running }, ...(ack ? { ack } : {}) }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(4000)]) });
         const body = await response.json();
         if (cancelled) return;
         if (!response.ok) { setStatus('Connexion interrompue. Réactivez la télécommande si nécessaire.'); return; }
@@ -47,21 +55,33 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
             handled.add(command.id);
             // Lock this version synchronously: an in-flight duplicate cannot act twice.
             live.snapshot = { ...live.snapshot, blocked: true };
-            if (command.action === 'next') live.actions.next(); else live.actions.toggle();
+            switch (command.action) {
+              case 'next': live.actions.next(); break;
+              case 'restart': live.actions.restart(); break;
+              case 'penalty': live.actions.penalty(); break;
+              case 'black-screen': live.actions.blackScreen(); break;
+              default: live.actions.toggle();
+            }
           }
           // Even a locally rejected command consumes its version. A dialog or
           // visibility race must not leave the recovered remote permanently locked.
           live.revision++;
           live.snapshot = { ...live.snapshot, version: String(live.revision) };
+          queued = true;
         } else if (body.consumedVersion === latest.current.snapshot.version) {
           // An accepted command may expire during a network outage before we
           // receive it. Retire that version without replaying the stale action.
           latest.current.revision++;
           latest.current.snapshot = { ...latest.current.snapshot, version: String(latest.current.revision) };
+          queued = true;
         }
       } catch { if (!cancelled) setStatus('Connexion interrompue · nouvelle tentative automatique.'); }
-      finally { busy = false; }
+      finally {
+        busy = false;
+        if (queued && !cancelled) immediate = setTimeout(() => void sync(), 0);
+      }
     }
+    publishNow.current = () => { void sync(); };
     async function create() {
       try {
         const response = await fetch('/api/timer-remote', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId! }, body: JSON.stringify({ operation: 'create' }), signal: AbortSignal.timeout(8000) });
@@ -78,8 +98,11 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
     const pagehide = () => { if (credentials) revoke(credentials); };
     window.addEventListener('pagehide', pagehide);
     void create();
-    const interval = setInterval(() => void sync(), 750);
-    return () => { cancelled = true; clearInterval(interval); controller.abort(); window.removeEventListener('pagehide', pagehide); if (credentials) revoke(credentials); };
+    const interval = setInterval(() => { if (!busy) void sync(); }, 350);
+    const visible = () => { void sync(); };
+    document.addEventListener('visibilitychange', visible);
+    window.addEventListener('online', visible);
+    return () => { cancelled = true; publishNow.current = () => {}; clearInterval(interval); clearTimeout(immediate); controller.abort(); window.removeEventListener('pagehide', pagehide); document.removeEventListener('visibilitychange', visible); window.removeEventListener('online', visible); if (credentials) revoke(credentials); };
   }, [enabled, teamId]);
 
   return { enabled, pair, status, toggle: () => { setPair(null); setStatus('Création du lien sécurisé…'); setEnabled(value => !value); } };

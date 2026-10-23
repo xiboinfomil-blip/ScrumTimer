@@ -194,6 +194,12 @@ test('individual score explanations show arithmetic and never invent archived re
   assert.match(optimal, /Pic de 1 000 pts à 105 s/);
   assert.match(optimal, /pénalité de 200 pts/);
   assert.match(optimal, /max\(125, 1000 − 200\) = 800 pts/);
+  assert.match(optimal, /Total : max\(0, 800 − 0\) = 800 pts/);
+  const manual = explainScore({ speakingSeconds: 270, budgetSeconds: 120, score: 75, attempts: 3, manualPenalty: 50 }).join(' ');
+  assert.match(manual, /max\(125, 125 − 200\) = 125 pts/);
+  assert.match(manual, /Pénalité manuelle cumulée : 50 pts \(50 par clic\)/);
+  assert.match(manual, /Total : max\(0, 125 − 50\) = 75 pts/);
+  assert.match(explainScore({ speakingSeconds: 270, budgetSeconds: 120, score: 0, attempts: 3, manualPenalty: 150 }).join(' '), /Total : max\(0, 125 − 150\) = 0 pts/);
   const overtime = explainScore({ speakingSeconds: 144, budgetSeconds: 120, score: 750, attempts: 1 }).join(' ');
   assert.match(overtime, /max\(125, 850 − 50 × 2\) = 750 pts/);
   assert.match(explainScore({ speakingSeconds: 5, budgetSeconds: 120, score: 0, attempts: 1 }).join(' '), /5 premières secondes : 0 pt/);
@@ -202,9 +208,30 @@ test('individual score explanations show arithmetic and never invent archived re
   assert.match(archive, /Score enregistré : 867 pts/);
   assert.match(archive, /317 pts/);
   assert.match(archive, /ne peut donc pas être attribué avec certitude/);
+  assert.match(archive, /les pénalités manuelles/);
   const oldPlateau = explainScore({ speakingSeconds: 102, budgetSeconds: 120, score: 1000 }).join(' ');
   assert.match(oldPlateau, /Score enregistré : 1000 pts/);
   assert.match(oldPlateau, /Écart avec le score de temps actuel : 30 pts/);
   assert.match(oldPlateau, /Le score enregistré n’est pas recalculé/);
   assert.match(explainScore({ speakingSeconds: 0, budgetSeconds: 120, score: null })[0], /aucun score attribué/);
+});
+
+test('manual deductions are shared live/final, cumulative and applied after the retry floor with a final zero floor', () => {
+  const person: SessionSpeaker = { id: 'a', name: 'Alice', present: true, mood: 1, moodUpdatedAt: null, done: false, started: true, speakingSeconds: 105, budgetSeconds: 120, timeUp: false, attempts: 3 };
+  for (const [manualPenalty, expected] of [[0, 800], [50, 750], [100, 700], [750, 50], [800, 0], [850, 0]]) {
+    const active = { ...person, manualPenalty };
+    assert.equal(speakerScoreProgress(active).score, expected);
+    assert.equal(scoreSpeaker({ ...active, done: true }), expected);
+  }
+  for (const seconds of [6, 270]) {
+    for (const [manualPenalty, expected] of [[50, 75], [100, 25], [150, 0]]) {
+      assert.equal(scoreSpeaker({ ...person, done: true, speakingSeconds: seconds, manualPenalty }), expected);
+    }
+  }
+  assert.equal(speakerScoreProgress({ ...person, speakingSeconds: 5, manualPenalty: 50 }).score, 0);
+  assert.equal(scoreSpeaker({ ...person, done: true, speakingSeconds: .5, manualPenalty: 50 }), null);
+  assert.equal(speakerScoreProgress({ ...person, started: false, manualPenalty: 50 }).score, null);
+  assert.equal(speakerScoreProgress(person).score, speakerScoreProgress({ ...person, manualPenalty: 0 }).score);
+  const ranked = sessionLeaderboard([{ ...person, done: true, manualPenalty: 50 }, { ...person, id: 'b', done: true }]);
+  assert.deepEqual(ranked.map(({ id, score, rank }) => ({ id, score, rank })), [{ id: 'b', score: 800, rank: 1 }, { id: 'a', score: 750, rank: 2 }]);
 });

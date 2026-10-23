@@ -1,5 +1,5 @@
 import type { TeamState } from '../types/team.ts';
-import type { SessionSpeaker } from './session-results.ts';
+import { MANUAL_PENALTY_STEP, MAX_MANUAL_PENALTY, validManualPenalty, type SessionSpeaker } from './session-results.ts';
 import { hasValidSession, normalizeTeam } from './team-storage.ts';
 import { timerFrame } from './timer.ts';
 
@@ -26,6 +26,20 @@ export interface TimerCheckpoint {
   postponed: string[];
   timer: TimerState;
   roundId: string | null;
+}
+
+/** Current-speaker actions never change the lineup, other speakers or metrics. */
+export function penalizeCurrentTimer(timer: TimerState): TimerState {
+  const person = timer.people.find(candidate => candidate.id === timer.activeId && !candidate.done && !candidate.postponed);
+  if (!person || (person.manualPenalty ?? 0) > MAX_MANUAL_PENALTY - MANUAL_PENALTY_STEP) return timer;
+  return { ...timer, people: timer.people.map(candidate => candidate === person
+    ? { ...candidate, manualPenalty: (candidate.manualPenalty ?? 0) + MANUAL_PENALTY_STEP } : candidate) };
+}
+
+export function restartCurrentTimer(timer: TimerState, duration = timer.turnTotal): TimerState {
+  if (!timer.people.some(person => person.id === timer.activeId && !person.done && !person.postponed)) return timer;
+  // turnStarted=false makes the NEXT start count a retry; restarting alone does not.
+  return { ...timer, remaining: duration, turnTotal: duration, running: false, turnStarted: false, ended: false, warned: false, deadline: 0 };
 }
 
 export const checkpointKey = (teamId: string) => `standup.timer.tab.v1:${teamId}`;
@@ -57,7 +71,7 @@ export function parseCheckpoint(raw: string | null, team: TeamState, now = new D
       || timer.people.some(person => !saved.session.includes(person.id)
         || ['done', 'started', 'timeUp', 'postponed'].some(key => typeof person[key as keyof typeof person] !== 'boolean')
         || [person.speakingSeconds, person.budgetSeconds, person.attempts].some(value => !Number.isFinite(value) || value < 0 || value > 86400)
-        || !Number.isInteger(person.attempts))
+        || !Number.isInteger(person.attempts) || !validManualPenalty(person.manualPenalty))
       || [timer.remaining, timer.turnTotal, timer.deadline].some(value => !Number.isFinite(value))
       || timer.turnTotal < 1 || timer.turnTotal > 86400 || Math.abs(timer.remaining) > 86400
       || ['running', 'turnStarted', 'focusMode', 'managing', 'ended', 'warned'].some(key => typeof timer[key as keyof TimerState] !== 'boolean')

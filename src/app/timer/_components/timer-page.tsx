@@ -34,6 +34,7 @@ export function TimerPage() {
   const [lineupOpen, setLineupOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [remoteOpen, setRemoteOpen] = useState(false);
+  const [blackScreen, setBlackScreen] = useState(false);
   const panels = useViewMotion(`${view}-${timer.focusMode}`);
   const { activeTeamId, activeTeamName } = useTeam();
   const notes = useDailyHints(activeTeamId);
@@ -49,7 +50,11 @@ export function TimerPage() {
     activeId: timer.activeId, running: timer.running, remaining: timer.remaining, deadline: timer.deadline,
     completed: timer.people.filter(person => person.done).length, total: timer.people.length,
     blocked: timer.managing || timer.lateChecking || lineupOpen || remoteOpen || sharing,
-  }, { toggle: timer.toggle, next: timer.next });
+    blackScreen, manualPenalty: timer.person?.manualPenalty ?? 0,
+  }, { toggle: timer.toggle, next: timer.next, restart: timer.restartCurrent, penalty: timer.penalize, blackScreen: () => {
+    if (timer.running) timer.toggle();
+    setBlackScreen(value => !value);
+  } });
   const broadcast = useLiveBroadcast(allowed ? activeTeamId : null, {
     speaker: timer.person?.name ?? '', nextSpeaker: following?.name ?? '', teamName: activeTeamName,
     running: timer.running, remaining: timer.remaining, deadline: timer.deadline,
@@ -66,6 +71,7 @@ export function TimerPage() {
   return (
     <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-1 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh max-w-none! bg-slate-50 p-3 sm:p-6' : 'mx-auto w-full'} overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
       <RemotePairingDialog open={remoteOpen} onClose={() => setRemoteOpen(false)} remote={remote} />
+      {blackScreen && <button type="button" autoFocus onClick={() => setBlackScreen(false)} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setBlackScreen(false); } }} aria-label="Rétablir l’écran" className="fixed inset-0 z-[3000] h-dvh w-screen bg-black text-transparent focus-visible:outline-2 focus-visible:outline-white">Rétablir l’écran</button>}
       <Dialog open={lineupOpen && !timer.lateChecking} onClose={() => setLineupOpen(false)} aria-labelledby="lineup-dialog-title" fullWidth maxWidth="sm" slotProps={{ paper: { sx: { height: 'min(640px, calc(100dvh - 32px))', m: 2, width: 'calc(100% - 32px)', borderRadius: '24px' } } }}>
         <DialogTitle id="lineup-dialog-title">Le tour de parole</DialogTitle>
         <DialogContent className="flex min-h-0 flex-1 flex-col"><p className="mb-3 shrink-0 text-xs text-muted">{timer.focusMode ? 'Votre passage reste sélectionné. Reprenez le minuteur une fois prêt.' : 'Choisissez la personne qui ouvrira le point.'}</p>{lineupOpen && <TeamLineup timer={timer} className="flex-1" />}</DialogContent>
