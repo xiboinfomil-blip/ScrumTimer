@@ -3,24 +3,34 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert } from '@mui/material';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import StarOutlineIcon from '@mui/icons-material/StarOutline';
+import StarIcon from '@mui/icons-material/Star';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useTeam } from '@/providers/team-provider';
 import { NavIcon } from '@/components/layout/nav-icon';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
+import { filterTeams, teamCategories, type TeamCategory } from '@/lib/team-directory';
 
 const searchable = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr-FR');
 const pageSize = 6;
-const secondaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-sm font-semibold text-brand hover:border-brand/40 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50';
-const primaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50';
+const secondaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 text-xs font-semibold text-brand hover:border-brand/40 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50';
+const primaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-xs font-semibold text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50';
+const field = 'min-h-11 min-w-0 rounded-lg border border-line bg-slate-50/80 px-3 text-sm text-ink placeholder:text-muted focus:border-brand';
+type View = 'all' | 'current' | 'favorites';
 
 export function TeamsPage() {
-  const { teams, activeTeamId, teamBusy, ready, cloudStatus, switchTeam, createTeam } = useTeam();
+  const { teams, activeTeamId, teamBusy, ready, cloudStatus, switchTeam, createTeam, updateTeamDirectory } = useTeam();
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const [view, setView] = useState<View>('all');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [name, setName] = useState('');
+  const [category, setCategory] = useState<TeamCategory | null>('Tech');
+  const [showCreate, setShowCreate] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [createError, setCreateError] = useState('');
@@ -30,16 +40,20 @@ export function TeamsPage() {
   const [openingId, setOpeningId] = useState<string | null>(null);
   const nameInput = useRef<HTMLInputElement>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
-  const results = teams.filter(team => searchable(team.name).includes(searchable(query.trim())));
+  const results = filterTeams(teams, { favoritesOnly: view === 'favorites', ...(categoryFilter ? { category: categoryFilter === 'none' ? null : categoryFilter as TeamCategory } : {}) })
+    .filter(team => (view !== 'current' || team.id === activeTeamId) && searchable(`${team.name} ${team.category ?? ''}`).includes(searchable(query.trim())));
   const pageCount = Math.max(1, Math.ceil(results.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
   const visibleTeams = results.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   const totalMembers = teams.reduce((total, team) => total + team.memberCount, 0);
   const disabled = teamBusy || pending || !ready;
+
   function changePage(next: number) {
-    setDirection(next > currentPage ? 1 : -1);
-    setPage(next);
-    listHeading.current?.focus();
+    setDirection(next > currentPage ? 1 : -1); setPage(next); listHeading.current?.focus();
+  }
+  function revealCreate() {
+    setShowCreate(true);
+    requestAnimationFrame(() => { nameInput.current?.scrollIntoView({ block: 'nearest' }); nameInput.current?.focus(); });
   }
   async function choose(id: string, manage: boolean) {
     if (disabled) return;
@@ -53,102 +67,102 @@ export function TeamsPage() {
     event.preventDefault();
     if (disabled) return;
     if (!name.trim() || name.trim().length > 60 || /\p{Cc}/u.test(name)) {
-      setCreateError('Choisissez un nom de 1 à 60 caractères, sans caractère de contrôle.');
-      nameInput.current?.focus();
-      return;
+      setCreateError('Choisissez un nom de 1 à 60 caractères, sans caractère de contrôle.'); nameInput.current?.focus(); return;
     }
     setPending(true); setCreateError('');
-    const success = await createTeam(name.trim());
+    const success = await createTeam(name.trim(), category);
     setPending(false);
     if (success) router.push(`/manage-team${window.location.search}`);
     else setCreateError('Création impossible. Ce nom existe peut-être déjà ; vérifiez aussi la connexion.');
   }
-  return <div className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto pb-3" aria-labelledby="teams-heading">
-    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-1">
-      <h1 id="teams-heading" className="text-xl font-bold tracking-tight text-ink">Vos équipes</h1>
-      <dl className="flex gap-5 text-sm sm:gap-6" aria-label="Résumé des équipes">
-        <div><dt className="text-xs text-muted">Équipes</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-ink">{ready ? teams.length : '—'}</dd></div>
-        <div className="border-l border-line pl-5 sm:pl-6"><dt className="text-xs text-muted">Membres au total</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-ink">{ready ? totalMembers : '—'}</dd></div>
-      </dl>
-    </header>
 
-    <div className="grid shrink-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-5">
-      <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-white shadow-sm shadow-brand/3" aria-labelledby="team-list-heading">
-        <div className="border-b border-line p-4 sm:p-5">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 ref={listHeading} tabIndex={-1} id="team-list-heading" className="rounded text-base font-bold text-ink">Choisir une équipe</h2>
-            <span role="status" aria-live="polite" aria-atomic="true" className="text-xs text-muted">{!ready ? 'Chargement…' : `${results.length} résultat${results.length === 1 ? '' : 's'}`}</span>
+  return <div className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-y-auto pb-4" aria-labelledby="teams-heading">
+        <header className="mb-5 flex shrink-0 items-center justify-between gap-3 pt-2 pb-5 sm:mb-6 sm:border-b sm:border-line lg:pt-4 lg:pb-7">
+          <div>
+            <div className="flex flex-wrap items-center gap-2"><h1 id="teams-heading" className="text-xl font-bold tracking-tight text-ink sm:text-2xl">Vos équipes</h1><span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-muted sm:hidden">{ready ? teams.length : '—'} équipes</span></div>
+            <p className="mt-1 text-[11px] text-muted"><span className="hidden sm:inline">Rituels d’équipe, humeurs du jour et synchronisations en direct.</span><span className="sm:hidden">{ready ? totalMembers : '—'} collaborateurs synchronisés</span></p>
           </div>
-          <div className="flex min-h-11 items-center gap-2 rounded-xl border border-line bg-slate-50/80 px-3 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
-            <NavIcon name="search" className="shrink-0 text-muted" />
+          <dl className="ml-auto hidden shrink-0 items-center gap-7 text-right sm:flex" aria-label="Résumé des équipes"><div><dt className="text-[10px] text-muted uppercase">Équipes</dt><dd className="mt-1 text-xl font-bold tabular-nums text-ink">{ready ? teams.length : '—'}</dd></div><div className="border-l border-line pl-7"><dt className="text-[10px] text-muted uppercase">Membres</dt><dd className="mt-1 text-xl font-bold tabular-nums text-ink">{ready ? totalMembers : '—'}</dd></div></dl>
+          <button type="button" onClick={revealCreate} aria-expanded={showCreate} aria-controls="create-team-panel" className={`${primaryButton} lg:hidden`}><NavIcon name="plus" width="16" height="16" />Nouvelle</button>
+        </header>
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2.1fr)_minmax(280px,1fr)] lg:gap-7">
+      <section className="min-w-0" aria-labelledby="team-list-heading">
+        <div className="min-w-0 sm:rounded-xl sm:border sm:border-line sm:bg-white sm:p-5">
+        <div className="mb-4 flex items-center justify-between gap-3 sm:border-b sm:border-slate-100 sm:pb-3"><h2 ref={listHeading} tabIndex={-1} id="team-list-heading" className="text-[10px] font-medium tracking-wide text-muted uppercase sm:text-xs sm:font-semibold sm:tracking-normal sm:text-ink sm:normal-case"><span className="sm:hidden">Équipes</span><span className="hidden sm:inline">Choisir une équipe</span></h2><span role="status" aria-live="polite" aria-atomic="true" className="text-[10px] text-muted">{!ready ? 'Chargement…' : `${results.length} résultat${results.length === 1 ? '' : 's'}`}</span></div>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <div className="flex min-h-11 min-w-0 basis-full items-center gap-2 rounded-lg border border-line bg-slate-50/70 px-3 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
+            <NavIcon name="search" className="shrink-0 text-muted" width="16" height="16" />
             <label htmlFor="team-page-search" className="sr-only">Rechercher une équipe</label>
-            <input id="team-page-search" type="search" value={query} onChange={event => { setQuery(event.target.value); setPage(0); }} placeholder="Rechercher par nom…" className="min-h-11 min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted focus-visible:outline-none" />
+            <input id="team-page-search" type="search" value={query} onChange={event => { setQuery(event.target.value); setPage(0); }} placeholder="Rechercher par nom d’équipe ou catégorie…" className="min-h-11 min-w-0 flex-1 bg-transparent text-xs text-ink outline-none placeholder:text-muted focus-visible:outline-none" />
           </div>
+          <div role="group" aria-label="Afficher les équipes" className="flex shrink-0 gap-1 max-sm:w-full">
+            {([['all', 'Toutes'], ['current', 'Mon équipe'], ['favorites', 'Favorites']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={view === value} onClick={() => { setView(value); setPage(0); }} className={`min-h-11 rounded-lg px-3 text-xs font-medium max-sm:flex-1 ${view === value ? 'bg-ink text-white' : 'text-muted hover:bg-white hover:text-ink'}`}>{label}</button>)}
+          </div>
+          <label className="flex min-w-0 items-center gap-2 text-[11px] text-muted sm:ml-auto"><span className="sr-only">Catégorie</span>
+            <select aria-label="Filtrer par catégorie" value={categoryFilter} onChange={event => { setCategoryFilter(event.target.value); setPage(0); }} className="min-h-11 min-w-0 rounded-lg border border-line bg-white px-2 text-xs text-ink">
+              <option value="">Toutes les catégories</option>{teamCategories.map(item => <option key={item}>{item}</option>)}<option value="none">Sans catégorie</option>
+            </select>
+          </label>
         </div>
-        {error && <Alert severity="error" className="m-4">{error}</Alert>}
+        {error && <Alert severity="error" className="mb-3">{error}</Alert>}
         <p role="status" className="sr-only">{pending ? openingId ? 'Ouverture de l’équipe…' : 'Création de l’équipe…' : ''}</p>
-        <div className="flex min-w-0 overflow-hidden">
-        <div className="min-w-0 flex-1 overflow-hidden">
-        {!ready && cloudStatus !== 'error' ? <PageSkeleton variant="teams" scope="section" className="p-4" /> : !teams.length ? <div className="px-5 py-10 text-center">
-          <span className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-blue-50 text-brand"><NavIcon name="people" /></span>
-          <p role="status" className="text-sm font-semibold text-ink">{cloudStatus === 'error' ? 'Équipes indisponibles. Réessayez la connexion Neon.' : 'Votre première équipe commence ici.'}</p>
-          {cloudStatus !== 'error' && <><p className="mt-2 text-sm text-muted">Créez son espace, puis invitez chacun à prendre part au point.</p><button type="button" onClick={() => nameInput.current?.focus()} className={`${secondaryButton} mt-4`}>Nommer mon équipe <NavIcon name="plus" /></button></>}
-        </div> : !results.length ? <div className="px-5 py-10 text-center motion-safe:animate-enter">
-          <NavIcon name="search" className="mx-auto mb-3 text-muted" />
-          <p className="text-sm font-semibold text-ink">Aucune équipe trouvée.</p>
-          <p className="mt-2 text-sm text-muted">Essayez un autre nom ou créez votre équipe.</p>
-          <button type="button" onClick={() => { setQuery(''); setPage(0); }} className={`${secondaryButton} mt-4`}>Effacer la recherche</button>
-        </div> : <motion.ul key={currentPage} initial={reducedMotion || !direction ? false : { y: direction * 20, opacity: .35 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: reducedMotion ? 0 : .3, ease: [.22, 1, .36, 1] }} aria-label="Équipes disponibles" aria-busy={pending && openingId !== null} className="list-none divide-y divide-line p-2">
-          {visibleTeams.map(team => {
-            const active = activeTeamId === team.id;
-            return <li key={team.id} className="group grid min-w-0 gap-3 rounded-xl p-3 hover:bg-slate-50 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-              <div className="flex min-w-0 items-center gap-3">
-                <span aria-hidden="true" className={`grid size-11 shrink-0 place-items-center rounded-2xl text-base font-bold ${active ? 'bg-brand text-white shadow-sm shadow-brand/20' : 'bg-blue-50 text-brand'}`}>{Array.from(team.name)[0]?.toLocaleUpperCase('fr-FR')}</span>
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-bold wrap-anywhere text-ink">{team.name}</h3>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-                    <span>{team.memberCount} membre{team.memberCount === 1 ? '' : 's'}</span>
-                    {active && <span className="inline-flex items-center gap-1 font-semibold text-brand"><NavIcon name="check" width="13" height="13" />Actuelle</span>}
-                    {team.memberCount === 0 && <span>À compléter</span>}
+        <div className="flex min-w-0 gap-2 overflow-hidden">
+          <div className="min-w-0 flex-1">
+            {!ready && cloudStatus !== 'error' ? <PageSkeleton variant="teams" scope="section" /> : !teams.length ? <div className="rounded-xl border border-line bg-white px-5 py-10 text-center">
+              <NavIcon name="people" className="mx-auto mb-3 text-brand" /><p role="status" className="text-sm font-semibold text-ink">{cloudStatus === 'error' ? 'Équipes indisponibles. Réessayez la connexion Neon.' : 'Votre première équipe commence ici.'}</p>
+              {cloudStatus !== 'error' && <button type="button" onClick={revealCreate} className={`${secondaryButton} mt-4`}>Nommer mon équipe <NavIcon name="plus" /></button>}
+            </div> : !results.length ? <div className="rounded-xl border border-line bg-white px-5 py-10 text-center">
+              <StarOutlineIcon aria-hidden="true" className="mb-2 text-muted" /><p className="text-sm font-semibold text-ink">{view === 'favorites' ? 'Aucune équipe favorite dans cette sélection.' : 'Aucune équipe trouvée.'}</p>
+              <p className="mt-2 text-xs text-muted">{view === 'favorites' ? 'Touchez l’étoile d’une équipe pour la retrouver ici.' : 'Essayez un autre nom ou une autre catégorie.'}</p>
+              <button type="button" onClick={() => { setQuery(''); setCategoryFilter(''); setView('all'); setPage(0); }} className={`${secondaryButton} mt-4`}>Afficher toutes les équipes</button>
+            </div> : <motion.ul key={currentPage} initial={reducedMotion || !direction ? false : { y: direction * 20, opacity: .35 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: reducedMotion ? 0 : .3 }} aria-label="Équipes disponibles" aria-busy={teamBusy || pending} className="grid list-none gap-3">
+              {visibleTeams.map(team => {
+                const active = activeTeamId === team.id;
+                return <li key={team.id} className="group min-w-0 rounded-xl border border-line bg-white p-3 transition-colors hover:border-brand/30 sm:rounded-lg xl:grid xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center xl:gap-x-2 xl:px-3 xl:py-2">
+                  <div className="flex min-w-0 items-center gap-2.5 xl:row-span-2">
+                    <span aria-hidden="true" className={`grid size-11 shrink-0 place-items-center rounded-lg border text-sm font-semibold ${active ? 'border-brand bg-brand text-white max-sm:border-blue-200 max-sm:bg-blue-50 max-sm:text-brand' : team.category === 'Support' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-100 bg-slate-50 text-slate-500'}`}>{team.name.split(/\s+/).slice(0, 2).map(word => Array.from(word)[0]).join('').toLocaleUpperCase('fr-FR')}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><h3 className="text-sm font-semibold wrap-anywhere text-ink">{team.name}</h3>{active && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Actuelle</span>}</div>
+                      <p className="mt-1 text-[11px] text-muted">{team.memberCount} membre{team.memberCount === 1 ? '' : 's'}{team.category && <span> · {team.category}</span>}{team.memberCount === 0 && ' · À compléter'}</p>
+                    </div>
+                    <button type="button" disabled={disabled} aria-label={`${team.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} : ${team.name}`} aria-pressed={team.favorite} onClick={() => void updateTeamDirectory({ teamId: team.id, favorite: !team.favorite })} className={`grid size-11 shrink-0 place-items-center rounded-lg hover:bg-amber-50 disabled:opacity-50 ${team.favorite ? 'text-amber-500' : 'text-slate-400'}`}>{team.favorite ? <StarIcon aria-hidden="true" sx={{ fontSize: 21 }} /> : <StarOutlineIcon aria-hidden="true" sx={{ fontSize: 21 }} />}</button>
                   </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 max-sm:pl-14">
-                <button type="button" disabled={disabled} onClick={() => void choose(team.id, true)} aria-label={`Gérer l’équipe ${team.name}`} className="min-h-11 rounded-xl px-3 text-sm font-semibold text-muted hover:bg-white hover:text-brand disabled:cursor-not-allowed disabled:opacity-50">Gérer</button>
-                <button type="button" disabled={disabled} onClick={() => void choose(team.id, false)} aria-label={`Ouvrir l’équipe ${team.name}`} className={`${active ? primaryButton : secondaryButton} group/open max-sm:flex-1`}>
-                  {openingId === team.id ? 'Ouverture…' : 'Ouvrir'}<span aria-hidden="true" className="motion-safe:transition-transform motion-safe:group-hover/open:translate-x-1"><ArrowForwardIcon aria-hidden="true" sx={{ fontSize: 20 }} /></span>
-                </button>
-              </div>
-            </li>;
-          })}
-        </motion.ul>}
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-1 border-t border-slate-100 pt-2 xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:mt-0 xl:justify-end xl:border-0 xl:pt-0">
+                    <label className="flex min-w-0 items-center text-[10px] text-muted"><span className="sr-only">Catégorie</span><select aria-label={`Catégorie de ${team.name}`} disabled={disabled} value={team.category ?? ''} onChange={event => void updateTeamDirectory({ teamId: team.id, category: (event.target.value || null) as TeamCategory | null })} className="min-h-11 max-w-32 rounded-lg bg-slate-50 px-2 text-[11px] text-muted disabled:opacity-50 xl:max-w-28 xl:bg-transparent"><option value="">Sans catégorie</option>{teamCategories.map(item => <option key={item}>{item}</option>)}</select></label>
+                    <div className="flex items-center gap-1"><button type="button" disabled={disabled} onClick={() => void choose(team.id, true)} aria-label={`Gérer l’équipe ${team.name}`} className="min-h-11 min-w-11 rounded-lg px-2 text-xs text-muted hover:bg-slate-50 disabled:opacity-50">Gérer</button><button type="button" disabled={disabled} onClick={() => void choose(team.id, false)} aria-label={`Ouvrir l’équipe ${team.name}`} className={`${active ? primaryButton : secondaryButton} px-3`}>{openingId === team.id ? 'Ouverture…' : 'Ouvrir'}<ArrowForwardIcon aria-hidden="true" sx={{ fontSize: 14 }} /></button></div>
+                  </div>
+                </li>;
+              })}
+            </motion.ul>}
+          </div>
+          {results.length > pageSize && <nav aria-label="Pagination des équipes" className="flex w-11 shrink-0 flex-col items-center justify-center gap-2">
+            <button type="button" className={`${secondaryButton} size-11 px-0`} disabled={currentPage === 0} onClick={() => changePage(currentPage - 1)} aria-label="Page précédente des équipes"><KeyboardArrowUpIcon aria-hidden="true" /></button>
+            <p role="status" className="text-center text-xs tabular-nums text-muted">{currentPage + 1}<span className="block text-[10px]">sur {pageCount}</span></p>
+            <button type="button" className={`${secondaryButton} size-11 px-0`} disabled={currentPage === pageCount - 1} onClick={() => changePage(currentPage + 1)} aria-label="Page suivante des équipes"><KeyboardArrowDownIcon aria-hidden="true" /></button>
+          </nav>}
         </div>
-        {results.length > pageSize && <nav aria-label="Pagination des équipes" className="flex w-14 shrink-0 flex-col items-center justify-center gap-2 border-l border-line px-1 py-3">
-          <button type="button" className={`${secondaryButton} size-11 shrink-0 px-0`} disabled={currentPage === 0} onClick={() => changePage(currentPage - 1)} aria-label="Page précédente des équipes"><KeyboardArrowUpIcon aria-hidden="true" sx={{ fontSize: 20 }} /></button>
-          <p role="status" aria-live="polite" aria-atomic="true" className="text-center text-xs tabular-nums text-muted"><span className="sr-only">Page </span>{currentPage + 1}<span className="block text-[10px]">sur {pageCount}</span></p>
-          <button type="button" className={`${secondaryButton} size-11 shrink-0 px-0`} disabled={currentPage === pageCount - 1} onClick={() => changePage(currentPage + 1)} aria-label="Page suivante des équipes"><KeyboardArrowDownIcon aria-hidden="true" sx={{ fontSize: 20 }} /></button>
-        </nav>}
         </div>
-        {ready && teams.length > 0 && <p className="border-t border-line px-5 py-3 text-xs leading-relaxed text-muted">Ouvrir pour préparer le point · Gérer pour modifier les membres et les réglages.</p>}
+        <p className="mt-4 hidden px-1 text-[11px] leading-relaxed text-muted sm:block">Ouvrir pour préparer le point · Gérer pour modifier les membres et les réglages.</p>
+        <div className="mt-7 text-center text-[10px] leading-5 text-muted sm:hidden"><p><AutoAwesomeIcon aria-hidden="true" className="mr-1 text-accent" sx={{ fontSize: 12 }} />Moins de réunions. Plus de sens.</p><p className="text-[9px]">Infomil Mauritius · Persistance Neon DB</p></div>
       </section>
 
-      <aside className="min-w-0 overflow-hidden rounded-2xl border border-line bg-white" aria-labelledby="create-team-heading">
-        <div className="relative overflow-hidden bg-brand-dark p-5 text-white">
-          <span aria-hidden="true" className="pointer-events-none absolute -top-10 -right-10 size-40 rounded-full border border-white/10" />
-          <span aria-hidden="true" className="pointer-events-none absolute -top-3 -right-3 size-26 rounded-full border border-white/10" />
-          <span aria-hidden="true" className="mb-4 grid size-10 place-items-center rounded-xl border border-white/20 bg-white/10 text-orange-200"><NavIcon name="plus" /></span>
-          <h2 id="create-team-heading" className="relative text-lg font-bold tracking-tight">Une nouvelle équipe ?</h2>
-          <p className="relative mt-2 max-w-64 text-sm leading-relaxed text-blue-100">Rassemblez vos collègues dans un espace à vous.</p>
+      <aside id="create-team-panel" className={`min-w-0 ${showCreate ? '' : 'max-lg:hidden'}`} aria-labelledby="create-team-heading">
+        <div className="relative isolate overflow-hidden rounded-xl border border-line bg-white p-5 lg:p-6">
+          <span aria-hidden="true" className="pointer-events-none absolute -top-8 -right-8 -z-10 size-28 rounded-full bg-blue-50/60" />
+          <span aria-hidden="true" className="mb-4 grid size-11 place-items-center rounded-xl border border-blue-200 bg-blue-50 text-brand"><NavIcon name="plus" /></span>
+          <h2 id="create-team-heading" className="text-base font-bold tracking-tight text-ink">Une nouvelle équipe ?</h2>
+          <p className="mt-1.5 mb-5 text-xs leading-relaxed text-muted">Rassemblez vos collègues dans un espace dédié sans compte nécessaire.</p>
+          <form onSubmit={event => void create(event)} className="flex flex-col gap-2" noValidate aria-busy={pending && !openingId}>
+            <label htmlFor="new-team-name" className="text-xs font-medium text-ink">Nom de l’équipe</label>
+            <input ref={nameInput} id="new-team-name" value={name} onChange={event => { setName(event.target.value); setCreateError(''); }} placeholder="Ex. Squad Produit, Agilité…" aria-invalid={!!createError} aria-describedby={createError ? 'team-name-hint team-create-error' : 'team-name-hint'} required maxLength={60} className={`${field} w-full`} />
+            <p id="team-name-hint" className="flex flex-wrap justify-between gap-1 text-[10px] text-muted"><span>Un nom reconnaissable.</span><span>60 caractères max.</span></p>
+            <fieldset className="mt-2"><legend className="mb-1 text-xs font-medium text-ink">Catégorie</legend><div className="flex flex-wrap gap-1">{teamCategories.map(item => <button key={item} type="button" aria-pressed={category === item} onClick={() => setCategory(category === item ? null : item)} className={`min-h-11 rounded-lg px-3 text-xs ${category === item ? 'bg-ink text-white' : 'bg-slate-100 text-muted hover:bg-slate-200'}`}>{item}</button>)}</div></fieldset>
+            {createError && <p id="team-create-error" role="alert" className="text-sm text-danger">{createError}</p>}
+            <button type="submit" disabled={disabled} className={`${primaryButton} mt-2 w-full`}><NavIcon name="plus" width="17" height="17" />{pending && !openingId ? 'Création…' : 'Créer l’équipe'}</button>
+            <p className="mt-2 text-center text-[10px] text-muted">Vous ajouterez les membres juste après.</p>
+          </form>
+          <div className="mt-5 flex items-start gap-2 border-t border-slate-100 pt-4 text-[10px] leading-relaxed text-muted"><NavIcon name="people" width="16" height="16" className="mt-0.5 shrink-0" /><p>Les équipes sont partagées sur ce site. Présences, humeurs et bilans restent propres à chacune. Catégories et favoris sont enregistrés dans Neon.</p></div>
         </div>
-        <form onSubmit={event => void create(event)} className="flex flex-col gap-2 p-5" noValidate aria-busy={pending && !openingId}>
-          <label htmlFor="new-team-name" className="text-sm font-semibold text-ink">Nom de l’équipe</label>
-          <input ref={nameInput} id="new-team-name" value={name} onChange={event => { setName(event.target.value); setCreateError(''); }} placeholder="Ex. Équipe Produit" aria-invalid={!!createError} aria-describedby={createError ? 'team-name-hint team-create-error' : 'team-name-hint'} required maxLength={60} className="min-h-11 min-w-0 w-full rounded-xl border border-line bg-slate-50 px-3 text-sm text-ink placeholder:text-muted focus:border-brand" />
-          <p id="team-name-hint" className="text-xs text-muted">Un nom reconnaissable, 60 caractères maximum.</p>
-          {createError && <p id="team-create-error" role="alert" className="mt-1 text-sm text-danger">{createError}</p>}
-          <button type="submit" disabled={disabled} className={`${primaryButton} mt-3 w-full`}><NavIcon name="plus" />{pending && !openingId ? 'Création…' : 'Créer une équipe'}</button>
-          <p className="mt-1 text-center text-xs text-muted">Vous ajouterez les membres juste après.</p>
-        </form>
-        <div className="mx-5 flex gap-2 border-t border-line py-4 text-xs leading-relaxed text-muted"><NavIcon name="people" className="mt-0.5 shrink-0 text-brand" /><p>Les équipes sont partagées sur ce site. Présences, humeurs et bilans restent propres à chacune.</p></div>
       </aside>
     </div>
   </div>;

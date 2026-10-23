@@ -112,7 +112,7 @@ test('PostgreSQL: legacy backfill, CAS isolation, atomic rollback, scoped reads 
   await engine.query("UPDATE standup_spaces SET team=jsonb_set(team,'{warning}','30')");
   await engine.transaction(async (tx: typeof engine) => { await tx.exec(migration); });
   await engine.transaction(async (tx: typeof engine) => { await tx.exec(readFileSync(new URL('../drizzle/0002_workspace_daily_meters.sql', import.meta.url), 'utf8')); });
-  for (const name of ['0004_slim_emma_frost', '0005_tired_black_bird']) {
+  for (const name of ['0004_slim_emma_frost', '0005_tired_black_bird', '0006_pretty_shiver_man']) {
     await engine.exec(readFileSync(new URL(`../drizzle/${name}.sql`, import.meta.url), 'utf8'));
   }
   assert.equal((await engine.query('SELECT count(*)::int AS n FROM standup_sessions')).rows[0].n, 1, 'old history converted before retention');

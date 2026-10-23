@@ -12,12 +12,8 @@ import { clearCheckpoint, readCheckpoint, parseCheckpoint, writeCheckpoint, chec
 import { rejoinCheckpoint } from '@/lib/timer-completion';
 import type { Mood } from '@/types/team';
 import { CloudRequestError, cloudFetch, cloudRetryDelay, isTransientCloudError, sameCloudTeam } from '@/lib/cloud-retry';
-
-export interface TeamSummary {
-  id: string;
-  name: string;
-  memberCount: number;
-}
+import { isTeamCategory, type TeamCategory, type TeamSummary, type TeamDirectoryUpdate } from '@/lib/team-directory';
+export type { TeamSummary } from '@/lib/team-directory';
 
 interface TeamList {
   teams: TeamSummary[];
@@ -28,9 +24,11 @@ function readTeamList(value: unknown): TeamList {
   const list = value as TeamList | null;
   if (!list || !Array.isArray(list.teams) || (list.activeTeamId !== null && typeof list.activeTeamId !== 'string')
     || !list.teams.every(team => typeof team.id === 'string' && typeof team.name === 'string'
-      && Number.isInteger(team.memberCount) && team.memberCount >= 0)
+      && Number.isInteger(team.memberCount) && team.memberCount >= 0
+      && (team.category === undefined || team.category === null || isTeamCategory(team.category))
+      && (team.favorite === undefined || typeof team.favorite === 'boolean'))
     || (list.teams.length ? !list.teams.some(team => team.id === list.activeTeamId) : list.activeTeamId !== null)) throw new Error('Liste des équipes invalide.');
-  return list;
+  return { ...list, teams: list.teams.map(team => ({ ...team, category: team.category ?? null, favorite: team.favorite ?? false })) };
 }
 
 interface TeamContextValue {
@@ -48,7 +46,8 @@ interface TeamContextValue {
   resetToday: () => Promise<boolean>;
   setDailyReady: (ready: boolean) => void;
   switchTeam: (id: string) => Promise<boolean>;
-  createTeam: (name: string) => Promise<boolean>;
+  createTeam: (name: string, category?: TeamCategory | null) => Promise<boolean>;
+  updateTeamDirectory: (update: TeamDirectoryUpdate) => Promise<boolean>;
   deleteTeam: (id: string, name: string) => Promise<boolean>;
   state: TeamState;
   ready: boolean;
@@ -78,6 +77,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   const generation = useRef(0);
   const loadController = useRef<AbortController | null>(null);
   const writeController = useRef<AbortController | null>(null);
+  const directoryController = useRef<AbortController | null>(null);
   const revision = useRef(0);
   const latest = useRef(state);
   const hydrated = useRef(false);
@@ -274,6 +274,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', resume);
       loadController.current?.abort();
       writeController.current?.abort();
+      directoryController.current?.abort();
     };
   }, [clearRetry]);
 
@@ -333,7 +334,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     };
   }, [flush]);
 
-  const changeTeam = useCallback(async (method: 'PATCH' | 'POST', body: { teamId: string } | { name: string }) => {
+  const changeTeam = useCallback(async (method: 'PATCH' | 'POST', body: { teamId: string } | { name: string; category?: TeamCategory | null }) => {
     if (busy.current || uploading.current || dirty.current || pendingRounds.current.length || conflict.current) {
       notify(conflict.current ? 'Conflit de sauvegarde : changement d’équipe bloqué. Vos modifications restent en attente.'
         : 'Changement d’équipe indisponible : attendez la confirmation des sauvegardes, ou réessayez Neon.', 'error');
@@ -393,13 +394,41 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       && !dirty.current && !pendingRounds.current.length && !conflict.current) return true;
     return changeTeam('PATCH', { teamId: id });
   }, [teams, changeTeam, notify]);
-  const createTeam = useCallback(async (name: string) => {
+  const createTeam = useCallback(async (name: string, category?: TeamCategory | null) => {
     const clean = name.trim();
     if (!clean || clean.length > 60 || /\p{Cc}/u.test(name)) {
       notify('Le nom doit contenir de 1 à 60 caractères, sans caractère de contrôle.', 'error'); return false;
     }
-    return changeTeam('POST', { name: clean });
+    return changeTeam('POST', category === undefined ? { name: clean } : { name: clean, category });
   }, [changeTeam, notify]);
+
+  const updateTeamDirectory = useCallback(async (update: TeamDirectoryUpdate) => {
+    if (busy.current || !hydrated.current || !teams.some(team => team.id === update.teamId)) return false;
+    busy.current = true; setTeamBusy(true);
+    const controller = new AbortController();
+    directoryController.current = controller;
+    const token = generation.current;
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await cloudFetch('/api/teams', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(update), signal: controller.signal });
+      if (!response.ok) throw new Error('Classement non confirmé. Réessayez pour retrouver le choix partagé.');
+      const list = readTeamList(await response.json());
+      if (!mounted.current || generation.current !== token) return false;
+      // Directory-only changes must never select a team or reset its live session.
+      setTeams(list.teams);
+      return true;
+    } catch {
+      if (mounted.current) notify('Classement non confirmé. Réessayez ou rechargez pour vérifier le choix enregistré.', 'error');
+      return false;
+    } finally {
+      clearTimeout(timeout);
+      if (directoryController.current === controller) directoryController.current = null;
+      if (mounted.current && generation.current === token) {
+        busy.current = false; setTeamBusy(false);
+        if (dirty.current) void flush();
+      }
+    }
+  }, [teams, notify, flush]);
 
   const deleteTeam = useCallback(async (id: string, name: string) => {
     if (!teams.some(team => team.id === id && team.name === name) || busy.current || uploading.current || dirty.current || pendingRounds.current.length || conflict.current || !hydrated.current) {
@@ -522,7 +551,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     } finally { clearTimeout(timeout); busy.current = false; setTeamBusy(false); }
   }, [todayRound, hydrateTeam, notify, scheduleRetry]);
   const activeTeamName = teams.find(team => team.id === activeTeamId)?.name ?? '';
-  return <TeamContext.Provider value={{ getTimerCheckpoint, storeTimerCheckpoint, rejoinLateParticipant, participantOrder, setParticipantOrder, teams, activeTeamId, activeTeamName, teamBusy, dailyReady, todayRound, resetToday, setDailyReady, switchTeam, createTeam, deleteTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;
+  return <TeamContext.Provider value={{ getTimerCheckpoint, storeTimerCheckpoint, rejoinLateParticipant, participantOrder, setParticipantOrder, teams, activeTeamId, activeTeamName, teamBusy, dailyReady, todayRound, resetToday, setDailyReady, switchTeam, createTeam, updateTeamDirectory, deleteTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;
 }
 
 export function useTeam() {

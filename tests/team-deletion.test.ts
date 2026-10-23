@@ -122,7 +122,7 @@ test('PGlite: dependent-first team deletion cascades remaining ownership, clears
     for (const table of tables) assert.ok(before[table].some(row => (row as { team_id: string }).team_id === target.id), `${table} must be populated before deletion`);
     statements.length = 0;
     const deleted = await deleteTeam(client, { teamId: target.id, name: target.name });
-    assert.deepEqual(deleted, { teams: [{ id: second, name: 'Autre équipe', memberCount: 1 }], activeTeamId: second });
+    assert.deepEqual(deleted, { teams: [{ id: second, name: 'Autre équipe', memberCount: 1, category: null, favorite: false }], activeTeamId: second });
     assert.match(statements[1], /FROM workspaces .*FOR UPDATE/);
     assert.match(statements[2], /FROM teams .*FOR UPDATE/);
     assert.match(statements[3], /^UPDATE workspaces /);
@@ -154,7 +154,7 @@ test('PGlite: initial bootstrap is singleton, last deletion stays empty across G
     const client = clientFor(engine);
     const [first, concurrent] = await Promise.all([listTeams(client), listTeams(client)]);
     assert.deepEqual(concurrent, first);
-    assert.deepEqual(first, { teams: [{ id: sharedWorkspace, name: 'Mon équipe', memberCount: 0 }], activeTeamId: sharedWorkspace });
+    assert.deepEqual(first, { teams: [{ id: sharedWorkspace, name: 'Mon équipe', memberCount: 0, category: null, favorite: false }], activeTeamId: sharedWorkspace });
     const empty = { teams: [], activeTeamId: null };
     assert.deepEqual(await deleteTeam(client, { teamId: sharedWorkspace, name: 'Mon équipe' }), empty);
     for (let reload = 0; reload < 3; reload++) assert.deepEqual(await listTeams(clientFor(engine)), empty);
@@ -183,7 +183,7 @@ test('PGlite: legacy teams suppress the initial default without changing ownersh
     await engine.query(`INSERT INTO teams(id,workspace_id,name,duration,warning,sound) VALUES($1,$1,'Mon équipe',120,30,true)`, [legacyWorkspace]);
     await engine.query('UPDATE workspaces SET selected_team_id=$1 WHERE id=$1', [legacyWorkspace]);
     const client = clientFor(engine);
-    const initial = { teams: [{ id: legacyWorkspace, name: 'Mon équipe', memberCount: 0 }], activeTeamId: legacyWorkspace };
+    const initial = { teams: [{ id: legacyWorkspace, name: 'Mon équipe', memberCount: 0, category: null, favorite: false }], activeTeamId: legacyWorkspace };
     assert.deepEqual(await listTeams(client), initial);
     assert.deepEqual(await listTeams(client), initial);
     assert.equal((await engine.query('SELECT workspace_id FROM teams')).rows[0].workspace_id, legacyWorkspace);

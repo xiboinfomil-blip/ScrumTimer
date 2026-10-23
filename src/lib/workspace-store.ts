@@ -3,6 +3,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
 import catalog from './remote-mood-catalog.json' with { type: 'json' };
 import type { TeamState } from '../types/team.ts';
+import { validateTeamCategory, validateTeamDirectoryPatch, type TeamCategory, type TeamSummary } from './team-directory.ts';
 import { mauritiusDay } from '@infomil/scrum-shared/statistics';
 export { mauritiusDay } from '@infomil/scrum-shared/statistics';
 
@@ -47,9 +48,10 @@ async function batch(db: Database, statements: SQL[]) {
 }
 // A single database namespace, not a browser identity. Legacy rows stay visible.
 const sharedWorkspace = '0'.repeat(64);
-const listStatement = () => sql`SELECT t.id,t.name,(SELECT count(*)::int FROM team_members m WHERE m.team_id=t.id) AS "memberCount" FROM teams t ORDER BY lower(t.name),t.id`;
+const listStatement = () => sql`SELECT t.id,t.name,t.category,t.favorite,(SELECT count(*)::int FROM team_members m WHERE m.team_id=t.id) AS "memberCount" FROM teams t ORDER BY lower(t.name),t.id`;
 function listResult(rows: Record<string, unknown>[], selectedId: string | null = null) {
-  return { teams: rows.map(row => ({ id: String(row.id), name: String(row.name), memberCount: Number(row.memberCount) })), activeTeamId: selectedId ?? (rows.length ? String(rows[0].id) : null) };
+  const teams: TeamSummary[] = rows.map(row => ({ id: String(row.id), name: String(row.name), memberCount: Number(row.memberCount), category: validateTeamCategory(row.category ?? null), favorite: row.favorite === true }));
+  return { teams, activeTeamId: selectedId ?? (rows.length ? String(rows[0].id) : null) };
 }
 export async function listTeams(db: Database) {
   // Bootstrap only when the shared namespace is first inserted, never after
@@ -68,12 +70,14 @@ export async function resolveSelectedTeam(db: Database, explicitId: string | nul
   if (!result.rows.length) throw forbidden();
   return String(result.rows[0].id);
 }
-export async function createTeam(db: Database, value: unknown) {
+export async function createTeam(db: Database, value: unknown, category: TeamCategory | null = null) {
+  try { validateTeamCategory(category); }
+  catch { throw new WorkspaceError(400, 'Catégorie d’équipe invalide.'); }
   const name = validateTeamName(value); const id = newTeamId();
   const results = await batch(db, [
     sql`INSERT INTO workspaces(id) VALUES(${sharedWorkspace}) ON CONFLICT DO NOTHING`,
     sql`SELECT id FROM workspaces WHERE id=${sharedWorkspace} FOR UPDATE`,
-    sql`INSERT INTO teams(id,workspace_id,name,duration,warning,sound) SELECT ${id},${sharedWorkspace},${name},120,30,true WHERE NOT EXISTS(SELECT 1 FROM teams WHERE lower(name)=lower(${name})) RETURNING id`,
+    sql`INSERT INTO teams(id,workspace_id,name,category,duration,warning,sound) SELECT ${id},${sharedWorkspace},${name},${category},120,30,true WHERE NOT EXISTS(SELECT 1 FROM teams WHERE lower(name)=lower(${name})) RETURNING id`,
     listStatement(),
   ]);
   if (!results[2].rows.length) throw new WorkspaceError(409, 'Une équipe porte déjà ce nom, ou votre sélection est indisponible.');
@@ -110,6 +114,25 @@ export async function selectTeam(db: Database, teamId: unknown) {
   if (!rows.some(row => row.id === teamId)) throw forbidden();
   // Selection is returned to React only; it never updates a device record.
   return listResult(rows, teamId);
+}
+/** Shared metadata only: never touches roster revision, timestamps or sessions. */
+export async function updateTeamDirectory(db: Database, value: unknown) {
+  let input;
+  try {
+    input = validateTeamDirectoryPatch(value);
+    if (!('category' in input) && !('favorite' in input)) throw new TypeError();
+  } catch { throw new WorkspaceError(400, 'Métadonnées d’équipe invalides.'); }
+  const teamId = input.teamId;
+  const assignment = 'category' in input ? sql`category=${input.category}` : sql`favorite=${input.favorite}`;
+  const results = await batch(db, [
+    sql`INSERT INTO workspaces(id) VALUES(${sharedWorkspace}) ON CONFLICT DO NOTHING`,
+    sql`SELECT id FROM workspaces WHERE id=${sharedWorkspace} FOR UPDATE`,
+    sql`SELECT id FROM teams WHERE id=${teamId} FOR UPDATE`,
+    sql`UPDATE teams SET ${assignment} WHERE id=${teamId} RETURNING id`,
+    listStatement(),
+  ]);
+  if (!results[3].rows.length) throw new WorkspaceError(404, 'Équipe introuvable.');
+  return listResult(results[4].rows, teamId);
 }
 const dailyStatement = (teamId: string, day: string) => sql`SELECT meter_id AS "meterId",title FROM team_daily_meters WHERE team_id=${teamId} AND day=${day}::date`;
 function dailyResult(day: string, rows: Record<string, unknown>[]) {

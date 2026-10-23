@@ -24,10 +24,12 @@ export const workspaces = pgTable('workspaces', {
 export const teams = pgTable('teams', {
   id: text('id').primaryKey(), revision: integer('revision').notNull().default(1),
   workspaceId: text('workspace_id').notNull().references(() => workspaces.id), name: text('name').notNull(),
+  category: text('category', { enum: ['Tech', 'Produit', 'Support', 'Marketing'] }),
+  favorite: boolean('favorite').notNull().default(false),
   writeTransaction: bigint('write_transaction', { mode: 'bigint' }).notNull().default(sql`0`),
   duration: integer('duration').notNull(), warning: integer('warning').notNull(), sound: boolean('sound').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => [uniqueIndex('teams_workspace_name').on(t.workspaceId, sql`lower(${t.name})`), check('teams_name', sql`length(${t.name}) BETWEEN 1 AND 60 AND ${t.name} = btrim(${t.name}) AND ${t.name} !~ '[[:cntrl:]]'`), check('teams_id', sql`${t.id} ~ '^[a-f0-9]{64}$'`), check('teams_revision', sql`${t.revision} >= 1`), check('teams_duration', sql`${t.duration} BETWEEN 1 AND 3659`), check('teams_warning', sql`${t.warning} IN (0,10,15,30,60)`)]);
+}, t => [check('teams_category', sql`${t.category} IN ('Tech','Produit','Support','Marketing')`), uniqueIndex('teams_workspace_name').on(t.workspaceId, sql`lower(${t.name})`), check('teams_name', sql`length(${t.name}) BETWEEN 1 AND 60 AND ${t.name} = btrim(${t.name}) AND ${t.name} !~ '[[:cntrl:]]'`), check('teams_id', sql`${t.id} ~ '^[a-f0-9]{64}$'`), check('teams_revision', sql`${t.revision} >= 1`), check('teams_duration', sql`${t.duration} BETWEEN 1 AND 3659`), check('teams_warning', sql`${t.warning} IN (0,10,15,30,60)`)]);
 export const participants = pgTable('participants', {
   teamId: text('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }), id: text('id').notNull(), name: text('name').notNull(),
 }, t => [primaryKey({ columns: [t.teamId, t.id] }), check('participants_id', sql`length(${t.id}) BETWEEN 1 AND 100 AND ${t.id} !~ '[[:cntrl:]]'`), check('participants_name', sql`length(${t.name}) BETWEEN 1 AND 60 AND ${t.name} = btrim(${t.name}) AND ${t.name} !~ '[[:cntrl:]]'`)]);

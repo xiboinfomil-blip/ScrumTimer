@@ -88,9 +88,10 @@ test('PGlite: shared teams across devices, independent selection, daily singleto
     await engine.exec(migration('0003_remote_mood_cache'));
     await engine.exec(migration('0004_slim_emma_frost'));
     await engine.exec(migration('0005_tired_black_bird'));
+    await engine.exec(migration('0006_pretty_shiver_man'));
     await readMoodFetchCache(client, catalog, clock);
     const first = await listTeams(client);
-    assert.deepEqual(first, { teams: [{ id: workspace, name: 'Mon équipe', memberCount: 1 }], activeTeamId: workspace });
+    assert.deepEqual(first, { teams: [{ id: workspace, name: 'Mon équipe', memberCount: 1, category: null, favorite: false }], activeTeamId: workspace });
     assert.deepEqual(await listTeams(client), first);
     const bootstrap = await Promise.all([listTeams(client), listTeams(client)]);
     assert.deepEqual(bootstrap[0], bootstrap[1]);
