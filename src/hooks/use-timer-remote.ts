@@ -87,7 +87,13 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
         const response = await fetch('/api/timer-remote', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId! }, body: JSON.stringify({ operation: 'create' }), signal: AbortSignal.timeout(8000) });
         const body = await response.json();
         if (!response.ok) {
-          if (!cancelled) setStatus(response.status === 409 ? 'Un autre ordinateur contrôle déjà cette équipe. Désactivez-le ou attendez dix secondes après sa déconnexion.' : 'Activation impossible. Vérifiez le secret serveur TIMER_REMOTE_SECRET (32 octets minimum) et le transport partagé, puis réessayez.');
+          const diagnostics: Record<string, string> = {
+            REMOTE_SECRET_INVALID: 'Secret serveur absent ou trop court. Configurez TIMER_REMOTE_SECRET (32 octets minimum) sur le serveur maître, puis redémarrez en local ou redéployez sur Vercel.',
+            REMOTE_REDIS_REQUIRED: 'Redis est requis sur Vercel. Connectez l’intégration REDIS_URL au projet maître, ou configurez UPSTASH_REDIS_REST_URL et UPSTASH_REDIS_REST_TOKEN, puis redéployez.',
+            REMOTE_REDIS_CONFIG_INVALID: 'Configuration Redis invalide. Vérifiez REDIS_URL (redis:// ou rediss://), ou la paire UPSTASH_REDIS_REST_URL (HTTPS) et UPSTASH_REDIS_REST_TOKEN, puis redémarrez ou redéployez.',
+            REMOTE_REDIS_UNAVAILABLE: 'Connexion Redis impossible. Vérifiez le service, ses accès et la connexion réseau du serveur, puis réessayez.',
+          };
+          if (!cancelled) setStatus(response.status === 409 ? 'Un autre ordinateur contrôle déjà cette équipe. Désactivez-le ou attendez dix secondes après sa déconnexion.' : diagnostics[body.code] ?? (response.status === 403 ? 'Origine refusée. Rechargez le site depuis une seule adresse et réessayez.' : 'Activation impossible : le serveur ou la vérification de l’équipe est indisponible. Réessayez ; en local, redémarrez le serveur après modification de la configuration.'));
           return;
         }
         credentials = body;

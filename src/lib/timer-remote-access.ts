@@ -7,7 +7,7 @@ const shape = /^[A-Za-z0-9_-]{43}$/;
 
 export function timerRemoteSecret(env: Readonly<Record<string, string | undefined>>): string {
   const secret = env.TIMER_REMOTE_SECRET ?? env.PARTICIPANT_PORTAL_SECRET;
-  if (!secret || Buffer.byteLength(secret, 'utf8') < 32) throw new RemoteError(503);
+  if (!secret || Buffer.byteLength(secret, 'utf8') < 32) throw new RemoteError(503, 'REMOTE_SECRET_INVALID');
   return secret;
 }
 

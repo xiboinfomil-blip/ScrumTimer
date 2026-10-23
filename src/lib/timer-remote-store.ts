@@ -6,24 +6,17 @@ import {
   REMOTE_COMMAND_TTL, REMOTE_HOST_FRESH, REMOTE_HOST_LEASE, REMOTE_MAX_ENTRIES, REMOTE_PAIR_TTL, syncRemoteEntry,
 } from './timer-remote.ts';
 import type { RemoteCommandPayload, RemoteEntry, RemoteSnapshot, RemoteTransport } from './timer-remote.ts';
+import { evalRemoteRedis, remoteRedisAdapter } from './remote-redis.ts';
 
 const globalStore = globalThis as typeof globalThis & { __standupTimerRemote?: Map<string, RemoteEntry> };
 const entries = globalStore.__standupTimerRemote ??= new Map<string, RemoteEntry>();
 const keyPrefix = 'standup:timer-remote:';
 
 export function timerRemoteTransport(): RemoteTransport {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url && !token) {
-    if (process.env.VERCEL === '1') throw new RemoteError(503);
+  if (!remoteRedisAdapter()) {
+    if (process.env.VERCEL === '1') throw new RemoteError(503, 'REMOTE_REDIS_REQUIRED');
     return 'instance';
   }
-  // A partial/broken shared configuration must not silently split clients across instances.
-  if (!url || !token) throw new RemoteError(503);
-  try {
-    const endpoint = new URL(url);
-    if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) throw new Error();
-  } catch { throw new RemoteError(503); }
   return 'shared';
 }
 
@@ -109,21 +102,28 @@ return cjson.encode({expiresAt=e.expiresAt,serverNow=now})
 
 async function redisEval(script: string, id: string, ...args: string[]): Promise<Record<string, unknown>> {
   try {
-    const response = await fetch(process.env.UPSTASH_REDIS_REST_URL!, {
+    let raw: unknown;
+    if (remoteRedisAdapter() === 'redis') {
+      raw = await evalRemoteRedis(script, `${keyPrefix}${id}`, args);
+    } else {
+      const response = await fetch(process.env.UPSTASH_REDIS_REST_URL!, {
       method: 'POST', headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(['EVAL', script, 1, `${keyPrefix}${id}`, ...args]),
       cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(5_000),
     });
-    if (!response.ok) throw new Error();
-    const body = await response.json();
-    if (body.error || typeof body.result !== 'string') throw new Error();
-    const result = JSON.parse(body.result) as Record<string, unknown>;
+      if (!response.ok) throw new Error();
+      const body = await response.json();
+      if (body.error) throw new Error();
+      raw = body.result;
+    }
+    if (typeof raw !== 'string') throw new Error();
+    const result = JSON.parse(raw) as Record<string, unknown>;
     if (result.error === 401 || result.error === 404 || result.error === 409) throw new RemoteError(result.error);
     if (result.error) throw new Error();
     return result;
   } catch (error) {
     if (error instanceof RemoteError) throw error;
-    throw new RemoteError(503);
+    throw new RemoteError(503, 'REMOTE_REDIS_UNAVAILABLE');
   }
 }
 

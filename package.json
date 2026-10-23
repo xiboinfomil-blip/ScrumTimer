@@ -38,6 +38,7 @@
     "@mui/material": "^9.4.0",
     "@mui/material-nextjs": "^9.5.0",
     "@neondatabase/serverless": "^1.1.0",
+    "@redis/client": "^5.8.2",
     "drizzle-orm": "^0.45.1",
     "entities": "^8.1.0",
     "framer-motion": "12.10.6",

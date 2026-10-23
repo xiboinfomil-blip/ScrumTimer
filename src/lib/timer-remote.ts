@@ -48,10 +48,12 @@ export interface RemoteEntry {
 
 export class RemoteError extends Error {
   status: 400 | 401 | 404 | 409 | 503;
-  constructor(status: RemoteError['status']) {
+  code?: 'REMOTE_SECRET_INVALID' | 'REMOTE_REDIS_REQUIRED' | 'REMOTE_REDIS_CONFIG_INVALID' | 'REMOTE_REDIS_UNAVAILABLE';
+  constructor(status: RemoteError['status'], code?: RemoteError['code']) {
     super('Télécommande indisponible.');
     this.name = 'RemoteError';
     this.status = status;
+    this.code = code;
   }
 }
 

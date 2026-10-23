@@ -244,6 +244,7 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
     delete process.env.VERCEL;
     delete process.env.UPSTASH_REDIS_REST_URL;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    delete process.env.REDIS_URL;
     process.env.TIMER_REMOTE_SECRET = 'timer-remote-test-only-secret-32-bytes-minimum';
     delete process.env.PARTICIPANT_PORTAL_SECRET;
     const store = await import(${JSON.stringify(storeUrl)});
@@ -342,14 +343,14 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
     assert.equal(map.size, 512);
     process.env.VERCEL = '1';
     try {
-      assert.throws(() => store.timerRemoteTransport(), e => e.status === 503);
+      assert.throws(() => store.timerRemoteTransport(), e => e.status === 503 && e.code === 'REMOTE_REDIS_REQUIRED');
       await assert.rejects(store.createTimerRemote(teamA), e => e.status === 503);
       await assert.rejects(store.readTimerRemote(a.id, a.control), e => e.status === 503);
       await assert.rejects(store.syncTimerRemote(a.id, a.owner, snapshot), e => e.status === 503);
       await assert.rejects(store.commandTimerRemote(a.id, a.control, command), e => e.status === 503);
       await assert.rejects(store.revokeTimerRemote(a.id, a.owner), e => e.status === 503);
       process.env.UPSTASH_REDIS_REST_URL = 'https://redis.invalid';
-      assert.throws(() => store.timerRemoteTransport(), e => e.status === 503);
+      assert.throws(() => store.timerRemoteTransport(), e => e.status === 503 && e.code === 'REMOTE_REDIS_CONFIG_INVALID');
       process.env.UPSTASH_REDIS_REST_TOKEN = 'test-only';
       assert.equal(store.timerRemoteTransport(), 'shared');
       delete process.env.UPSTASH_REDIS_REST_URL;
@@ -362,7 +363,7 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
     assert.equal(store.timerRemoteTransport(), 'instance');
     process.env.UPSTASH_REDIS_REST_URL = 'http://insecure.invalid';
     process.env.UPSTASH_REDIS_REST_TOKEN = 'test-only';
-    assert.throws(() => store.timerRemoteTransport(), e => e.status === 503);
+    assert.throws(() => store.timerRemoteTransport(), e => e.status === 503 && e.code === 'REMOTE_REDIS_CONFIG_INVALID');
     process.env.UPSTASH_REDIS_REST_URL = 'https://redis.invalid';
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
     assert.throws(() => store.timerRemoteTransport(), e => e.status === 503);

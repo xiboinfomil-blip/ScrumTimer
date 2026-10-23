@@ -18,7 +18,7 @@ const json = (body: unknown, status = 200, startedAt?: number) => NextResponse.j
 
 function failure(error: unknown, startedAt?: number) {
   const status = error instanceof RemoteError ? error.status : 503;
-  return json({ error: 'Télécommande indisponible.' }, status, startedAt);
+  return json({ error: 'Télécommande indisponible.', ...(error instanceof RemoteError && error.code ? { code: error.code } : {}) }, status, startedAt);
 }
 
 /** Keep the existing JSON parser, but cap the actual stream (including whitespace) at 8 KiB. */
