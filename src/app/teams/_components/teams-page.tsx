@@ -1,8 +1,8 @@
 'use client';
 
 import { useRef, useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
-import { Alert } from '@mui/material';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Alert, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -14,6 +14,10 @@ import { useTeam } from '@/providers/team-provider';
 import { NavIcon } from '@/components/layout/nav-icon';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { filterTeams, teamCategories, type TeamCategory } from '@/lib/team-directory';
+import { SprintPicker } from '@/components/jira/sprint-picker';
+import { JiraAccount } from '@/components/jira/jira-account';
+import { useJiraResource } from '@/hooks/use-jira-resource';
+import type { JiraConnection, JiraSprintSelection } from '@/lib/jira';
 
 const searchable = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr-FR');
 const pageSize = 6;
@@ -30,6 +34,10 @@ export function TeamsPage() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [name, setName] = useState('');
   const [category, setCategory] = useState<TeamCategory | null>('Tech');
+  const [kind, setKind] = useState<'ordinary' | 'sprint'>('ordinary');
+  const [sprint, setSprint] = useState<JiraSprintSelection>({ cloudId: '', boardId: 0, sprintId: 0 });
+  const connection = useJiraResource<JiraConnection>('/api/jira');
+  const loginFailure = useSearchParams().get('jira') === 'error';
   const [showCreate, setShowCreate] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
@@ -38,6 +46,7 @@ export function TeamsPage() {
   const [direction, setDirection] = useState(0);
   const reducedMotion = useReducedMotion();
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [loginTeamId, setLoginTeamId] = useState<string | null>(null);
   const nameInput = useRef<HTMLInputElement>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
   const results = filterTeams(teams, { favoritesOnly: view === 'favorites', ...(categoryFilter ? { category: categoryFilter === 'none' ? null : categoryFilter as TeamCategory } : {}) })
@@ -57,10 +66,13 @@ export function TeamsPage() {
   }
   async function choose(id: string, manage: boolean) {
     if (disabled) return;
+    const team = teams.find(team => team.id === id);
+    if (team?.kind === 'sprint' && (team.jiraLocked || !connection.data?.connected)) { setLoginTeamId(id); return; }
     setPending(true); setOpeningId(id); setError('');
     const success = await switchTeam(id);
     setPending(false); setOpeningId(null);
     if (success) router.push(`${manage ? '/manage-team' : '/participants'}?team=${id}`);
+    else if (team?.kind === 'sprint') { connection.retry(); setLoginTeamId(id); }
     else setError('Changement impossible. Vérifiez la connexion et les sauvegardes en attente.');
   }
   async function create(event: FormEvent) {
@@ -70,7 +82,8 @@ export function TeamsPage() {
       setCreateError('Choisissez un nom de 1 à 60 caractères, sans caractère de contrôle.'); nameInput.current?.focus(); return;
     }
     setPending(true); setCreateError('');
-    const success = await createTeam(name.trim(), category);
+    if (kind === 'sprint' && (!connection.data?.connected || !sprint.sprintId)) { setPending(false); setCreateError('Connectez-vous à Jira et choisissez un sprint actif.'); return; }
+    const success = await createTeam(name.trim(), category, kind === 'sprint' ? sprint : undefined);
     setPending(false);
     if (success) router.push(`/manage-team${window.location.search}`);
     else setCreateError('Création impossible. Ce nom existe peut-être déjà ; vérifiez aussi la connexion.');
@@ -85,6 +98,12 @@ export function TeamsPage() {
           <dl className="ml-auto hidden shrink-0 items-center gap-7 text-right sm:flex" aria-label="Résumé des équipes"><div><dt className="text-[10px] text-muted uppercase">Équipes</dt><dd className="mt-1 text-xl font-bold tabular-nums text-ink">{ready ? teams.length : '—'}</dd></div><div className="border-l border-line pl-7"><dt className="text-[10px] text-muted uppercase">Membres</dt><dd className="mt-1 text-xl font-bold tabular-nums text-ink">{ready ? totalMembers : '—'}</dd></div></dl>
           <button type="button" onClick={revealCreate} aria-expanded={showCreate} aria-controls="create-team-panel" className={`${primaryButton} lg:hidden`}><NavIcon name="plus" width="16" height="16" />Nouvelle</button>
         </header>
+      {loginFailure && <Alert severity="error" className="mb-4">Connexion Jira refusée ou expirée. Réessayez la connexion.</Alert>}
+      <Dialog open={loginTeamId !== null} onClose={() => setLoginTeamId(null)} fullWidth maxWidth="xs" aria-labelledby="jira-team-login-title">
+        <DialogTitle id="jira-team-login-title">Connexion Jira requise</DialogTitle>
+        <DialogContent><p className="mb-4 break-words text-sm text-ink">{teams.find(team => team.id === loginTeamId)?.name}</p><JiraAccount connection={connection.data} loading={connection.loading} error={connection.error} onRetry={connection.retry} /></DialogContent>
+        <DialogActions><button type="button" onClick={() => setLoginTeamId(null)} className={secondaryButton}>Annuler</button></DialogActions>
+      </Dialog>
     <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2.1fr)_minmax(280px,1fr)] lg:gap-7">
       <section className="min-w-0" aria-labelledby="team-list-heading">
         <div className="min-w-0 sm:rounded-xl sm:border sm:border-line sm:bg-white sm:p-5">
@@ -123,12 +142,13 @@ export function TeamsPage() {
                     <span aria-hidden="true" className={`grid size-11 shrink-0 place-items-center rounded-lg border text-sm font-semibold ${active ? 'border-brand bg-brand text-white max-sm:border-blue-200 max-sm:bg-blue-50 max-sm:text-brand' : team.category === 'Support' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-100 bg-slate-50 text-slate-500'}`}>{team.name.split(/\s+/).slice(0, 2).map(word => Array.from(word)[0]).join('').toLocaleUpperCase('fr-FR')}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><h3 className="text-sm font-semibold wrap-anywhere text-ink">{team.name}</h3>{active && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Actuelle</span>}</div>
-                      <p className="mt-1 text-[11px] text-muted">{team.memberCount} membre{team.memberCount === 1 ? '' : 's'}{team.category && <span> · {team.category}</span>}{team.memberCount === 0 && ' · À compléter'}</p>
+                      <p className="mt-1 text-[11px] text-muted">{team.jiraLocked ? 'Connexion Jira requise' : <>{team.memberCount} membre{team.memberCount === 1 ? '' : 's'}{team.category && <span> · {team.category}</span>}{team.memberCount === 0 && ' · À compléter'}</>}</p>
+                      <p className="mt-1 break-words text-[10px] text-brand">{team.kind === 'sprint' ? `Sprint Jira · ${team.sprintName ?? ''}` : 'Équipe ordinaire'}</p>
                     </div>
-                    <button type="button" disabled={disabled} aria-label={`${team.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} : ${team.name}`} aria-pressed={team.favorite} onClick={() => void updateTeamDirectory({ teamId: team.id, favorite: !team.favorite })} className={`grid size-11 shrink-0 place-items-center rounded-lg hover:bg-amber-50 disabled:opacity-50 ${team.favorite ? 'text-amber-500' : 'text-slate-400'}`}>{team.favorite ? <StarIcon aria-hidden="true" sx={{ fontSize: 21 }} /> : <StarOutlineIcon aria-hidden="true" sx={{ fontSize: 21 }} />}</button>
+                    <button type="button" disabled={disabled || team.jiraLocked} aria-label={`${team.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} : ${team.name}`} aria-pressed={team.favorite} onClick={() => void updateTeamDirectory({ teamId: team.id, favorite: !team.favorite })} className={`grid size-11 shrink-0 place-items-center rounded-lg hover:bg-amber-50 disabled:opacity-50 ${team.favorite ? 'text-amber-500' : 'text-slate-400'}`}>{team.favorite ? <StarIcon aria-hidden="true" sx={{ fontSize: 21 }} /> : <StarOutlineIcon aria-hidden="true" sx={{ fontSize: 21 }} />}</button>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-1 border-t border-slate-100 pt-2 xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:mt-0 xl:justify-end xl:border-0 xl:pt-0">
-                    <label className="flex min-w-0 items-center text-[10px] text-muted"><span className="sr-only">Catégorie</span><select aria-label={`Catégorie de ${team.name}`} disabled={disabled} value={team.category ?? ''} onChange={event => void updateTeamDirectory({ teamId: team.id, category: (event.target.value || null) as TeamCategory | null })} className="min-h-11 max-w-32 rounded-lg bg-slate-50 px-2 text-[11px] text-muted disabled:opacity-50 xl:max-w-28 xl:bg-transparent"><option value="">Sans catégorie</option>{teamCategories.map(item => <option key={item}>{item}</option>)}</select></label>
+                    <label className="flex min-w-0 items-center text-[10px] text-muted"><span className="sr-only">Catégorie</span><select aria-label={`Catégorie de ${team.name}`} disabled={disabled || team.jiraLocked} value={team.category ?? ''} onChange={event => void updateTeamDirectory({ teamId: team.id, category: (event.target.value || null) as TeamCategory | null })} className="min-h-11 max-w-32 rounded-lg bg-slate-50 px-2 text-[11px] text-muted disabled:opacity-50 xl:max-w-28 xl:bg-transparent"><option value="">Sans catégorie</option>{teamCategories.map(item => <option key={item}>{item}</option>)}</select></label>
                     <div className="flex items-center gap-1"><button type="button" disabled={disabled} onClick={() => void choose(team.id, true)} aria-label={`Gérer l’équipe ${team.name}`} className="min-h-11 min-w-11 rounded-lg px-2 text-xs text-muted hover:bg-slate-50 disabled:opacity-50">Gérer</button><button type="button" disabled={disabled} onClick={() => void choose(team.id, false)} aria-label={`Ouvrir l’équipe ${team.name}`} className={`${active ? primaryButton : secondaryButton} px-3`}>{openingId === team.id ? 'Ouverture…' : 'Ouvrir'}<ArrowForwardIcon aria-hidden="true" sx={{ fontSize: 14 }} /></button></div>
                   </div>
                 </li>;
@@ -151,15 +171,18 @@ export function TeamsPage() {
           <span aria-hidden="true" className="pointer-events-none absolute -top-8 -right-8 -z-10 size-28 rounded-full bg-blue-50/60" />
           <span aria-hidden="true" className="mb-4 grid size-11 place-items-center rounded-xl border border-blue-200 bg-blue-50 text-brand"><NavIcon name="plus" /></span>
           <h2 id="create-team-heading" className="text-base font-bold tracking-tight text-ink">Une nouvelle équipe ?</h2>
-          <p className="mt-1.5 mb-5 text-xs leading-relaxed text-muted">Rassemblez vos collègues dans un espace dédié sans compte nécessaire.</p>
+          <p className="mt-1.5 mb-5 text-xs leading-relaxed text-muted">{kind === 'sprint' ? 'Jira · Sprint actif' : 'Équipe ordinaire · Sans connexion Jira'}</p>
+          <fieldset className="my-2"><legend className="mb-1 text-xs font-medium text-ink">Type d’équipe</legend><div className="flex gap-1" role="group" aria-label="Type d’équipe">{(['ordinary', 'sprint'] as const).map(value => <button key={value} type="button" disabled={pending} aria-pressed={kind === value} onClick={() => { setKind(value); setCreateError(''); }} className={`min-h-11 min-w-0 flex-1 rounded-lg px-2 text-xs ${kind === value ? 'bg-brand text-white' : 'bg-slate-100 text-muted'}`}>{value === 'ordinary' ? 'Ordinaire' : 'Sprint Jira'}</button>)}</div></fieldset>
+          {kind === 'sprint' && <JiraAccount connection={connection.data} loading={connection.loading} error={connection.error} onRetry={connection.retry} />}
           <form onSubmit={event => void create(event)} className="flex flex-col gap-2" noValidate aria-busy={pending && !openingId}>
             <label htmlFor="new-team-name" className="text-xs font-medium text-ink">Nom de l’équipe</label>
             <input ref={nameInput} id="new-team-name" value={name} onChange={event => { setName(event.target.value); setCreateError(''); }} placeholder="Ex. Squad Produit, Agilité…" aria-invalid={!!createError} aria-describedby={createError ? 'team-name-hint team-create-error' : 'team-name-hint'} required maxLength={60} className={`${field} w-full`} />
             <p id="team-name-hint" className="flex flex-wrap justify-between gap-1 text-[10px] text-muted"><span>Un nom reconnaissable.</span><span>60 caractères max.</span></p>
             <fieldset className="mt-2"><legend className="mb-1 text-xs font-medium text-ink">Catégorie</legend><div className="flex flex-wrap gap-1">{teamCategories.map(item => <button key={item} type="button" aria-pressed={category === item} onClick={() => setCategory(category === item ? null : item)} className={`min-h-11 rounded-lg px-3 text-xs ${category === item ? 'bg-ink text-white' : 'bg-slate-100 text-muted hover:bg-slate-200'}`}>{item}</button>)}</div></fieldset>
+            {kind === 'sprint' && <SprintPicker value={sprint} onChange={setSprint} disabled={pending} connected={!!connection.data?.connected} />}
             {createError && <p id="team-create-error" role="alert" className="text-sm text-danger">{createError}</p>}
-            <button type="submit" disabled={disabled} className={`${primaryButton} mt-2 w-full`}><NavIcon name="plus" width="17" height="17" />{pending && !openingId ? 'Création…' : 'Créer l’équipe'}</button>
-            <p className="mt-2 text-center text-[10px] text-muted">Vous ajouterez les membres juste après.</p>
+            <button type="submit" disabled={disabled || (kind === 'sprint' && (!connection.data?.connected || !sprint.sprintId))} className={`${primaryButton} mt-2 w-full`}><NavIcon name="plus" width="17" height="17" />{pending && !openingId ? 'Création…' : 'Créer l’équipe'}</button>
+            <p className="mt-2 text-center text-[10px] text-muted">{kind === 'sprint' ? 'Participants · Responsables des tickets du sprint' : 'Membres · Saisie manuelle'}</p>
           </form>
           <div className="mt-5 flex items-start gap-2 border-t border-slate-100 pt-4 text-[10px] leading-relaxed text-muted"><NavIcon name="people" width="16" height="16" className="mt-0.5 shrink-0" /><p>Les équipes sont partagées sur ce site. Présences, humeurs et bilans restent propres à chacune. Catégories et favoris sont enregistrés dans Neon.</p></div>
         </div>

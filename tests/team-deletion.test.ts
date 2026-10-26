@@ -97,7 +97,8 @@ test('DELETE teams route requires same-origin strict JSON and delegates exact-na
   assert.match(handler, /strictObject\(await readJson\(request\), \['teamId', 'name'\]\)/);
   assert.match(handler, /capabilityId\(input.teamId\)/);
   assert.match(handler, /validateTeamName\(input.name\)/);
-  assert.match(handler, /response\(await teamReadCache\.mutate\(\(\) => deleteTeam\(database\(\), input\)\)\)/);
+  assert.match(handler, /response\(await visibleJiraTeams\(database\(\), request, await teamReadCache\.mutate\(\(\) => deleteTeam\(database\(\), input\)\)\)\)/);
+  assert.ok(handler.indexOf('await authorizeJiraTeam') < handler.indexOf('deleteTeam(database(), input)'));
   assert.ok(handler.indexOf('sameOrigin(request)') < handler.indexOf('readJson(request)'));
   assert.ok(handler.indexOf('readJson(request)') < handler.indexOf('database()'));
   assert.doesNotMatch(handler, /input.name\s*=|selectTeam\(/, 'never normalize confirmation or switch to another team before deleting');
@@ -115,10 +116,10 @@ test('PGlite: cleanup migrations roll back atomically and preserve every survivi
     await seedGlobals(engine);
     await engine.query('UPDATE workspaces SET selected_team_id=$1', [target.id]);
     await engine.query("INSERT INTO round_feedback(team_id,session_id,participant_id,value) VALUES($1,'round','person','utile')", [target.id]);
-    const configs = Object.values(schema).map(getTableConfig);
+    const configs = Object.values(schema).map(getTableConfig).filter(config => !config.name.startsWith('jira_'));
     const tables = [...configs.map(config => config.name), 'round_feedback'];
     const before = await snapshot(engine, tables);
-    const cleanup = journal.entries.slice(cleanupIndex);
+    const cleanup = journal.entries.slice(cleanupIndex, journal.entries.findIndex(entry => entry.tag === '0010_jira_sprint_teams'));
     await assert.rejects(engine.transaction(async tx => {
       for (const { tag } of cleanup) await tx.exec(read(`../drizzle/${tag}.sql`));
       throw new Error('injected cleanup failure');
@@ -150,9 +151,9 @@ test('PGlite: dependent-first team deletion cascades remaining ownership and pre
     await seedOwnedRows(engine, second);
     await seedGlobals(engine);
     const tables = await teamTables(engine);
-    assert.equal(tables.length, 13, 'all current team_id tables, including daily hints');
+    assert.equal(tables.length, 14, 'all current team_id tables, including Jira sprint links');
     const before = await snapshot(engine, ['teams', ...tables, 'workspaces', 'remote_mood_cache_state', 'remote_mood_catalog', 'remote_mood_pages']);
-    for (const table of tables) assert.ok(before[table].some(row => (row as { team_id: string }).team_id === target.id), `${table} must be populated before deletion`);
+    for (const table of tables.filter(table => table !== 'jira_team_sprints')) assert.ok(before[table].some(row => (row as { team_id: string }).team_id === target.id), `${table} must be populated before deletion`);
     statements.length = 0;
     const deleted = await deleteTeam(client, { teamId: target.id, name: target.name });
     assert.deepEqual(deleted, { teams: [{ id: second, name: 'Autre équipe', memberCount: 1, category: null, favorite: false }], activeTeamId: second });

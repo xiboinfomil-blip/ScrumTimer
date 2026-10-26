@@ -32,6 +32,7 @@ Scripts disponibles : `dev`, `build`, `start`, `lint`, `typecheck`, `test`. Aucu
 ## Périmètre et confiance
 
 - `/` demande d’ouvrir le lien fourni par le scrum master. Aucun annuaire d’équipes.
+- Les liens de ce portail sont réservés aux **équipes ordinaires**. Le maître refuse leur émission et leur usage pour une équipe **Sprint Jira** ; ses accès passent par la connexion Jira du site maître.
 - `/t/[token]` ouvre une seule équipe : notes du jour modifiables, statistiques et bilan terminé du jour en lecture seule. Ni humeur à choisir, ni présence à modifier, ni minuteur, ni gestion d’équipe.
 - Le portail possède les vues complètes **Notes / Statistiques / Bilan**. Le maître n’a plus de pages autonomes `/daily-notes` ou `/statistics` : il conserve les pense-bêtes pendant la parole et les résumés de fin de tour/jour, ainsi que les API nécessaires au portail.
 - **Aucune authentification personnelle.** Toute personne possédant le lien peut lire les données de l’équipe et écrire une note pour **n’importe quel participant**, absent inclus. Sélectionner un nom n’établit aucune identité. Ne présentez jamais cette interface comme un espace personnel ou privé par participant.

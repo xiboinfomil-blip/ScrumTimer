@@ -15,11 +15,11 @@ const round = { id: 'round-1', completedAt: now.toISOString(), people: [{ id: 'p
 
 test('normalized schema has no JSON columns, scoped identity keys and relational integrity', () => {
   const configs = Object.values(schema).map(getTableConfig);
-  assert.equal(configs.length, 18);
+  assert.equal(configs.length, 21);
   for (const table of configs) {
     for (const column of table.columns) assert.ok(!/json/i.test(column.getSQLType()), `${table.name}.${column.name}`);
-    if (!['teams', 'workspaces'].includes(table.name) && !table.name.startsWith('remote_mood_')) {
-      assert.equal(table.primaryKeys[0].columns[0].name, 'team_id');
+    if (!['teams', 'workspaces', 'jira_oauth_states', 'jira_sessions'].includes(table.name) && !table.name.startsWith('remote_mood_')) {
+      assert.equal((table.primaryKeys[0]?.columns[0] ?? table.columns.find(column => column.primary))?.name, 'team_id');
       assert.ok(table.foreignKeys.length > 0);
     }
     assert.ok(table.checks.length > 0, table.name);

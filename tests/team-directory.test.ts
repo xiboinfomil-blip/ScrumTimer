@@ -7,10 +7,25 @@ import type { SQL } from 'drizzle-orm';
 import { filterTeams, isTeamCategory, teamCategories, validateTeamCategory, validateTeamCreation, validateTeamDirectoryPatch } from '../src/lib/team-directory.ts';
 import { createTeam, deleteTeam, listTeams, selectTeam, updateTeamDirectory, WorkspaceError } from '../src/lib/workspace-store.ts';
 import { readTeam, writeTeam } from '../src/lib/relational-store.ts';
+import { jiraTickets, sprintParticipants, validateJiraSelection } from '../src/lib/jira.ts';
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const id = 'a'.repeat(64);
 const hasStatus = (status: number) => (error: unknown) => error instanceof WorkspaceError && error.status === status;
+
+test('Jira sprint imports use distinct account IDs and exclude unassigned tickets', () => {
+  const issue = (id: string, accountId: string | null, name = 'Camille') => ({ id, key: `TEST-${id}`, fields: { summary: 'Ticket', status: { name: 'En cours' }, assignee: accountId ? { accountId, displayName: name } : null } });
+  const tickets = jiraTickets([issue('1', 'account-a'), issue('2', 'account-a'), issue('3', null), issue('4', 'account-b')], 'https://example.atlassian.net');
+  const people = sprintParticipants(tickets);
+  assert.deepEqual(people.map(person => person.id).sort(), ['jira:account-a', 'jira:account-b']);
+  assert.ok(people.every(person => person.present && person.mood === null));
+  assert.equal(tickets[0].url, 'https://example.atlassian.net/browse/TEST-1');
+  assert.throws(() => sprintParticipants(jiraTickets([issue('1', null)], 'https://example.atlassian.net')));
+  assert.throws(() => jiraTickets([issue('1', 'a')], 'https://untrusted.example'));
+  assert.throws(() => sprintParticipants(jiraTickets(Array.from({ length: 101 }, (_, position) => issue(String(position + 1), `account-${position}`)), 'https://example.atlassian.net')));
+  assert.deepEqual(validateJiraSelection({ cloudId: '12345678-1234-1234-1234-123456789abc', boardId: 1, sprintId: 2 }).sprintId, 2);
+  assert.throws(() => validateJiraSelection({ cloudId: 'host.example', boardId: 1, sprintId: 2 }));
+});
 
 function clientFor(engine: PGlite, statements: string[] = [], failList = false) {
   const dialect = new PgDialect();
@@ -65,7 +80,7 @@ test('teams API validates before database access, keeps selection separate and i
     assert.ok(handler.indexOf('readJson(request)') < handler.indexOf('database()'));
   }
   assert.match(post, /validateTeamCreation\(await readJson\(request\)\)/);
-  assert.match(post, /createTeam\(database\(\), name, category\)/);
+  assert.match(post, /createTeam\(database\(\), name, category, setup\)/);
   assert.match(patch, /validateTeamDirectoryPatch\(await readJson\(request\)\)/);
   assert.match(patch, /teamReadCache\.mutate\(\(\) => updateTeamDirectory\(database\(\), input\)\)/);
   assert.match(patch, /selectTeam\(database\(\), input.teamId\)/);

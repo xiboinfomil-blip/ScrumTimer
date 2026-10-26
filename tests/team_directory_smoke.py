@@ -42,6 +42,10 @@ class DirectoryMock:
     def api(self, route):
         request = route.request
         path, method = urlparse(request.url).path, request.method
+        if path == '/api/jira' and method == 'GET':
+            assert parse_qs(urlparse(request.url).query).get('action', ['status']) == ['status']
+            route.fulfill(json={'configured': False, 'connected': False})
+            return
         if path == '/api/teams' and method in ('GET', 'PATCH', 'POST'):
             if method == 'PATCH':
                 body = request.post_data_json

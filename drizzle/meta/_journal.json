@@ -71,6 +71,13 @@
       "when": 1792991696144,
       "tag": "0009_remove_unused_audit_timestamps",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793005626341,
+      "tag": "0010_jira_sprint_teams",
+      "breakpoints": true
     }
   ]
 }

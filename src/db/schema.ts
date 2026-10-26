@@ -82,3 +82,23 @@ export const participantDailyHints = pgTable('participant_daily_hints', {
   check('participant_daily_hints_revision', sql`${t.revision} >= 1`),
   check('participant_daily_hints_text', sql`length(${t.hint}) BETWEEN 1 AND 600 AND ${t.hint} = btrim(${t.hint}, E' \\n\\r\\t\\013\\014') AND ${t.hint} !~ '[\\x01-\\x09\\x0B-\\x1F\\x7F-\\x9F]'`),
 ]);
+
+export const jiraTeamSprints = pgTable('jira_team_sprints', {
+  teamId: text('team_id').primaryKey().references(() => teams.id, { onDelete: 'cascade' }),
+  cloudId: text('cloud_id').notNull(), boardId: integer('board_id').notNull(), sprintId: integer('sprint_id').notNull(),
+  sprintName: text('sprint_name').notNull(),
+}, table => [check('jira_team_sprints_cloud', sql`${table.cloudId} ~ '^[a-fA-F0-9-]{36}$'`),
+  check('jira_team_sprints_ids', sql`${table.boardId} > 0 AND ${table.sprintId} > 0`),
+  check('jira_team_sprints_name', sql`length(${table.sprintName}) BETWEEN 1 AND 200`)]);
+
+export const jiraOAuthStates = pgTable('jira_oauth_states', {
+  id: text('id').primaryKey(), expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, table => [check('jira_oauth_states_id', sql`${table.id} ~ '^[a-f0-9]{64}$'`), index('jira_oauth_states_expiry').on(table.expiresAt)]);
+
+export const jiraSessions = pgTable('jira_sessions', {
+  id: text('id').primaryKey(), accountId: text('account_id').notNull(), displayName: text('display_name').notNull(),
+  accessToken: text('access_token').notNull(), refreshToken: text('refresh_token'),
+  accessExpiresAt: timestamp('access_expires_at', { withTimezone: true }).notNull(), expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  refreshLease: text('refresh_lease'), refreshLeaseUntil: timestamp('refresh_lease_until', { withTimezone: true }),
+}, table => [check('jira_sessions_id', sql`${table.id} ~ '^[a-f0-9]{64}$'`),
+  check('jira_sessions_account', sql`length(${table.accountId}) BETWEEN 1 AND 100`), index('jira_sessions_expiry').on(table.expiresAt)]);

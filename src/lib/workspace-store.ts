@@ -3,6 +3,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
 import catalog from './remote-mood-catalog.json' with { type: 'json' };
 import type { TeamState } from '../types/team.ts';
+import type { JiraParticipant, JiraSprintSelection } from './jira.ts';
 import { validateTeamCategory, validateTeamDirectoryPatch, type TeamCategory, type TeamSummary } from './team-directory.ts';
 import { mauritiusDay } from '@infomil/scrum-shared/statistics';
 export { mauritiusDay } from '@infomil/scrum-shared/statistics';
@@ -70,7 +71,7 @@ export async function resolveSelectedTeam(db: Database, explicitId: string | nul
   if (!result.rows.length) throw forbidden();
   return String(result.rows[0].id);
 }
-export async function createTeam(db: Database, value: unknown, category: TeamCategory | null = null) {
+export async function createTeam(db: Database, value: unknown, category: TeamCategory | null = null, sprint?: JiraSprintSelection & { name: string; roster: JiraParticipant[] }) {
   try { validateTeamCategory(category); }
   catch { throw new WorkspaceError(400, 'Catégorie d’équipe invalide.'); }
   const name = validateTeamName(value); const id = newTeamId();
@@ -78,10 +79,15 @@ export async function createTeam(db: Database, value: unknown, category: TeamCat
     sql`INSERT INTO workspaces(id) VALUES(${sharedWorkspace}) ON CONFLICT DO NOTHING`,
     sql`SELECT id FROM workspaces WHERE id=${sharedWorkspace} FOR UPDATE`,
     sql`INSERT INTO teams(id,workspace_id,name,category,duration,warning,sound) SELECT ${id},${sharedWorkspace},${name},${category},120,30,true WHERE NOT EXISTS(SELECT 1 FROM teams WHERE lower(name)=lower(${name})) RETURNING id`,
+    ...(sprint ? [
+      sql`INSERT INTO jira_team_sprints(team_id,cloud_id,board_id,sprint_id,sprint_name) SELECT ${id},${sprint.cloudId},${sprint.boardId},${sprint.sprintId},${sprint.name} WHERE EXISTS(SELECT 1 FROM teams WHERE id=${id})`,
+      sql`INSERT INTO participants(team_id,id,name) SELECT ${id},p.id,p.name FROM jsonb_to_recordset(${JSON.stringify(sprint.roster)}::jsonb) AS p(id text,name text) WHERE EXISTS(SELECT 1 FROM teams WHERE id=${id})`,
+      sql`INSERT INTO team_members(team_id,participant_id,position,present) SELECT ${id},p.value->>'id',(p.position-1)::int,true FROM jsonb_array_elements(${JSON.stringify(sprint.roster)}::jsonb) WITH ORDINALITY AS p(value,position) WHERE EXISTS(SELECT 1 FROM teams WHERE id=${id})`,
+    ] : []),
     listStatement(),
   ]);
   if (!results[2].rows.length) throw new WorkspaceError(409, 'Une équipe porte déjà ce nom, ou votre sélection est indisponible.');
-  return listResult(results[3].rows, id);
+  return listResult(results.at(-1)!.rows, id);
 }
 export async function deleteTeam(db: Database, value: unknown) {
   const input = strictObject(value, ['teamId', 'name']);

@@ -7,6 +7,7 @@ import { ParticipantNote } from '@/components/ui/participant-note';
 import { useTeam } from '@/providers/team-provider';
 import { DEFAULT_DISCUSSION_PROMPTS, validateDiscussionPrompts, validateMeetingSettings, type MeetingSettings } from '@/lib/meeting-settings';
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, TextField } from '@mui/material';
+import { JiraTickets } from './jira-tickets';
 
 const descriptions = [
   'Partagez vos avancées, vos petites réussites et ce que vous avez terminé.',
@@ -27,11 +28,12 @@ type SpeakerContent = {
 };
 
 export function DailyPrompts({ className = '', ...speaker }: SpeakerContent & { className?: string }) {
-  const { activeTeamId } = useTeam();
-  return <TeamPrompts key={activeTeamId ?? 'none'} teamId={activeTeamId} className={className} {...speaker} />;
+  const { activeTeamId, teams } = useTeam();
+  return <TeamPrompts key={activeTeamId ?? 'none'} teamId={activeTeamId} sprint={teams.find(team => team.id === activeTeamId)?.kind === 'sprint'} className={className} {...speaker} />;
 }
-function TeamPrompts({ teamId, className, speakerId, speakerName, note, notesError, retryNotes, running, remaining = 0, onReturn }: SpeakerContent & { teamId: string | null; className: string }) {
+function TeamPrompts({ teamId, sprint, className, speakerId, speakerName, note, notesError, retryNotes, running, remaining = 0, onReturn }: SpeakerContent & { teamId: string | null; sprint: boolean; className: string }) {
   const reduced = useReducedMotion();
+  const [view, setView] = useState<'notes' | 'tickets'>(sprint ? 'tickets' : 'notes');
   const [settings, setSettings] = useState<MeetingSettings>({ prompts: [...DEFAULT_DISCUSSION_PROMPTS], revision: 0 });
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
@@ -81,11 +83,13 @@ function TeamPrompts({ teamId, className, speakerId, speakerName, note, notesErr
   };
   const standard = settings.prompts.length === 3 && settings.prompts.every((prompt, index) => prompt === DEFAULT_DISCUSSION_PROMPTS[index]);
   return (
-    <Paper component="section" elevation={0} className={`daily-prompts flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[28px] border border-line bg-white p-6 max-[800px]:rounded-2xl max-[800px]:p-4 [@media(max-height:650px)]:p-3 ${className}`} aria-labelledby={note ? 'sidebar-note-title' : 'prompts-title'} data-speaker-sidebar>
+    <Paper component="section" elevation={0} className={`daily-prompts flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[28px] border border-line bg-white p-6 max-[800px]:rounded-2xl max-[800px]:p-4 [@media(max-height:650px)]:p-3 ${className}`} aria-labelledby={sprint && view === 'tickets' ? 'jira-tickets-heading' : note ? 'sidebar-note-title' : 'prompts-title'} data-speaker-sidebar>
       <button type="button" onClick={onReturn} className="mb-3 flex min-h-11 shrink-0 items-center justify-between gap-3 rounded-xl bg-blue-50 px-3 text-left min-[801px]:hidden" aria-label="Revenir au minuteur">
         <span className="min-w-0"><span className="block truncate text-xs font-bold text-brand">{speakerName}</span><span className="text-[10px] text-muted">{running ? 'À la parole · voir le minuteur' : 'Revenir au minuteur'}</span></span>
         <span className={`shrink-0 text-xl font-bold tabular-nums ${remaining < 0 ? 'text-danger' : 'text-brand'}`}>{remaining < 0 ? '+' : ''}{String(Math.floor(Math.ceil(Math.abs(remaining)) / 60)).padStart(2, '0')}:{String(Math.ceil(Math.abs(remaining)) % 60).padStart(2, '0')}</span>
       </button>
+      {sprint && <div role="group" aria-label="Contenu de l’intervenant" className="mb-3 flex h-11 shrink-0 gap-1 border-b border-line">{(['tickets', 'notes'] as const).map(tab => <button key={tab} type="button" aria-pressed={view === tab} onClick={() => setView(tab)} className={`min-w-0 flex-1 rounded-t-lg px-2 text-xs font-semibold ${view === tab ? 'border-b-2 border-brand bg-blue-50 text-brand' : 'text-muted hover:bg-slate-50'}`}>{tab === 'tickets' ? 'Tickets Jira' : note ? 'Pense-bête' : 'Questions'}</button>)}</div>}
+      {sprint && view === 'tickets' ? <JiraTickets key={speakerId} teamId={teamId} participantId={speakerId} /> : <>
       <motion.div key={`${speakerId ?? 'none'}-${note ? 'note' : 'questions'}`} initial={reduced ? false : { x: '100%' }} animate={{ x: 0 }} transition={reduced ? { duration: 0 } : { duration: .32, ease: [.22, 1, .36, 1] }} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" data-sidebar-slide>
       {notesError && <div role="alert" className="shrink-0 text-[11px] text-danger">{notesError} <Button size="small" onClick={retryNotes}>Réessayer les notes</Button></div>}
       {note ? <>
@@ -118,6 +122,7 @@ function TeamPrompts({ teamId, className, speakerId, speakerName, note, notesErr
       <p className="mt-auto shrink-0 border-t border-line pt-3 text-xs leading-relaxed text-muted [@media(max-height:650px)]:hidden">L’essentiel, simplement. Un sujet à approfondir ? Gardez-le pour après le tour.</p>
       </>}
       </motion.div>
+      </>}
       <Dialog open={editing} onClose={() => { if (!saving) setEditing(false); }} aria-labelledby="edit-prompts-title" fullWidth maxWidth="sm">
         <DialogTitle id="edit-prompts-title">Questions de l’équipe</DialogTitle>
         <DialogContent>

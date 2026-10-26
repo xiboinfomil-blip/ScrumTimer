@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { databaseFailure, sameOrigin, selectedTeam } from '@/lib/database';
+import { database, databaseFailure, sameOrigin, selectedTeam } from '@/lib/database';
+import { jiraTeamSprint } from '@/lib/jira-store';
+import { WorkspaceError } from '@/lib/workspace-store';
 import { createParticipantLinkToken, validPortalSecret } from '@/lib/participant-access';
 
 export const runtime = 'nodejs';
@@ -17,6 +19,7 @@ export async function POST(request: Request) {
   if (!validPortalSecret(secret)) return NextResponse.json({ error: 'Configurez un PARTICIPANT_PORTAL_SECRET partagé d’au moins 32 octets.' }, { status: 503, headers });
   try {
     const id = await selectedTeam(request);
+    if (await jiraTeamSprint(database(), id)) throw new WorkspaceError(403, 'Cette équipe de sprint nécessite une connexion Jira sur l’application principale.');
     return NextResponse.json({ url: new URL(`/t/${createParticipantLinkToken(id, secret)}`, base).href }, { headers });
   } catch (error) { return databaseFailure(error); }
 }

@@ -1,7 +1,9 @@
 /** Shared directory metadata, independent of roster/session state and browser APIs. */
+import { validateJiraSelection, type JiraSprintSelection } from './jira.ts';
 export const teamCategories = ['Tech', 'Produit', 'Support', 'Marketing'] as const;
 export type TeamCategory = typeof teamCategories[number];
-export type TeamSummary = { id: string; name: string; memberCount: number; category: TeamCategory | null; favorite: boolean };
+export type TeamSummary = { id: string; name: string; memberCount: number; category: TeamCategory | null; favorite: boolean; kind?: 'ordinary' | 'sprint'; sprintName?: string; jiraLocked?: boolean };
+export type TeamCreation = { name: unknown; category: TeamCategory | null; sprint?: JiraSprintSelection };
 export type TeamDirectoryUpdate = { teamId: string; category: TeamCategory | null } | { teamId: string; favorite: boolean };
 export type TeamDirectoryPatch = { teamId: string } | TeamDirectoryUpdate;
 
@@ -17,7 +19,13 @@ function exactObject(value: unknown, keys: string[]): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 /** Old {name} clients create an uncategorized team, never an implicit Tech team. */
-export function validateTeamCreation(value: unknown): { name: unknown; category: TeamCategory | null } {
+export function validateTeamCreation(value: unknown): TeamCreation {
+  if (value && typeof value === 'object' && Object.hasOwn(value, 'kind')) {
+    const kind = (value as { kind: unknown }).kind;
+    const input = exactObject(value, kind === 'sprint' ? ['name', 'category', 'kind', 'sprint'] : ['name', 'category', 'kind']);
+    if (kind !== 'ordinary' && kind !== 'sprint') throw new TypeError('Type d’équipe invalide.');
+    return { name: input.name, category: validateTeamCategory(input.category), ...(kind === 'sprint' ? { sprint: validateJiraSelection(input.sprint) } : {}) };
+  }
   const withCategory = !!value && typeof value === 'object' && Object.hasOwn(value, 'category');
   const input = exactObject(value, withCategory ? ['name', 'category'] : ['name']);
   return { name: input.name, category: withCategory ? validateTeamCategory(input.category) : null };

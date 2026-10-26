@@ -82,7 +82,8 @@ test('participant link issuance is same-origin selected-team only, validates the
   assert.match(source, /return NextResponse\.json\(\{ url: new URL\(`\/t\/\$\{createParticipantLinkToken\(id, secret\)\}`, base\)\.href \}, \{ headers \}\)/);
   assert.match(source, /'Cache-Control': 'no-store'/);
   assert.match(source, /'Referrer-Policy': 'no-referrer'/);
-  assert.doesNotMatch(source, /readJson|request\.json|searchParams|request\.url|fetch\(|database\(/);
+  assert.doesNotMatch(source, /readJson|request\.json|searchParams|request\.url|fetch\(/);
+  assert.match(source, /if \(await jiraTeamSprint\(database\(\), id\)\) throw new WorkspaceError\(403/);
 });
 
 test('PGlite: signed team-A notes use member-only CAS, reject forged scope and preserve team B, management state and archived history', async () => {

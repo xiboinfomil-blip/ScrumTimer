@@ -1,0 +1,1619 @@
+{
+  "id": "cde2e78c-0fda-413d-91db-56f59160973c",
+  "prevId": "c1e2328f-2cd8-480d-8c44-a5a498b11c68",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.jira_oauth_states": {
+      "name": "jira_oauth_states",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "jira_oauth_states_expiry": {
+          "name": "jira_oauth_states_expiry",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "jira_oauth_states_id": {
+          "name": "jira_oauth_states_id",
+          "value": "\"jira_oauth_states\".\"id\" ~ '^[a-f0-9]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.jira_sessions": {
+      "name": "jira_sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "access_token": {
+          "name": "access_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "refresh_token": {
+          "name": "refresh_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "access_expires_at": {
+          "name": "access_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "refresh_lease": {
+          "name": "refresh_lease",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refresh_lease_until": {
+          "name": "refresh_lease_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "jira_sessions_expiry": {
+          "name": "jira_sessions_expiry",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "jira_sessions_id": {
+          "name": "jira_sessions_id",
+          "value": "\"jira_sessions\".\"id\" ~ '^[a-f0-9]{64}$'"
+        },
+        "jira_sessions_account": {
+          "name": "jira_sessions_account",
+          "value": "length(\"jira_sessions\".\"account_id\") BETWEEN 1 AND 100"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.jira_team_sprints": {
+      "name": "jira_team_sprints",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "cloud_id": {
+          "name": "cloud_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "board_id": {
+          "name": "board_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sprint_id": {
+          "name": "sprint_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sprint_name": {
+          "name": "sprint_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "jira_team_sprints_team_id_teams_id_fk": {
+          "name": "jira_team_sprints_team_id_teams_id_fk",
+          "tableFrom": "jira_team_sprints",
+          "tableTo": "teams",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "jira_team_sprints_cloud": {
+          "name": "jira_team_sprints_cloud",
+          "value": "\"jira_team_sprints\".\"cloud_id\" ~ '^[a-fA-F0-9-]{36}$'"
+        },
+        "jira_team_sprints_ids": {
+          "name": "jira_team_sprints_ids",
+          "value": "\"jira_team_sprints\".\"board_id\" > 0 AND \"jira_team_sprints\".\"sprint_id\" > 0"
+        },
+        "jira_team_sprints_name": {
+          "name": "jira_team_sprints_name",
+          "value": "length(\"jira_team_sprints\".\"sprint_name\") BETWEEN 1 AND 200"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.mood_meter_identifiers": {
+      "name": "mood_meter_identifiers",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "mood_meter_identifiers_team_id_teams_id_fk": {
+          "name": "mood_meter_identifiers_team_id_teams_id_fk",
+          "tableFrom": "mood_meter_identifiers",
+          "tableTo": "teams",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "mood_meter_identifiers_team_id_id_pk": {
+          "name": "mood_meter_identifiers_team_id_id_pk",
+          "columns": [
+            "team_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "mood_meter_identifiers_length": {
+          "name": "mood_meter_identifiers_length",
+          "value": "length(\"mood_meter_identifiers\".\"id\") BETWEEN 1 AND 200"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.mood_meter_slides": {
+      "name": "mood_meter_slides",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "meter_id": {
+          "name": "meter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "image": {
+          "name": "image",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slide_number": {
+          "name": "slide_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "mood_meter_slides_team_id_meter_id_mood_meters_team_id_id_fk": {
+          "name": "mood_meter_slides_team_id_meter_id_mood_meters_team_id_id_fk",
+          "tableFrom": "mood_meter_slides",
+          "tableTo": "mood_meters",
+          "columnsFrom": [
+            "team_id",
+            "meter_id"
+          ],
+          "columnsTo": [
+            "team_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "mood_meter_slides_team_id_id_pk": {
+          "name": "mood_meter_slides_team_id_id_pk",
+          "columns": [
+            "team_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "mood_meter_slides_context": {
+          "name": "mood_meter_slides_context",
+          "nullsNotDistinct": false,
+          "columns": [
+            "team_id",
+            "meter_id",
+            "image",
+            "slide_number"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "mood_meter_slides_number": {
+          "name": "mood_meter_slides_number",
+          "value": "\"mood_meter_slides\".\"slide_number\" BETWEEN 1 AND 10000"
+        },
+        "mood_meter_slides_image": {
+          "name": "mood_meter_slides_image",
+          "value": "\"mood_meter_slides\".\"image\" ~* '^/mood-meters/slides/[a-zA-Z0-9_ ./-]+[.](png|jpe?g|gif|webp|svg)$' AND \"mood_meter_slides\".\"image\" !~ '/([.]{1,2})?(/|$)'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.mood_meters": {
+      "name": "mood_meters",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "mood_meters_team_id_teams_id_fk": {
+          "name": "mood_meters_team_id_teams_id_fk",
+          "tableFrom": "mood_meters",
+          "tableTo": "teams",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "mood_meters_team_id_id_pk": {
+          "name": "mood_meters_team_id_id_pk",
+          "columns": [
+            "team_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "mood_meters_title": {
+          "name": "mood_meters_title",
+          "nullsNotDistinct": false,
+          "columns": [
+            "team_id",
+            "title"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "mood_meters_title_length": {
+          "name": "mood_meters_title_length",
+          "value": "length(\"mood_meters\".\"title\") <= 200"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.participant_check_ins": {
+      "name": "participant_check_ins",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "participant_id": {
+          "name": "participant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mood": {
+          "name": "mood",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mood_updated_at": {
+          "name": "mood_updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slide_id": {
+          "name": "slide_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "identifier_id": {
+          "name": "identifier_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "participant_check_ins_team_id_participant_id_team_members_team_id_participant_id_fk": {
+          "name": "participant_check_ins_team_id_participant_id_team_members_team_id_participant_id_fk",
+          "tableFrom": "participant_check_ins",
+          "tableTo": "team_members",
+          "columnsFrom": [
+            "team_id",
+            "participant_id"
+          ],
+          "columnsTo": [
+            "team_id",
+            "participant_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "participant_check_ins_team_id_slide_id_mood_meter_slides_team_id_id_fk": {
+          "name": "participant_check_ins_team_id_slide_id_mood_meter_slides_team_id_id_fk",
+          "tableFrom": "participant_check_ins",
+          "tableTo": "mood_meter_slides",
+          "columnsFrom": [
+            "team_id",
+            "slide_id"
+          ],
+          "columnsTo": [
+            "team_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "participant_check_ins_team_id_identifier_id_mood_meter_identifiers_team_id_id_fk": {
+          "name": "participant_check_ins_team_id_identifier_id_mood_meter_identifiers_team_id_id_fk",
+          "tableFrom": "participant_check_ins",
+          "tableTo": "mood_meter_identifiers",
+          "columnsFrom": [
+            "team_id",
+            "identifier_id"
+          ],
+          "columnsTo": [
+            "team_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "participant_check_ins_team_id_participant_id_pk": {
+          "name": "participant_check_ins_team_id_participant_id_pk",
+          "columns": [
+            "team_id",
+            "participant_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "participant_check_ins_mood": {
+          "name": "participant_check_ins_mood",
+          "value": "\"participant_check_ins\".\"mood\" BETWEEN 1 AND 4"
+        },
+        "participant_check_ins_identifier": {
+          "name": "participant_check_ins_identifier",
+          "value": "\"participant_check_ins\".\"identifier_id\" IS NULL OR \"participant_check_ins\".\"slide_id\" IS NOT NULL"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.participant_daily_hints": {
+      "name": "participant_daily_hints",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "participant_id": {
+          "name": "participant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hint": {
+          "name": "hint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "participant_daily_hints_day": {
+          "name": "participant_daily_hints_day",
+          "columns": [
+            {
+              "expression": "day",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "participant_daily_hints_team_id_participant_id_participants_team_id_id_fk": {
+          "name": "participant_daily_hints_team_id_participant_id_participants_team_id_id_fk",
+          "tableFrom": "participant_daily_hints",
+          "tableTo": "participants",
+          "columnsFrom": [
+            "team_id",
+            "participant_id"
+          ],
+          "columnsTo": [
+            "team_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "participant_daily_hints_team_id_participant_id_pk": {
+          "name": "participant_daily_hints_team_id_participant_id_pk",
+          "columns": [
+            "team_id",
+            "participant_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "participant_daily_hints_revision": {
+          "name": "participant_daily_hints_revision",
+          "value": "\"participant_daily_hints\".\"revision\" >= 1"
+        },
+        "participant_daily_hints_text": {
+          "name": "participant_daily_hints_text",
+          "value": "length(\"participant_daily_hints\".\"hint\") BETWEEN 1 AND 600 AND \"participant_daily_hints\".\"hint\" = btrim(\"participant_daily_hints\".\"hint\", E' \\n\\r\\t\\013\\014') AND \"participant_daily_hints\".\"hint\" !~ '[\\x01-\\x09\\x0B-\\x1F\\x7F-\\x9F]'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.participants": {
+      "name": "participants",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "participants_team_id_teams_id_fk": {
+          "name": "participants_team_id_teams_id_fk",
+          "tableFrom": "participants",
+          "tableTo": "teams",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "participants_team_id_id_pk": {
+          "name": "participants_team_id_id_pk",
+          "columns": [
+            "team_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "participants_id": {
+          "name": "participants_id",
+          "value": "length(\"participants\".\"id\") BETWEEN 1 AND 100 AND \"participants\".\"id\" !~ '[[:cntrl:]]'"
+        },
+        "participants_name": {
+          "name": "participants_name",
+          "value": "length(\"participants\".\"name\") BETWEEN 1 AND 60 AND \"participants\".\"name\" = btrim(\"participants\".\"name\") AND \"participants\".\"name\" !~ '[[:cntrl:]]'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.remote_mood_cache_state": {
+      "name": "remote_mood_cache_state",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "generation": {
+          "name": "generation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "remote_mood_cache_singleton": {
+          "name": "remote_mood_cache_singleton",
+          "value": "\"remote_mood_cache_state\".\"id\" = 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.remote_mood_catalog": {
+      "name": "remote_mood_catalog",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "google_id": {
+          "name": "google_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "loaded_at": {
+          "name": "loaded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "remote_mood_catalog_id": {
+          "name": "remote_mood_catalog_id",
+          "value": "\"remote_mood_catalog\".\"id\" ~ '^deck-[a-f0-9]{20}$'"
+        },
+        "remote_mood_catalog_google_id": {
+          "name": "remote_mood_catalog_google_id",
+          "value": "\"remote_mood_catalog\".\"google_id\" ~ '^[a-zA-Z0-9_-]+$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.remote_mood_pages": {
+      "name": "remote_mood_pages",
+      "schema": "",
+      "columns": {
+        "deck_id": {
+          "name": "deck_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page_id": {
+          "name": "page_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "remote_mood_pages_deck_id_remote_mood_catalog_id_fk": {
+          "name": "remote_mood_pages_deck_id_remote_mood_catalog_id_fk",
+          "tableFrom": "remote_mood_pages",
+          "tableTo": "remote_mood_catalog",
+          "columnsFrom": [
+            "deck_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "remote_mood_pages_deck_id_position_pk": {
+          "name": "remote_mood_pages_deck_id_position_pk",
+          "columns": [
+            "deck_id",
+            "position"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "remote_mood_pages_identity": {
+          "name": "remote_mood_pages_identity",
+          "nullsNotDistinct": false,
+          "columns": [
+            "deck_id",
+            "page_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "remote_mood_pages_position": {
+          "name": "remote_mood_pages_position",
+          "value": "\"remote_mood_pages\".\"position\" BETWEEN 0 AND 499"
+        },
+        "remote_mood_pages_id": {
+          "name": "remote_mood_pages_id",
+          "value": "\"remote_mood_pages\".\"page_id\" ~ '^[a-zA-Z0-9_.-]+$' AND \"remote_mood_pages\".\"page_id\" !~ '[.][.]'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.speaking_turns": {
+      "name": "speaking_turns",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "participant_id": {
+          "name": "participant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name_snapshot": {
+          "name": "name_snapshot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mood": {
+          "name": "mood",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "speaking_seconds": {
+          "name": "speaking_seconds",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "budget_seconds": {
+          "name": "budget_seconds",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "time_up": {
+          "name": "time_up",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meter_id": {
+          "name": "meter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "speaking_turns_team_id_session_id_standup_sessions_team_id_id_fk": {
+          "name": "speaking_turns_team_id_session_id_standup_sessions_team_id_id_fk",
+          "tableFrom": "speaking_turns",
+          "tableTo": "standup_sessions",
+          "columnsFrom": [
+            "team_id",
+            "session_id"
+          ],
+          "columnsTo": [
+            "team_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "speaking_turns_team_id_participant_id_participants_team_id_id_fk": {
+          "name": "speaking_turns_team_id_participant_id_participants_team_id_id_fk",
+          "tableFrom": "speaking_turns",
+          "tableTo": "participants",
+          "columnsFrom": [
+            "team_id",
+            "participant_id"
+          ],
+          "columnsTo": [
+            "team_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "speaking_turns_team_id_meter_id_mood_meters_team_id_id_fk": {
+          "name": "speaking_turns_team_id_meter_id_mood_meters_team_id_id_fk",
+          "tableFrom": "speaking_turns",
+          "tableTo": "mood_meters",
+          "columnsFrom": [
+            "team_id",
+            "meter_id"
+          ],
+          "columnsTo": [
+            "team_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "speaking_turns_team_id_session_id_participant_id_pk": {
+          "name": "speaking_turns_team_id_session_id_participant_id_pk",
+          "columns": [
+            "team_id",
+            "session_id",
+            "participant_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "speaking_turns_position": {
+          "name": "speaking_turns_position",
+          "nullsNotDistinct": false,
+          "columns": [
+            "team_id",
+            "session_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "speaking_turns_position_bounds": {
+          "name": "speaking_turns_position_bounds",
+          "value": "\"speaking_turns\".\"position\" BETWEEN 0 AND 99"
+        },
+        "speaking_turns_name": {
+          "name": "speaking_turns_name",
+          "value": "length(\"speaking_turns\".\"name_snapshot\") BETWEEN 1 AND 60 AND \"speaking_turns\".\"name_snapshot\" = btrim(\"speaking_turns\".\"name_snapshot\") AND \"speaking_turns\".\"name_snapshot\" !~ '[[:cntrl:]]'"
+        },
+        "speaking_turns_mood": {
+          "name": "speaking_turns_mood",
+          "value": "\"speaking_turns\".\"mood\" BETWEEN 1 AND 4"
+        },
+        "speaking_turns_times": {
+          "name": "speaking_turns_times",
+          "value": "\"speaking_turns\".\"speaking_seconds\" BETWEEN 0 AND 86400 AND \"speaking_turns\".\"budget_seconds\" BETWEEN 0 AND 86400"
+        },
+        "speaking_turns_score": {
+          "name": "speaking_turns_score",
+          "value": "\"speaking_turns\".\"score\" BETWEEN 0 AND 1000"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.standup_sessions": {
+      "name": "standup_sessions",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "write_transaction": {
+          "name": "write_transaction",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        }
+      },
+      "indexes": {
+        "standup_sessions_completed": {
+          "name": "standup_sessions_completed",
+          "columns": [
+            {
+              "expression": "team_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "completed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "standup_sessions_team_id_teams_id_fk": {
+          "name": "standup_sessions_team_id_teams_id_fk",
+          "tableFrom": "standup_sessions",
+          "tableTo": "teams",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "standup_sessions_team_id_id_pk": {
+          "name": "standup_sessions_team_id_id_pk",
+          "columns": [
+            "team_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "standup_sessions_id": {
+          "name": "standup_sessions_id",
+          "value": "\"standup_sessions\".\"id\" ~ '^[a-zA-Z0-9_-]{1,100}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.team_daily_meters": {
+      "name": "team_daily_meters",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "meter_id": {
+          "name": "meter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "team_daily_meters_team_id_teams_id_fk": {
+          "name": "team_daily_meters_team_id_teams_id_fk",
+          "tableFrom": "team_daily_meters",
+          "tableTo": "teams",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "team_daily_meters_team_id_meter_id_mood_meter_identifiers_team_id_id_fk": {
+          "name": "team_daily_meters_team_id_meter_id_mood_meter_identifiers_team_id_id_fk",
+          "tableFrom": "team_daily_meters",
+          "tableTo": "mood_meter_identifiers",
+          "columnsFrom": [
+            "team_id",
+            "meter_id"
+          ],
+          "columnsTo": [
+            "team_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "team_daily_meters_team_id_day_pk": {
+          "name": "team_daily_meters_team_id_day_pk",
+          "columns": [
+            "team_id",
+            "day"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "team_daily_meters_identifier": {
+          "name": "team_daily_meters_identifier",
+          "value": "length(\"team_daily_meters\".\"meter_id\") BETWEEN 1 AND 200"
+        },
+        "team_daily_meters_title": {
+          "name": "team_daily_meters_title",
+          "value": "length(\"team_daily_meters\".\"title\") BETWEEN 1 AND 200"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.team_discussion_prompts": {
+      "name": "team_discussion_prompts",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prompt": {
+          "name": "prompt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "team_discussion_prompts_team_id_teams_id_fk": {
+          "name": "team_discussion_prompts_team_id_teams_id_fk",
+          "tableFrom": "team_discussion_prompts",
+          "tableTo": "teams",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "team_discussion_prompts_team_id_position_pk": {
+          "name": "team_discussion_prompts_team_id_position_pk",
+          "columns": [
+            "team_id",
+            "position"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "team_discussion_prompts_position": {
+          "name": "team_discussion_prompts_position",
+          "value": "\"team_discussion_prompts\".\"position\" BETWEEN 0 AND 4"
+        },
+        "team_discussion_prompts_text": {
+          "name": "team_discussion_prompts_text",
+          "value": "length(\"team_discussion_prompts\".\"prompt\") BETWEEN 1 AND 160 AND \"team_discussion_prompts\".\"prompt\" = btrim(\"team_discussion_prompts\".\"prompt\") AND \"team_discussion_prompts\".\"prompt\" !~ '[[:cntrl:]]'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.team_meeting_settings": {
+      "name": "team_meeting_settings",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "write_transaction": {
+          "name": "write_transaction",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "team_meeting_settings_team_id_teams_id_fk": {
+          "name": "team_meeting_settings_team_id_teams_id_fk",
+          "tableFrom": "team_meeting_settings",
+          "tableTo": "teams",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "team_meeting_settings_team_id_pk": {
+          "name": "team_meeting_settings_team_id_pk",
+          "columns": [
+            "team_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "team_meeting_settings_revision": {
+          "name": "team_meeting_settings_revision",
+          "value": "\"team_meeting_settings\".\"revision\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.team_members": {
+      "name": "team_members",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "participant_id": {
+          "name": "participant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "present": {
+          "name": "present",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "team_members_team_id_participant_id_participants_team_id_id_fk": {
+          "name": "team_members_team_id_participant_id_participants_team_id_id_fk",
+          "tableFrom": "team_members",
+          "tableTo": "participants",
+          "columnsFrom": [
+            "team_id",
+            "participant_id"
+          ],
+          "columnsTo": [
+            "team_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "team_members_team_id_participant_id_pk": {
+          "name": "team_members_team_id_participant_id_pk",
+          "columns": [
+            "team_id",
+            "participant_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "team_members_position": {
+          "name": "team_members_position",
+          "nullsNotDistinct": false,
+          "columns": [
+            "team_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "team_members_position_bounds": {
+          "name": "team_members_position_bounds",
+          "value": "\"team_members\".\"position\" BETWEEN 0 AND 99"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.team_used_mood_meters": {
+      "name": "team_used_mood_meters",
+      "schema": "",
+      "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "identifier_id": {
+          "name": "identifier_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "team_used_mood_meters_team_id_identifier_id_mood_meter_identifiers_team_id_id_fk": {
+          "name": "team_used_mood_meters_team_id_identifier_id_mood_meter_identifiers_team_id_id_fk",
+          "tableFrom": "team_used_mood_meters",
+          "tableTo": "mood_meter_identifiers",
+          "columnsFrom": [
+            "team_id",
+            "identifier_id"
+          ],
+          "columnsTo": [
+            "team_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "team_used_mood_meters_team_id_identifier_id_pk": {
+          "name": "team_used_mood_meters_team_id_identifier_id_pk",
+          "columns": [
+            "team_id",
+            "identifier_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "team_used_mood_meters_position": {
+          "name": "team_used_mood_meters_position",
+          "nullsNotDistinct": false,
+          "columns": [
+            "team_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "team_used_mood_meters_bounds": {
+          "name": "team_used_mood_meters_bounds",
+          "value": "\"team_used_mood_meters\".\"position\" BETWEEN 0 AND 1999"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.teams": {
+      "name": "teams",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "favorite": {
+          "name": "favorite",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "write_transaction": {
+          "name": "write_transaction",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "duration": {
+          "name": "duration",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "warning": {
+          "name": "warning",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sound": {
+          "name": "sound",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "teams_workspace_name": {
+          "name": "teams_workspace_name",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "teams_workspace_id_workspaces_id_fk": {
+          "name": "teams_workspace_id_workspaces_id_fk",
+          "tableFrom": "teams",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "teams_category": {
+          "name": "teams_category",
+          "value": "\"teams\".\"category\" IN ('Tech','Produit','Support','Marketing')"
+        },
+        "teams_name": {
+          "name": "teams_name",
+          "value": "length(\"teams\".\"name\") BETWEEN 1 AND 60 AND \"teams\".\"name\" = btrim(\"teams\".\"name\") AND \"teams\".\"name\" !~ '[[:cntrl:]]'"
+        },
+        "teams_id": {
+          "name": "teams_id",
+          "value": "\"teams\".\"id\" ~ '^[a-f0-9]{64}$'"
+        },
+        "teams_revision": {
+          "name": "teams_revision",
+          "value": "\"teams\".\"revision\" >= 1"
+        },
+        "teams_duration": {
+          "name": "teams_duration",
+          "value": "\"teams\".\"duration\" BETWEEN 1 AND 3659"
+        },
+        "teams_warning": {
+          "name": "teams_warning",
+          "value": "\"teams\".\"warning\" IN (0,10,15,30,60)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.workspaces": {
+      "name": "workspaces",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "workspaces_id": {
+          "name": "workspaces_id",
+          "value": "\"workspaces\".\"id\" ~ '^[a-f0-9]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

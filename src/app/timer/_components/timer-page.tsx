@@ -36,7 +36,8 @@ export function TimerPage() {
   const [remoteOpen, setRemoteOpen] = useState(false);
   const [blackScreen, setBlackScreen] = useState(false);
   const panels = useViewMotion(`${view}-${timer.focusMode}`);
-  const { activeTeamId, activeTeamName } = useTeam();
+  const { activeTeamId, activeTeamName, teams } = useTeam();
+  const isSprint = teams.find(team => team.id === activeTeamId)?.kind === 'sprint';
   const notes = useDailyHints(activeTeamId);
   const refreshNotes = notes.retry;
   useEffect(() => { refreshNotes(); }, [timer.activeId, refreshNotes]);
@@ -109,7 +110,7 @@ export function TimerPage() {
         onChange={setView}
         tabs={[
           { value: 'timer', label: 'Minuteur' },
-          { value: 'prompts', label: note ? 'Pense-bête' : 'Questions' },
+          { value: 'prompts', label: isSprint ? 'Tickets & notes' : note ? 'Pense-bête' : 'Questions' },
         ]}
       />}
       <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 items-stretch gap-4 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'grid-cols-1' : 'grid-cols-[minmax(0,1.2fr)_minmax(300px,.85fr)] max-[800px]:grid-cols-1'}`} data-view={presentation.presenting ? 'timer' : view}>

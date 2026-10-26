@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { configureNeonNetwork } from './neon-network';
 import { resolveSelectedTeam, WorkspaceError } from './workspace-store';
 import { teamReadCache, teamReadKey } from './shared-read-cache';
+import { authorizeJiraTeam } from './jira-store';
 
 let connection: ReturnType<typeof createDatabase> | undefined;
 function createDatabase() {
@@ -23,9 +24,11 @@ export function sameOrigin(request: Request) {
 export async function selectedTeam(request: Request) {
   const id = request.headers.get('X-Team-Id');
   const load = () => resolveSelectedTeam(database(), id);
-  return request.method === 'GET'
+  const teamId = await (request.method === 'GET'
     ? teamReadCache.read(teamReadKey('identity', id ?? ''), 5_000, load)
-    : load();
+    : load());
+  await authorizeJiraTeam(database(), request, teamId);
+  return teamId;
 }
 export function databaseFailure(error: unknown) {
   if (error instanceof WorkspaceError) return NextResponse.json({ error: error.message }, { status: error.status, headers: { 'Cache-Control': 'no-store' } });

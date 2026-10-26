@@ -7,6 +7,7 @@ import { equalPortalSecret, readParticipantLinkToken, validPortalSecret } from '
 import { readHistory } from '@/lib/relational-store';
 import { teamReadCache } from '@/lib/shared-read-cache';
 import { WorkspaceError } from '@/lib/workspace-store';
+import { jiraTeamSprint } from '@/lib/jira-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,7 @@ function authorizedTeam(request: Request) {
 export async function GET(request: Request) {
   try {
     const id = authorizedTeam(request), db = database();
+    if (await jiraTeamSprint(db, id)) throw new WorkspaceError(403, 'Cette équipe de sprint nécessite une connexion Jira sur l’application principale.');
     const team = await db.execute(sql`SELECT t.id,t.name,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',p.id,'name',p.name,'present',m.present) ORDER BY m.position) FROM team_members m JOIN participants p ON p.team_id=m.team_id AND p.id=m.participant_id WHERE m.team_id=t.id),'[]'::jsonb) AS roster FROM teams t WHERE t.id=${id}`);
     if (!team.rows.length) throw new WorkspaceError(403, 'Lien d’équipe invalide.');
     const [notes, history] = await Promise.all([readDailyHints(db, id), readHistory(db, id)]);
@@ -32,6 +34,7 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const id = authorizedTeam(request);
+    if (await jiraTeamSprint(database(), id)) throw new WorkspaceError(403, 'Cette équipe de sprint nécessite une connexion Jira sur l’application principale.');
     let input;
     try { input = validateDailyHint(await readJson(request)); }
     catch (error) { throw new WorkspaceError(400, error instanceof Error ? error.message : 'Note invalide.'); }
