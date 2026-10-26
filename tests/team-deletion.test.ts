@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { PgDialect } from 'drizzle-orm/pg-core';
+import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import { PGlite } from '@electric-sql/pglite';
 import { createTeam, deleteTeam, listTeams, WorkspaceError } from '../src/lib/workspace-store.ts';
+import * as schema from '../src/db/schema.ts';
 
 const sharedWorkspace = '0'.repeat(64);
 const legacyWorkspace = 'a'.repeat(64);
@@ -75,16 +76,14 @@ async function seedOwnedRows(engine: PGlite, teamId: string) {
     await insert(`INSERT INTO team_daily_meters(team_id,day,meter_id,title) VALUES($1,'2026-10-15','${deckId}','Baromètre partagé')`);
     await insert(`INSERT INTO standup_sessions(team_id,id,completed_at) VALUES($1,'round','2026-10-15T08:30:00Z')`);
     await insert(`INSERT INTO speaking_turns(team_id,session_id,participant_id,position,name_snapshot,mood,speaking_seconds,budget_seconds,time_up,score,meter_id) VALUES($1,'round','person',0,'Élodie',3,60,120,false,1000,'meter'),($1,'round','archived',1,'Ancien',2,130,120,true,917,'meter')`);
-    await insert(`INSERT INTO round_feedback(team_id,session_id,participant_id,value) VALUES($1,'round','person','utile'),($1,'round','archived','mitige')`);
     await insert(`INSERT INTO team_meeting_settings(team_id,revision,write_transaction) VALUES($1,2,17)`);
     await insert(`INSERT INTO team_discussion_prompts(team_id,position,prompt) VALUES($1,0,'Un obstacle ?'),($1,1,'Une réussite ?')`);
     await insert(`INSERT INTO participant_daily_hints(team_id,participant_id,day,hint,revision) VALUES($1,'person','2026-10-15','Préparer la démonstration',1)`);
   });
 }
 
-async function seedGlobals(engine: PGlite, selectedTeamId: string) {
-  await engine.query(`INSERT INTO workspaces(id,selected_team_id) VALUES($1,$3),($2,$3)`, [legacyWorkspace, anotherWorkspace, selectedTeamId]);
-  await engine.query(`UPDATE workspaces SET selected_team_id=$1 WHERE id=$2`, [selectedTeamId, sharedWorkspace]);
+async function seedGlobals(engine: PGlite) {
+  await engine.query(`INSERT INTO workspaces(id) VALUES($1),($2)`, [legacyWorkspace, anotherWorkspace]);
   await engine.query(`INSERT INTO remote_mood_cache_state(id,generation,expires_at) VALUES(1,'keep-generation','2026-10-22T00:00:00Z')`);
   await engine.query(`INSERT INTO remote_mood_catalog(id,google_id,title,category,loaded_at) VALUES($1,'google_shared','Baromètre partagé','Movies','2026-10-15T00:00:00Z')`, [deckId]);
   await engine.query(`INSERT INTO remote_mood_pages(deck_id,position,page_id) VALUES($1,0,'p.shared')`, [deckId]);
@@ -104,7 +103,43 @@ test('DELETE teams route requires same-origin strict JSON and delegates exact-na
   assert.doesNotMatch(handler, /input.name\s*=|selectTeam\(/, 'never normalize confirmation or switch to another team before deleting');
 });
 
-test('PGlite: dependent-first team deletion cascades remaining ownership, clears legacy references, and preserves other teams and global data', async () => {
+test('PGlite: cleanup migrations roll back atomically and preserve every surviving table and column', async () => {
+  const engine = new PGlite();
+  try {
+    const journal = JSON.parse(read('../drizzle/meta/_journal.json')) as { entries: { tag: string }[] };
+    const cleanupIndex = journal.entries.findIndex(entry => entry.tag === '0007_remove_unused_workspace_selection');
+    assert.ok(cleanupIndex > 0);
+    for (const { tag } of journal.entries.slice(0, cleanupIndex)) await engine.exec(read(`../drizzle/${tag}.sql`));
+    const target = (await listTeams(clientFor(engine))).teams[0];
+    await seedOwnedRows(engine, target.id);
+    await seedGlobals(engine);
+    await engine.query('UPDATE workspaces SET selected_team_id=$1', [target.id]);
+    await engine.query("INSERT INTO round_feedback(team_id,session_id,participant_id,value) VALUES($1,'round','person','utile')", [target.id]);
+    const configs = Object.values(schema).map(getTableConfig);
+    const tables = [...configs.map(config => config.name), 'round_feedback'];
+    const before = await snapshot(engine, tables);
+    const cleanup = journal.entries.slice(cleanupIndex);
+    await assert.rejects(engine.transaction(async tx => {
+      for (const { tag } of cleanup) await tx.exec(read(`../drizzle/${tag}.sql`));
+      throw new Error('injected cleanup failure');
+    }), /injected cleanup failure/);
+    assert.deepEqual(await snapshot(engine, tables), before);
+    await engine.transaction(async tx => {
+      for (const { tag } of cleanup) await tx.exec(read(`../drizzle/${tag}.sql`));
+    });
+    assert.equal((await engine.query("SELECT to_regclass('round_feedback') AS name")).rows[0].name, null);
+    const after = await snapshot(engine, configs.map(config => config.name));
+    for (const config of configs) {
+      const columns = config.columns.map(column => column.name).sort();
+      const actual = await engine.query<{ column_name: string }>('SELECT column_name FROM information_schema.columns WHERE table_schema=\'public\' AND table_name=$1 ORDER BY column_name', [config.name]);
+      assert.deepEqual(actual.rows.map(row => row.column_name), columns, config.name);
+      const project = (rows: unknown[]) => rows.map(row => Object.fromEntries(columns.map(column => [column, (row as Record<string, unknown>)[column]])));
+      assert.deepEqual(project(after[config.name]), project(before[config.name]), config.name);
+    }
+  } finally { await engine.close(); }
+});
+
+test('PGlite: dependent-first team deletion cascades remaining ownership and preserves other teams and global data', async () => {
   const engine = await migratedDatabase();
   try {
     const statements: string[] = [];
@@ -113,11 +148,9 @@ test('PGlite: dependent-first team deletion cascades remaining ownership, clears
     const second = (await createTeam(client, 'Autre équipe')).activeTeamId!;
     await seedOwnedRows(engine, target.id);
     await seedOwnedRows(engine, second);
-    await seedGlobals(engine, target.id);
-    // One legacy reference selects the surviving team and must not be cleared.
-    await engine.query('UPDATE workspaces SET selected_team_id=$1 WHERE id=$2', [second, anotherWorkspace]);
+    await seedGlobals(engine);
     const tables = await teamTables(engine);
-    assert.equal(tables.length, 14, 'all current team_id tables, including daily hints');
+    assert.equal(tables.length, 13, 'all current team_id tables, including daily hints');
     const before = await snapshot(engine, ['teams', ...tables, 'workspaces', 'remote_mood_cache_state', 'remote_mood_catalog', 'remote_mood_pages']);
     for (const table of tables) assert.ok(before[table].some(row => (row as { team_id: string }).team_id === target.id), `${table} must be populated before deletion`);
     statements.length = 0;
@@ -125,24 +158,20 @@ test('PGlite: dependent-first team deletion cascades remaining ownership, clears
     assert.deepEqual(deleted, { teams: [{ id: second, name: 'Autre équipe', memberCount: 1, category: null, favorite: false }], activeTeamId: second });
     assert.match(statements[1], /FROM workspaces .*FOR UPDATE/);
     assert.match(statements[2], /FROM teams .*FOR UPDATE/);
-    assert.match(statements[3], /^UPDATE workspaces /);
-    assert.match(statements[4], /^DELETE FROM participant_check_ins /);
-    assert.match(statements[5], /^DELETE FROM team_daily_meters /);
-    assert.match(statements[6], /^DELETE FROM standup_sessions /);
-    for (const statement of statements.slice(3, 7)) {
+    assert.match(statements[3], /^DELETE FROM participant_check_ins /);
+    assert.match(statements[4], /^DELETE FROM team_daily_meters /);
+    assert.match(statements[5], /^DELETE FROM standup_sessions /);
+    for (const statement of statements.slice(3, 6)) {
       assert.match(statement, /AND EXISTS\(SELECT 1 FROM teams WHERE id=\$\d+ AND name=\$\d+\)/, 'every pre-root mutation requires exact target ID and name');
     }
-    assert.match(statements[7], /^DELETE FROM teams WHERE id=\$\d+ AND name=\$\d+ RETURNING id/);
+    assert.match(statements[6], /^DELETE FROM teams WHERE id=\$\d+ AND name=\$\d+ RETURNING id/);
     assert.equal(statements.filter(statement => /^DELETE /i.test(statement)).length, 4, 'three dependent deletes precede the root cascade for remaining ownership');
     const after = await snapshot(engine, Object.keys(before));
     assert.deepEqual(after.teams, before.teams.filter(row => (row as { id: string }).id !== target.id));
     for (const table of tables) {
       assert.deepEqual(after[table], before[table].filter(row => (row as { team_id: string }).team_id !== target.id), `${table}: target zero, other team byte-for-byte unchanged`);
     }
-    assert.deepEqual(after.workspaces, before.workspaces.map(row => {
-      const workspace = row as { selected_team_id: string | null };
-      return workspace.selected_team_id === target.id ? { ...workspace, selected_team_id: null } : workspace;
-    }), 'all namespaces survive, only references to the deleted team are cleared');
+    assert.deepEqual(after.workspaces, before.workspaces, 'all namespaces survive unchanged');
     for (const table of ['remote_mood_cache_state', 'remote_mood_catalog', 'remote_mood_pages']) assert.deepEqual(after[table], before[table], table);
     assert.deepEqual(await listTeams(clientFor(engine)), deleted, 'GET/reload sees the authoritative surviving roster');
   } finally { await engine.close(); }
@@ -158,7 +187,7 @@ test('PGlite: initial bootstrap is singleton, last deletion stays empty across G
     const empty = { teams: [], activeTeamId: null };
     assert.deepEqual(await deleteTeam(client, { teamId: sharedWorkspace, name: 'Mon équipe' }), empty);
     for (let reload = 0; reload < 3; reload++) assert.deepEqual(await listTeams(clientFor(engine)), empty);
-    assert.deepEqual((await engine.query('SELECT id,selected_team_id FROM workspaces')).rows, [{ id: sharedWorkspace, selected_team_id: null }]);
+    assert.deepEqual((await engine.query('SELECT id FROM workspaces')).rows, [{ id: sharedWorkspace }]);
     const created = await createTeam(clientFor(engine), 'Mon équipe');
     assert.equal(created.teams.length, 1);
     assert.equal(created.teams[0].name, 'Mon équipe');
@@ -181,13 +210,12 @@ test('PGlite: legacy teams suppress the initial default without changing ownersh
   try {
     await engine.query('INSERT INTO workspaces(id) VALUES($1)', [legacyWorkspace]);
     await engine.query(`INSERT INTO teams(id,workspace_id,name,duration,warning,sound) VALUES($1,$1,'Mon équipe',120,30,true)`, [legacyWorkspace]);
-    await engine.query('UPDATE workspaces SET selected_team_id=$1 WHERE id=$1', [legacyWorkspace]);
     const client = clientFor(engine);
     const initial = { teams: [{ id: legacyWorkspace, name: 'Mon équipe', memberCount: 0, category: null, favorite: false }], activeTeamId: legacyWorkspace };
     assert.deepEqual(await listTeams(client), initial);
     assert.deepEqual(await listTeams(client), initial);
     assert.equal((await engine.query('SELECT workspace_id FROM teams')).rows[0].workspace_id, legacyWorkspace);
-    assert.equal((await engine.query('SELECT selected_team_id FROM workspaces WHERE id=$1', [legacyWorkspace])).rows[0].selected_team_id, legacyWorkspace);
+    assert.equal((await engine.query('SELECT id FROM workspaces WHERE id=$1', [legacyWorkspace])).rows[0].id, legacyWorkspace);
     assert.deepEqual(await deleteTeam(client, { teamId: legacyWorkspace, name: 'Mon équipe' }), { teams: [], activeTeamId: null });
     assert.deepEqual(await listTeams(clientFor(engine)), { teams: [], activeTeamId: null });
   } finally { await engine.close(); }
@@ -199,7 +227,7 @@ test('PGlite: malformed, missing and non-exact confirmations never mutate rows; 
     const client = clientFor(engine);
     const target = (await listTeams(client)).teams[0];
     await seedOwnedRows(engine, target.id);
-    await seedGlobals(engine, target.id);
+    await seedGlobals(engine);
     const tables = ['teams', ...await teamTables(engine), 'workspaces', 'remote_mood_cache_state', 'remote_mood_catalog', 'remote_mood_pages'];
     const before = await snapshot(engine, tables);
     const malformed: unknown[] = [null, [], '', {}, { teamId: target.id }, { name: target.name }, { teamId: target.id, name: target.name, extra: true },

@@ -127,7 +127,6 @@ test('PGlite: signed team-A notes use member-only CAS, reject forged scope and p
       await engine.query("INSERT INTO speaking_turns(team_id,session_id,participant_id,position,name_snapshot,mood,speaking_seconds,budget_seconds,time_up,score) VALUES($1,'shared-round','archived',0,'Ancien',2,60,120,false,1000)", [id]);
       await engine.query('INSERT INTO team_meeting_settings(team_id,revision) VALUES($1,2)', [id]);
       await engine.query("INSERT INTO team_discussion_prompts(team_id,position,prompt) VALUES($1,0,'Un obstacle ?')", [id]);
-      await engine.query("INSERT INTO round_feedback(team_id,session_id,participant_id,value) VALUES($1,'shared-round','archived','utile')", [id]);
     }
     await engine.query("INSERT INTO participants(team_id,id,name) VALUES($1,'only-b','B seulement')", [teamB]);
     await engine.query("INSERT INTO team_members(team_id,participant_id,position,present) VALUES($1,'only-b',1,true)", [teamB]);

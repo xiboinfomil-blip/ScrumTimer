@@ -70,7 +70,7 @@ test('keys cross both daily boundaries and preserve team isolation', () => {
 });
 
 test('every durable mutation route invalidates shared reads; writes keep direct identity validation', () => {
-  for (const route of ['team', 'teams', 'history', 'daily-meter', 'meeting-settings', 'round-feedback']) {
+  for (const route of ['team', 'teams', 'history', 'daily-meter', 'meeting-settings']) {
     const source = readFileSync(new URL(`../src/app/api/${route}/route.ts`, import.meta.url), 'utf8');
     assert.match(source, /teamReadCache\.mutate\(/, route);
     assert.match(source, /teamReadCache\.read\(/, route);

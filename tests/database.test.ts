@@ -15,7 +15,7 @@ const round = { id: 'round-1', completedAt: now.toISOString(), people: [{ id: 'p
 
 test('normalized schema has no JSON columns, scoped identity keys and relational integrity', () => {
   const configs = Object.values(schema).map(getTableConfig);
-  assert.equal(configs.length, 19);
+  assert.equal(configs.length, 18);
   for (const table of configs) {
     for (const column of table.columns) assert.ok(!/json/i.test(column.getSQLType()), `${table.name}.${column.name}`);
     if (!['teams', 'workspaces'].includes(table.name) && !table.name.startsWith('remote_mood_')) {
@@ -112,7 +112,7 @@ test('PostgreSQL: legacy backfill, CAS isolation, atomic rollback, scoped reads 
   await engine.query("UPDATE standup_spaces SET team=jsonb_set(team,'{warning}','30')");
   await engine.transaction(async (tx: typeof engine) => { await tx.exec(migration); });
   await engine.transaction(async (tx: typeof engine) => { await tx.exec(readFileSync(new URL('../drizzle/0002_workspace_daily_meters.sql', import.meta.url), 'utf8')); });
-  for (const name of ['0004_slim_emma_frost', '0005_tired_black_bird', '0006_pretty_shiver_man']) {
+  for (const name of ['0004_slim_emma_frost', '0005_tired_black_bird', '0006_pretty_shiver_man', '0007_remove_unused_workspace_selection', '0008_remove_unused_round_feedback', '0009_remove_unused_audit_timestamps']) {
     await engine.exec(readFileSync(new URL(`../drizzle/${name}.sql`, import.meta.url), 'utf8'));
   }
   assert.equal((await engine.query('SELECT count(*)::int AS n FROM standup_sessions')).rows[0].n, 1, 'old history converted before retention');

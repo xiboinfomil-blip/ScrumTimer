@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, unique, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // Disposable global source cache; never references team-owned history or check-ins.
 export const remoteMoodCacheState = pgTable('remote_mood_cache_state', {
@@ -18,7 +18,6 @@ export const remoteMoodPages = pgTable('remote_mood_pages', {
 
 export const workspaces = pgTable('workspaces', {
   id: text('id').primaryKey(),
-  selectedTeamId: text('selected_team_id').references((): AnyPgColumn => teams.id),
 }, t => [check('workspaces_id', sql`${t.id} ~ '^[a-f0-9]{64}$'`)]);
 
 export const teams = pgTable('teams', {
@@ -28,7 +27,6 @@ export const teams = pgTable('teams', {
   favorite: boolean('favorite').notNull().default(false),
   writeTransaction: bigint('write_transaction', { mode: 'bigint' }).notNull().default(sql`0`),
   duration: integer('duration').notNull(), warning: integer('warning').notNull(), sound: boolean('sound').notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [check('teams_category', sql`${t.category} IN ('Tech','Produit','Support','Marketing')`), uniqueIndex('teams_workspace_name').on(t.workspaceId, sql`lower(${t.name})`), check('teams_name', sql`length(${t.name}) BETWEEN 1 AND 60 AND ${t.name} = btrim(${t.name}) AND ${t.name} !~ '[[:cntrl:]]'`), check('teams_id', sql`${t.id} ~ '^[a-f0-9]{64}$'`), check('teams_revision', sql`${t.revision} >= 1`), check('teams_duration', sql`${t.duration} BETWEEN 1 AND 3659`), check('teams_warning', sql`${t.warning} IN (0,10,15,30,60)`)]);
 export const participants = pgTable('participants', {
   teamId: text('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }), id: text('id').notNull(), name: text('name').notNull(),
@@ -45,7 +43,6 @@ export const moodMeterIdentifiers = pgTable('mood_meter_identifiers', {
 export const teamDailyMeters = pgTable('team_daily_meters', {
   teamId: text('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }), day: date('day').notNull(),
   meterId: text('meter_id').notNull(), title: text('title').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.teamId, t.day] }), foreignKey({ columns: [t.teamId, t.meterId], foreignColumns: [moodMeterIdentifiers.teamId, moodMeterIdentifiers.id] }), check('team_daily_meters_identifier', sql`length(${t.meterId}) BETWEEN 1 AND 200`), check('team_daily_meters_title', sql`length(${t.title}) BETWEEN 1 AND 200`)]);
 export const moodMeterSlides = pgTable('mood_meter_slides', {
   teamId: text('team_id').notNull(), id: text('id').notNull(), meterId: text('meter_id').notNull(), image: text('image').notNull(), slideNumber: integer('slide_number').notNull(),
@@ -75,14 +72,6 @@ export const teamDiscussionPrompts = pgTable('team_discussion_prompts', {
   position: integer('position').notNull(), prompt: text('prompt').notNull(),
 }, t => [primaryKey({ columns: [t.teamId, t.position] }), check('team_discussion_prompts_position', sql`${t.position} BETWEEN 0 AND 4`),
   check('team_discussion_prompts_text', sql`length(${t.prompt}) BETWEEN 1 AND 160 AND ${t.prompt} = btrim(${t.prompt}) AND ${t.prompt} !~ '[[:cntrl:]]'`)]);
-export const roundFeedback = pgTable('round_feedback', {
-  teamId: text('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }),
-  sessionId: text('session_id').notNull(), participantId: text('participant_id').notNull(), value: text('value').notNull(),
-}, t => [primaryKey({ columns: [t.teamId, t.sessionId, t.participantId] }),
-  foreignKey({ columns: [t.teamId, t.sessionId], foreignColumns: [standupSessions.teamId, standupSessions.id] }).onDelete('cascade'),
-  foreignKey({ columns: [t.teamId, t.sessionId, t.participantId], foreignColumns: [speakingTurns.teamId, speakingTurns.sessionId, speakingTurns.participantId] }).onDelete('cascade'),
-  check('round_feedback_value', sql`${t.value} IN ('utile','mitige','pas-utile')`)]);
-
 // Identity FK, not membership: roster writes delete/reinsert team_members.
 export const participantDailyHints = pgTable('participant_daily_hints', {
   teamId: text('team_id').notNull(), participantId: text('participant_id').notNull(),

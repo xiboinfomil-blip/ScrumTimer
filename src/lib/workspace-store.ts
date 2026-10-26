@@ -87,17 +87,14 @@ export async function deleteTeam(db: Database, value: unknown) {
   const input = strictObject(value, ['teamId', 'name']);
   if (!capabilityId(input.teamId)) throw new WorkspaceError(400, 'Équipe invalide.');
   validateTeamName(input.name);
-  // Do not trim/case-fold confirmation: only the exact persisted name authorizes
-  // legacy-reference clearing, dependent deletes or the root FK cascades.
   const teamId = input.teamId; const name = input.name as string;
   const results = await batch(db, [
     sql`INSERT INTO workspaces(id) VALUES(${sharedWorkspace}) ON CONFLICT DO NOTHING`,
     sql`SELECT id FROM workspaces WHERE id=${sharedWorkspace} FOR UPDATE`,
     sql`SELECT id,name FROM teams WHERE id=${teamId} FOR UPDATE`,
-    sql`UPDATE workspaces SET selected_team_id=NULL WHERE selected_team_id=${teamId} AND EXISTS(SELECT 1 FROM teams WHERE id=${teamId} AND name=${name})`,
     // Immediate NO ACTION references can be checked before indirect root
     // cascades finish. Remove these dependents first in the same transaction;
-    // sessions cascade their speaking turns and feedback before meters vanish.
+    // sessions cascade their speaking turns before meters vanish.
     sql`DELETE FROM participant_check_ins WHERE team_id=${teamId} AND EXISTS(SELECT 1 FROM teams WHERE id=${teamId} AND name=${name})`,
     sql`DELETE FROM team_daily_meters WHERE team_id=${teamId} AND EXISTS(SELECT 1 FROM teams WHERE id=${teamId} AND name=${name})`,
     sql`DELETE FROM standup_sessions WHERE team_id=${teamId} AND EXISTS(SELECT 1 FROM teams WHERE id=${teamId} AND name=${name})`,
@@ -105,8 +102,8 @@ export async function deleteTeam(db: Database, value: unknown) {
     listStatement(),
   ]);
   if (!results[2].rows.length) throw new WorkspaceError(404, 'Équipe introuvable.');
-  if (!results[7].rows.length) throw new WorkspaceError(409, 'Le nom de confirmation ne correspond pas au nom de l’équipe.');
-  return listResult(results[8].rows);
+  if (!results[6].rows.length) throw new WorkspaceError(409, 'Le nom de confirmation ne correspond pas au nom de l’équipe.');
+  return listResult(results[7].rows);
 }
 export async function selectTeam(db: Database, teamId: unknown) {
   if (!capabilityId(teamId)) throw forbidden();

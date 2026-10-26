@@ -19,7 +19,7 @@ export function teamWriteStatements(id: string, revision: number, team: TeamStat
   return [
     // Teams are created by the workspace API at revision 1, never by profile PUT.
     // The daily rule shares the UPDATE lock with daily selection, preventing races.
-    sql`UPDATE teams SET revision=revision+1,duration=${team.duration},warning=${team.warning},sound=${team.sound},updated_at=now(),write_transaction=txid_current() WHERE id=${id} AND revision=${revision} AND NOT EXISTS(SELECT 1 FROM team_daily_meters d CROSS JOIN ${people} ${fields} WHERE d.team_id=${id} AND d.day=(now() AT TIME ZONE 'Indian/Mauritius')::date AND p.mood IS NOT NULL AND p.identifier IS DISTINCT FROM d.meter_id AND NOT(d.meter_id='original' AND p.identifier IS NULL AND p.image IS NULL)) RETURNING revision`,
+    sql`UPDATE teams SET revision=revision+1,duration=${team.duration},warning=${team.warning},sound=${team.sound},write_transaction=txid_current() WHERE id=${id} AND revision=${revision} AND NOT EXISTS(SELECT 1 FROM team_daily_meters d CROSS JOIN ${people} ${fields} WHERE d.team_id=${id} AND d.day=(now() AT TIME ZONE 'Indian/Mauritius')::date AND p.mood IS NOT NULL AND p.identifier IS DISTINCT FROM d.meter_id AND NOT(d.meter_id='original' AND p.identifier IS NULL AND p.image IS NULL)) RETURNING revision`,
     sql`INSERT INTO participants(team_id,id,name) SELECT ${id},p.id,p.name FROM ${people} ${fields} WHERE ${gate} ON CONFLICT(team_id,id) DO UPDATE SET name=excluded.name`,
     sql`INSERT INTO mood_meters(team_id,id,title) SELECT DISTINCT ${id},p.title,p.title FROM ${people} ${fields} WHERE ${gate} AND p.title IS NOT NULL ON CONFLICT DO NOTHING`,
     sql`INSERT INTO mood_meter_identifiers(team_id,id) SELECT ${id},identifier FROM (SELECT p.identifier FROM ${people} ${fields} UNION SELECT u.id FROM ${used} AS u(id text,position integer)) x WHERE ${gate} AND identifier IS NOT NULL ON CONFLICT DO NOTHING`,
@@ -70,7 +70,7 @@ export async function writeHistory(db: Database, id: string, round: HistoryRound
 export async function resetDailyRound(db: Database, id: string, roundId: string, now = new Date()) {
   const results = await batch(db, [
     sql`SELECT id FROM teams WHERE id=${id} FOR UPDATE`,
-    sql`UPDATE teams SET revision=revision+1,updated_at=now(),write_transaction=txid_current() WHERE id=${id} AND EXISTS(SELECT 1 FROM standup_sessions WHERE team_id=${id} AND id=${roundId} AND (completed_at AT TIME ZONE 'Indian/Mauritius')::date=${mauritiusDay(now)}::date) RETURNING revision`,
+    sql`UPDATE teams SET revision=revision+1,write_transaction=txid_current() WHERE id=${id} AND EXISTS(SELECT 1 FROM standup_sessions WHERE team_id=${id} AND id=${roundId} AND (completed_at AT TIME ZONE 'Indian/Mauritius')::date=${mauritiusDay(now)}::date) RETURNING revision`,
     sql`DELETE FROM standup_sessions WHERE team_id=${id} AND (completed_at AT TIME ZONE 'Indian/Mauritius')::date=${mauritiusDay(now)}::date AND ${teamGate(id)}`,
     sql`DELETE FROM participant_check_ins WHERE team_id=${id} AND ${teamGate(id)}`,
   ]);

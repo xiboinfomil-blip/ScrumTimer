@@ -56,7 +56,7 @@ test('API identity is database-only, with no cookie or browser-storage dependenc
   for (const path of ['../src/lib/database.ts', '../src/lib/workspace-store.ts', '../src/app/api/teams/route.ts', '../src/providers/team-provider.tsx']) {
     assert.doesNotMatch(read(path), /privateSpace|next\/headers|standup-space|localStorage|sessionStorage|indexedDB|document\.cookie|Set-Cookie/i, path);
   }
-  assert.doesNotMatch(read('../src/lib/workspace-store.ts').replace(/export async function deleteTeam[\s\S]*?(?=export async function selectTeam)/, ''), /selected_team_id/, 'legacy selections are only cleared for explicit deletion, never consulted or persisted during selection');
+  assert.doesNotMatch(read('../src/lib/workspace-store.ts'), /selected_team_id/, 'selection is never persisted');
 });
 
 test('PGlite: shared teams across devices, independent selection, daily singleton and reset', async () => {
@@ -89,6 +89,9 @@ test('PGlite: shared teams across devices, independent selection, daily singleto
     await engine.exec(migration('0004_slim_emma_frost'));
     await engine.exec(migration('0005_tired_black_bird'));
     await engine.exec(migration('0006_pretty_shiver_man'));
+    await engine.exec(migration('0007_remove_unused_workspace_selection'));
+    await engine.exec(migration('0008_remove_unused_round_feedback'));
+    await engine.exec(migration('0009_remove_unused_audit_timestamps'));
     await readMoodFetchCache(client, catalog, clock);
     const first = await listTeams(client);
     assert.deepEqual(first, { teams: [{ id: workspace, name: 'Mon équipe', memberCount: 1, category: null, favorite: false }], activeTeamId: workspace });
@@ -111,13 +114,12 @@ test('PGlite: shared teams across devices, independent selection, daily singleto
     for (const id of [null, foreignWorkspace, 'f'.repeat(64), '', 'bad']) await assert.rejects(resolveSelectedTeam(client, id), forbidden);
     await assert.rejects(selectTeam(client, foreignWorkspace), forbidden);
     await assert.rejects(selectTeam(client, 'e'.repeat(64)), forbidden);
-    const selectionsBefore = (await engine.query('SELECT id,selected_team_id FROM workspaces ORDER BY id')).rows;
+    const selectionsBefore = (await engine.query('SELECT id FROM workspaces ORDER BY id')).rows;
     assert.equal((await selectTeam(client, workspace)).activeTeamId, workspace);
     assert.equal((await selectTeam(client, second)).activeTeamId, second);
-    assert.deepEqual((await engine.query('SELECT id,selected_team_id FROM workspaces ORDER BY id')).rows, selectionsBefore, 'selection never persists device state');
+    assert.deepEqual((await engine.query('SELECT id FROM workspaces ORDER BY id')).rows, selectionsBefore, 'selection never persists device state');
     assert.equal((await engine.query('SELECT count(*)::int AS n FROM workspaces')).rows[0].n, 2, 'only legacy and shared namespaces; no device records');
-    await engine.query('UPDATE workspaces SET selected_team_id=NULL WHERE id=$1', [workspace]);
-    assert.ok((await listTeams(client)).activeTeamId, 'legacy selection is ignored');
+    assert.ok((await listTeams(client)).activeTeamId, 'selection does not require a persisted pointer');
 
     assert.deepEqual(await readTeam(client, workspace, oldClock), { team: legacyTeam, revision: 7 });
     const expired = await readTeam(client, workspace, clock);

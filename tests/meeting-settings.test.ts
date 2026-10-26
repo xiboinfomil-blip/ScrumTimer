@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { DEFAULT_DISCUSSION_PROMPTS, summarizeRoundFeedback, validateDiscussionPrompts, validateMeetingSettings, validateRoundFeedback, validateRoundId } from '../src/lib/meeting-settings.ts';
+import { DEFAULT_DISCUSSION_PROMPTS, validateDiscussionPrompts, validateMeetingSettings } from '../src/lib/meeting-settings.ts';
 
 test('discussion prompts validate exact bounded text and independent revisions', () => {
   assert.deepEqual(validateDiscussionPrompts([...DEFAULT_DISCUSSION_PROMPTS]), DEFAULT_DISCUSSION_PROMPTS);
@@ -14,11 +14,4 @@ test('discussion prompts validate exact bounded text and independent revisions',
   assert.throws(() => validateMeetingSettings({ prompts: ['Q'] }));
   const defaults = validateDiscussionPrompts([...DEFAULT_DISCUSSION_PROMPTS]); defaults[0] = 'Changed';
   assert.equal(DEFAULT_DISCUSSION_PROMPTS[0], 'Qu’avez-vous fait hier ?');
-});
-test('feedback is a strict three-value contract with no free text or inferred identity', () => {
-  for (const value of ['utile', 'mitige', 'pas-utile']) assert.equal(validateRoundFeedback({ roundId: 'round-1', participantId: 'person-1', value }).value, value);
-  for (const roundId of ['', 'x'.repeat(101), '../round', 'round\n']) assert.throws(() => validateRoundId(roundId));
-  for (const override of [{ value: 'Utile' }, { value: null }, { participantId: '' }, { participantId: 'x'.repeat(101) }, { participantId: 'A\n' }, { comment: 'Sensitive text' }, { teamId: 'other' }]) assert.throws(() => validateRoundFeedback({ roundId: 'r', participantId: 'p', value: 'utile', ...override }));
-  assert.deepEqual(summarizeRoundFeedback('r', []), { roundId: 'r', responses: [], counts: { utile: 0, mitige: 0, 'pas-utile': 0 } });
-  assert.deepEqual(summarizeRoundFeedback('r', [{ participantId: 'a', value: 'utile' }, { participantId: 'b', value: 'pas-utile' }]).counts, { utile: 1, mitige: 0, 'pas-utile': 1 });
 });

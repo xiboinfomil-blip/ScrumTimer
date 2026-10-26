@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { sql } from 'drizzle-orm';
+import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { configureNeonNetwork } from '../src/lib/neon-network';
 import * as schema from '../src/db/schema.ts';
 import { getTableConfig } from 'drizzle-orm/pg-core';
@@ -20,8 +21,15 @@ async function main() {
   const tables = await db.execute(sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN (${tableNames}) ORDER BY table_name`);
   console.log(`Application tables present: ${tables.rows.length} / ${names.length}`);
   if (tables.rows.length !== names.length) throw new Error('Missing normalized tables');
-  const legacy = await db.execute(sql`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('standup_spaces','standup_rounds')`);
+  const allTables = await db.execute(sql`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'`);
+  if (allTables.rows.some(row => !names.includes(String(row.table_name)))) throw new Error('Unexpected public tables remain');
+  const legacy = await db.execute(sql`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('standup_spaces','standup_rounds','round_feedback')`);
   if (legacy.rows.length) throw new Error('Legacy tables remain');
+  const liveColumns = await db.execute(sql`SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND table_name IN (${tableNames})`);
+  const expectedColumns = new Set(configs.flatMap(config => config.columns.map(column => `${config.name}.${column.name}`)));
+  const actualColumns = new Set(liveColumns.rows.map(row => `${row.table_name}.${row.column_name}`));
+  if (expectedColumns.size !== actualColumns.size || [...expectedColumns].some(column => !actualColumns.has(column))) throw new Error('Database columns differ from the canonical schema');
+  console.log(`Canonical columns verified: ${actualColumns.size}`);
   const columns = await db.execute(sql`SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND table_name IN (${tableNames}) AND data_type IN ('json','jsonb')`);
   console.log(`Persisted JSON columns: ${columns.rows.length}`);
   if (columns.rows.length) throw new Error('Unsupported JSON columns');
@@ -36,8 +44,10 @@ async function main() {
     const count = await db.execute(sql`SELECT count(*)::text AS count FROM ${sql.identifier(config.name)}`);
     console.log(`${config.name}: ${count.rows[0].count} rows`);
   }
-  const journal = await db.execute(sql`SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations`);
-  console.log(`Applied Drizzle migrations: ${journal.rows[0].count}`);
+  const migrations = readMigrationFiles({ migrationsFolder: './drizzle' });
+  const journal = await db.execute(sql`SELECT hash,created_at FROM drizzle.__drizzle_migrations ORDER BY created_at,id`);
+  if (journal.rows.length !== migrations.length || migrations.some((migration, position) => journal.rows[position]?.hash !== migration.hash || Number(journal.rows[position]?.created_at) !== migration.folderMillis)) throw new Error('Migration journal differs from local migrations');
+  console.log(`Applied Drizzle migrations: ${journal.rows.length} / ${migrations.length}`);
   // Aggregate-only diagnostics: no names, notes, credentials or team capabilities.
   // Read directly; application read routes may perform retention housekeeping.
   const integrity = await db.execute(sql`
@@ -46,7 +56,6 @@ async function main() {
       (SELECT count(*)::int FROM participant_check_ins c LEFT JOIN team_members m ON m.team_id=c.team_id AND m.participant_id=c.participant_id WHERE m.participant_id IS NULL) AS orphan_check_ins,
       (SELECT count(*)::int FROM participant_daily_hints h LEFT JOIN participants p ON p.team_id=h.team_id AND p.id=h.participant_id WHERE p.id IS NULL) AS orphan_notes,
       (SELECT count(*)::int FROM speaking_turns t LEFT JOIN standup_sessions s ON s.team_id=t.team_id AND s.id=t.session_id LEFT JOIN participants p ON p.team_id=t.team_id AND p.id=t.participant_id WHERE s.id IS NULL OR p.id IS NULL) AS orphan_turns,
-      (SELECT count(*)::int FROM round_feedback f LEFT JOIN speaking_turns t ON t.team_id=f.team_id AND t.session_id=f.session_id AND t.participant_id=f.participant_id WHERE t.participant_id IS NULL) AS orphan_feedback,
       (SELECT count(*)::int FROM standup_sessions s WHERE NOT EXISTS(SELECT 1 FROM speaking_turns t WHERE t.team_id=s.team_id AND t.session_id=s.id)) AS empty_sessions,
       (SELECT count(*)::int FROM speaking_turns WHERE score IS NOT NULL AND (score NOT BETWEEN 0 AND 1000 OR speaking_seconds < 1 OR budget_seconds <= 0)) AS invalid_scored_turns,
       (SELECT count(*)::int FROM (SELECT team_id FROM team_members GROUP BY team_id HAVING min(position)<>0 OR max(position)<>count(*)-1) gaps) AS roster_position_gaps,

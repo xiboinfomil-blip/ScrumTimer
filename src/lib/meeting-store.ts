@@ -1,8 +1,7 @@
 import { sql, type SQL } from 'drizzle-orm';
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
-import { historyCutoff } from './history.ts';
 import { WorkspaceError } from './workspace-store.ts';
-import { DEFAULT_DISCUSSION_PROMPTS, summarizeRoundFeedback, validateMeetingSettings, validateRoundFeedback, validateRoundId, type FeedbackValue, type MeetingSettings } from './meeting-settings.ts';
+import { DEFAULT_DISCUSSION_PROMPTS, validateMeetingSettings, type MeetingSettings } from './meeting-settings.ts';
 
 type Database = Pick<NeonHttpDatabase, 'execute' | 'batch'>;
 async function batch(db: Database, statements: SQL[]) {
@@ -33,26 +32,4 @@ export async function saveMeetingSettings(db: Database, teamId: string, value: u
   if (!results[0].rows.length) throw new WorkspaceError(403, 'Équipe inaccessible.');
   if (!results[2].rows.length) throw new WorkspaceError(409, 'Les questions ont changé sur un autre appareil. Rechargez avant de les modifier.');
   return settingsResult(results[results.length - 1].rows);
-}
-const prune = (teamId: string, now: Date) => sql`DELETE FROM standup_sessions WHERE team_id=${teamId} AND completed_at < ${historyCutoff(now).toISOString()}::timestamptz`;
-const roundStatement = (teamId: string, roundId: string) => sql`SELECT id FROM standup_sessions WHERE team_id=${teamId} AND id=${roundId}`;
-const feedbackStatement = (teamId: string, roundId: string) => sql`SELECT participant_id AS "participantId",value FROM round_feedback WHERE team_id=${teamId} AND session_id=${roundId} ORDER BY participant_id`;
-function feedbackResult(roundId: string, rows: Record<string, unknown>[]) {
-  return summarizeRoundFeedback(roundId, rows.map(row => ({ participantId: String(row.participantId), value: row.value as FeedbackValue })));
-}
-export async function readRoundFeedback(db: Database, teamId: string, value: unknown, now = new Date()) {
-  const roundId = validateRoundId(value);
-  const results = await batch(db, [lock(teamId), prune(teamId, now), roundStatement(teamId, roundId), feedbackStatement(teamId, roundId)]);
-  if (!results[2].rows.length) throw new WorkspaceError(404, 'Ce bilan n’est plus disponible.');
-  return feedbackResult(roundId, results[3].rows);
-}
-export async function saveRoundFeedback(db: Database, teamId: string, value: unknown, now = new Date()) {
-  const input = validateRoundFeedback(value);
-  const results = await batch(db, [
-    lock(teamId), prune(teamId, now),
-    sql`INSERT INTO round_feedback(team_id,session_id,participant_id,value) SELECT ${teamId},${input.roundId},${input.participantId},${input.value} WHERE EXISTS(SELECT 1 FROM speaking_turns WHERE team_id=${teamId} AND session_id=${input.roundId} AND participant_id=${input.participantId}) ON CONFLICT(team_id,session_id,participant_id) DO UPDATE SET value=excluded.value RETURNING participant_id`,
-    feedbackStatement(teamId, input.roundId),
-  ]);
-  if (!results[2].rows.length) throw new WorkspaceError(404, 'Bilan ou participant archivé introuvable.');
-  return feedbackResult(input.roundId, results[3].rows);
 }

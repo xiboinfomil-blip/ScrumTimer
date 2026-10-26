@@ -76,14 +76,18 @@ test('PGlite: migration backfill, category creation, shared absolute favorites, 
   const engine = new PGlite();
   try {
     const journal = JSON.parse(read('../drizzle/meta/_journal.json')) as { entries: { tag: string }[] };
-    for (const { tag } of journal.entries.slice(0, -1)) await engine.exec(read(`../drizzle/${tag}.sql`));
+    const directoryIndex = journal.entries.findIndex(entry => entry.tag === '0006_pretty_shiver_man');
+    assert.ok(directoryIndex >= 0);
+    for (const { tag } of journal.entries.slice(0, directoryIndex)) await engine.exec(read(`../drizzle/${tag}.sql`));
     await engine.query('INSERT INTO workspaces(id) VALUES($1)', [id]);
     await engine.query("INSERT INTO teams(id,workspace_id,name,duration,warning,sound) VALUES($1,$1,'Ancienne',120,30,true)", [id]);
     const beforeMigration = (await engine.query('SELECT * FROM teams')).rows[0];
-    const latest = journal.entries.at(-1)!.tag;
+    const latest = journal.entries[directoryIndex].tag;
     assert.equal(latest, '0006_pretty_shiver_man');
     await engine.exec(read(`../drizzle/${latest}.sql`));
     assert.deepEqual((await engine.query('SELECT * FROM teams')).rows[0], { ...beforeMigration, category: null, favorite: false });
+    for (const { tag } of journal.entries.slice(directoryIndex + 1)) await engine.exec(read(`../drizzle/${tag}.sql`));
+    delete beforeMigration.updated_at;
     const statements: string[] = [];
     const client = clientFor(engine, statements);
     const first = (await listTeams(client)).teams[0];

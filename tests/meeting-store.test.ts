@@ -4,23 +4,19 @@ import { readFileSync } from 'node:fs';
 import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import { DEFAULT_DISCUSSION_PROMPTS } from '../src/lib/meeting-settings.ts';
-import { readMeetingSettings, saveMeetingSettings, readRoundFeedback, saveRoundFeedback } from '../src/lib/meeting-store.ts';
-import { roundFeedback, teamDiscussionPrompts, teamMeetingSettings } from '../src/db/schema.ts';
+import { readMeetingSettings, saveMeetingSettings } from '../src/lib/meeting-store.ts';
+import { teamDiscussionPrompts, teamMeetingSettings } from '../src/db/schema.ts';
 
-test('meeting tables use normalized scoped keys and cascading archive FKs', () => {
-  for (const table of [roundFeedback, teamDiscussionPrompts, teamMeetingSettings]) {
+test('meeting settings tables use normalized scoped keys and cascading team FKs', () => {
+  for (const table of [teamDiscussionPrompts, teamMeetingSettings]) {
     const config = getTableConfig(table);
     assert.equal(config.primaryKeys[0].columns[0].name, 'team_id');
     assert.ok(config.columns.every(column => !/json/i.test(column.getSQLType())));
     assert.ok(config.foreignKeys.every(key => key.onDelete === 'cascade'));
   }
-  const feedback = getTableConfig(roundFeedback);
-  assert.deepEqual(feedback.primaryKeys[0].columns.map(column => column.name), ['team_id', 'session_id', 'participant_id']);
-  assert.ok(feedback.foreignKeys.every(key => key.reference().foreignTable !== roundFeedback));
-  assert.ok(feedback.foreignKeys.some(key => key.reference().columns.length === 3));
 });
 
-test('PGlite: generated migrations, settings CAS/rollback/isolation and feedback upsert/retention', async () => {
+test('PGlite: generated migrations and settings CAS/rollback/isolation', async () => {
   const { PGlite } = await import('@electric-sql/pglite');
   const engine = new PGlite();
   try {
@@ -73,30 +69,7 @@ test('PGlite: generated migrations, settings CAS/rollback/isolation and feedback
     }));
     assert.equal((await readMeetingSettings(client, a)).prompts.length, 1, 'constraint failure rolls back deletion');
     await saveMeetingSettings(client, a, { prompts: [...DEFAULT_DISCUSSION_PROMPTS], revision: 2 });
-    const now = new Date('2026-10-15T14:00:00Z');
-    assert.deepEqual((await readRoundFeedback(client, a, 'round', now)).counts, { utile: 0, mitige: 0, 'pas-utile': 0 });
-    await saveRoundFeedback(client, a, { roundId: 'round', participantId: 'p1', value: 'utile' }, now);
-    await saveRoundFeedback(client, a, { roundId: 'round', participantId: 'p1', value: 'utile' }, now);
-    const replaced = await saveRoundFeedback(client, a, { roundId: 'round', participantId: 'p1', value: 'mitige' }, now);
-    assert.equal(replaced.responses.length, 1);
-    assert.deepEqual(replaced.counts, { utile: 0, mitige: 1, 'pas-utile': 0 });
-    await saveRoundFeedback(client, a, { roundId: 'round', participantId: 'p2', value: 'pas-utile' }, now);
-    await saveRoundFeedback(client, b, { roundId: 'round', participantId: 'p1', value: 'utile' }, now);
-    assert.deepEqual((await readRoundFeedback(client, b, 'round', now)).counts, { utile: 1, mitige: 0, 'pas-utile': 0 });
-    await Promise.all([
-      saveRoundFeedback(client, b, { roundId: 'round', participantId: 'p1', value: 'mitige' }, now),
-      saveRoundFeedback(client, b, { roundId: 'round', participantId: 'p1', value: 'utile' }, now),
-    ]);
-    assert.equal((await readRoundFeedback(client, b, 'round', now)).responses.length, 1, 'concurrent feedback cannot accumulate duplicates');
-    await assert.rejects(saveRoundFeedback(client, a, { roundId: 'round', participantId: 'not-archived', value: 'utile' }, now), { status: 404 });
-    await assert.rejects(saveRoundFeedback(client, a, { roundId: 'other-round', participantId: 'p1', value: 'utile' }, now), { status: 404 });
-    await assert.rejects(engine.query("INSERT INTO round_feedback(team_id,session_id,participant_id,value) VALUES($1,'round','not-archived','utile')", [a]));
-    await assert.rejects(engine.query("UPDATE round_feedback SET value='unknown' WHERE team_id=$1", [a]));
     await engine.query("DELETE FROM standup_sessions WHERE team_id=$1 AND id='round'", [a]);
-    assert.equal((await engine.query('SELECT count(*)::int AS n FROM round_feedback WHERE team_id=$1', [a])).rows[0].n, 0);
-    assert.equal((await engine.query('SELECT count(*)::int AS n FROM round_feedback WHERE team_id=$1', [b])).rows[0].n, 1);
-    await assert.rejects(readRoundFeedback(client, b, 'round', new Date('2026-10-20T00:00:00Z')), { status: 404 });
-    assert.equal((await engine.query('SELECT count(*)::int AS n FROM round_feedback')).rows[0].n, 0, 'expired rounds cascade feedback on access');
     assert.equal((await readMeetingSettings(client, a)).prompts.length, 3, 'round deletion leaves settings');
     await engine.query('DELETE FROM teams WHERE id=$1', [a]);
     assert.equal((await engine.query('SELECT count(*)::int AS n FROM team_discussion_prompts WHERE team_id=$1', [a])).rows[0].n, 0);

@@ -50,6 +50,27 @@
       "when": 1792741013536,
       "tag": "0006_pretty_shiver_man",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792990812301,
+      "tag": "0007_remove_unused_workspace_selection",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792991488566,
+      "tag": "0008_remove_unused_round_feedback",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792991696144,
+      "tag": "0009_remove_unused_audit_timestamps",
+      "breakpoints": true
     }
   ]
 }
