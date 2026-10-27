@@ -13,7 +13,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { useTeam } from '@/providers/team-provider';
 import { NavIcon } from '@/components/layout/nav-icon';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
-import { filterTeams, teamCategories, type TeamCategory } from '@/lib/team-directory';
+import { filterTeams } from '@/lib/team-directory';
 import { SprintPicker } from '@/components/jira/sprint-picker';
 import { JiraAccount } from '@/components/jira/jira-account';
 import { useJiraResource } from '@/hooks/use-jira-resource';
@@ -31,9 +31,7 @@ export function TeamsPage() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [view, setView] = useState<View>('all');
-  const [categoryFilter, setCategoryFilter] = useState('');
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<TeamCategory | null>('Tech');
   const [kind, setKind] = useState<'ordinary' | 'sprint'>('ordinary');
   const [sprint, setSprint] = useState<JiraSprintSelection>({ cloudId: '', boardId: 0, sprintId: 0 });
   const connection = useJiraResource<JiraConnection>('/api/jira');
@@ -49,8 +47,8 @@ export function TeamsPage() {
   const [loginTeamId, setLoginTeamId] = useState<string | null>(null);
   const nameInput = useRef<HTMLInputElement>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
-  const results = filterTeams(teams, { favoritesOnly: view === 'favorites', ...(categoryFilter ? { category: categoryFilter === 'none' ? null : categoryFilter as TeamCategory } : {}) })
-    .filter(team => (view !== 'current' || team.id === activeTeamId) && searchable(`${team.name} ${team.category ?? ''}`).includes(searchable(query.trim())));
+  const results = filterTeams(teams, { favoritesOnly: view === 'favorites' })
+    .filter(team => (view !== 'current' || team.id === activeTeamId) && searchable(team.name).includes(searchable(query.trim())));
   const pageCount = Math.max(1, Math.ceil(results.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
   const visibleTeams = results.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
@@ -83,7 +81,7 @@ export function TeamsPage() {
     }
     setPending(true); setCreateError('');
     if (kind === 'sprint' && (!connection.data?.connected || !sprint.sprintId)) { setPending(false); setCreateError('Connectez-vous à Jira et choisissez un sprint actif.'); return; }
-    const success = await createTeam(name.trim(), category, kind === 'sprint' ? sprint : undefined);
+    const success = await createTeam(name.trim(), null, kind === 'sprint' ? sprint : undefined);
     setPending(false);
     if (success) router.push(`/manage-team${window.location.search}`);
     else setCreateError('Création impossible. Ce nom existe peut-être déjà ; vérifiez aussi la connexion.');
@@ -111,16 +109,11 @@ export function TeamsPage() {
           <div className="flex min-h-11 min-w-0 basis-full items-center gap-2 rounded-lg border border-line bg-slate-50/70 px-3 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
             <NavIcon name="search" className="shrink-0 text-muted" width="16" height="16" />
             <label htmlFor="team-page-search" className="sr-only">Rechercher une équipe</label>
-            <input id="team-page-search" type="search" value={query} onChange={event => { setQuery(event.target.value); setPage(0); }} placeholder="Rechercher par nom d’équipe ou catégorie…" className="min-h-11 min-w-0 flex-1 bg-transparent text-xs text-ink outline-none placeholder:text-muted focus-visible:outline-none" />
+            <input id="team-page-search" type="search" value={query} onChange={event => { setQuery(event.target.value); setPage(0); }} placeholder="Rechercher par nom d’équipe…" className="min-h-11 min-w-0 flex-1 bg-transparent text-xs text-ink outline-none placeholder:text-muted focus-visible:outline-none" />
           </div>
           <div role="group" aria-label="Afficher les équipes" className="flex shrink-0 gap-1 max-sm:w-full">
             {([['all', 'Toutes'], ['current', 'Mon équipe'], ['favorites', 'Favorites']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={view === value} onClick={() => { setView(value); setPage(0); }} className={`min-h-11 rounded-lg px-3 text-xs font-medium max-sm:flex-1 ${view === value ? 'bg-ink text-white' : 'text-muted hover:bg-white hover:text-ink'}`}>{label}</button>)}
           </div>
-          <label className="flex min-w-0 items-center gap-2 text-[11px] text-muted sm:ml-auto"><span className="sr-only">Catégorie</span>
-            <select aria-label="Filtrer par catégorie" value={categoryFilter} onChange={event => { setCategoryFilter(event.target.value); setPage(0); }} className="min-h-11 min-w-0 rounded-lg border border-line bg-white px-2 text-xs text-ink">
-              <option value="">Toutes les catégories</option>{teamCategories.map(item => <option key={item}>{item}</option>)}<option value="none">Sans catégorie</option>
-            </select>
-          </label>
         </div>
         {error && <Alert severity="error" className="mb-3">{error}</Alert>}
         <p role="status" className="sr-only">{pending ? openingId ? 'Ouverture de l’équipe…' : 'Création de l’équipe…' : ''}</p>
@@ -131,23 +124,22 @@ export function TeamsPage() {
               {cloudStatus !== 'error' && <button type="button" onClick={revealCreate} className={`${secondaryButton} mt-4`}>Nommer mon équipe <NavIcon name="plus" /></button>}
             </div> : !results.length ? <div className="rounded-xl border border-line bg-white px-5 py-10 text-center">
               <StarOutlineIcon aria-hidden="true" className="mb-2 text-muted" /><p className="text-sm font-semibold text-ink">{view === 'favorites' ? 'Aucune équipe favorite dans cette sélection.' : 'Aucune équipe trouvée.'}</p>
-              <p className="mt-2 text-xs text-muted">{view === 'favorites' ? 'Touchez l’étoile d’une équipe pour la retrouver ici.' : 'Essayez un autre nom ou une autre catégorie.'}</p>
-              <button type="button" onClick={() => { setQuery(''); setCategoryFilter(''); setView('all'); setPage(0); }} className={`${secondaryButton} mt-4`}>Afficher toutes les équipes</button>
+              <p className="mt-2 text-xs text-muted">{view === 'favorites' ? 'Touchez l’étoile d’une équipe pour la retrouver ici.' : 'Essayez un autre nom.'}</p>
+              <button type="button" onClick={() => { setQuery(''); setView('all'); setPage(0); }} className={`${secondaryButton} mt-4`}>Afficher toutes les équipes</button>
             </div> : <motion.ul key={currentPage} initial={reducedMotion || !direction ? false : { y: direction * 20, opacity: .35 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: reducedMotion ? 0 : .3 }} aria-label="Équipes disponibles" aria-busy={teamBusy || pending} className="grid list-none gap-3">
               {visibleTeams.map(team => {
                 const active = activeTeamId === team.id;
                 return <li key={team.id} className={`group min-w-0 rounded-lg border bg-white p-3 transition-colors hover:border-brand/40 xl:grid xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center xl:gap-x-2 xl:px-4 xl:py-3 ${active ? 'border-brand/40 ring-1 ring-brand/5' : 'border-line'}`}>
                   <div className="flex min-w-0 items-center gap-2.5 xl:row-span-2">
-                    <span aria-hidden="true" className={`grid size-11 shrink-0 place-items-center rounded-lg border text-sm font-semibold ${active ? 'border-brand bg-brand text-white max-sm:border-blue-200 max-sm:bg-blue-50 max-sm:text-brand' : team.category === 'Support' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-100 bg-slate-50 text-slate-500'}`}>{team.name.split(/\s+/).slice(0, 2).map(word => Array.from(word)[0]).join('').toLocaleUpperCase('fr-FR')}</span>
+                    <span aria-hidden="true" className={`grid size-11 shrink-0 place-items-center rounded-lg border text-sm font-semibold ${active ? 'border-brand bg-brand text-white max-sm:border-blue-200 max-sm:bg-blue-50 max-sm:text-brand' : 'border-slate-100 bg-slate-50 text-slate-500'}`}>{team.name.split(/\s+/).slice(0, 2).map(word => Array.from(word)[0]).join('').toLocaleUpperCase('fr-FR')}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><h3 className="text-sm font-semibold wrap-anywhere text-ink">{team.name}</h3>{active && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Actuelle</span>}</div>
-                      <p className="mt-1 text-[11px] text-muted">{team.jiraLocked ? 'Connexion Jira requise' : <>{team.memberCount} membre{team.memberCount === 1 ? '' : 's'}{team.category && <span> · {team.category}</span>}{team.memberCount === 0 && ' · À compléter'}</>}</p>
+                      <p className="mt-1 text-[11px] text-muted">{team.jiraLocked ? 'Connexion Jira requise' : <>{team.memberCount} membre{team.memberCount === 1 ? '' : 's'}{team.memberCount === 0 && ' · À compléter'}</>}</p>
                       {team.kind === 'sprint' && <p className="mt-1 break-words text-[11px] text-brand">Sprint Jira · {team.sprintName ?? ''}</p>}
                     </div>
                     <button type="button" disabled={disabled || team.jiraLocked} aria-label={`${team.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} : ${team.name}`} aria-pressed={team.favorite} onClick={() => void updateTeamDirectory({ teamId: team.id, favorite: !team.favorite })} className={`grid size-11 shrink-0 place-items-center rounded-lg hover:bg-amber-50 disabled:opacity-50 ${team.favorite ? 'text-amber-500' : 'text-slate-400'}`}>{team.favorite ? <StarIcon aria-hidden="true" sx={{ fontSize: 21 }} /> : <StarOutlineIcon aria-hidden="true" sx={{ fontSize: 21 }} />}</button>
                   </div>
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-1 border-t border-slate-100 pt-2 xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:mt-0 xl:justify-end xl:border-0 xl:pt-0">
-                    <label className="flex min-w-0 items-center text-[10px] text-muted"><span className="sr-only">Catégorie</span><select aria-label={`Catégorie de ${team.name}`} disabled={disabled || team.jiraLocked} value={team.category ?? ''} onChange={event => void updateTeamDirectory({ teamId: team.id, category: (event.target.value || null) as TeamCategory | null })} className="min-h-11 max-w-32 rounded-lg bg-slate-50 px-2 text-[11px] text-muted disabled:opacity-50 xl:max-w-28 xl:bg-transparent"><option value="">Sans catégorie</option>{teamCategories.map(item => <option key={item}>{item}</option>)}</select></label>
+                  <div className="mt-2 flex flex-wrap items-center justify-end gap-1 border-t border-slate-100 pt-2 xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:mt-0 xl:border-0 xl:pt-0">
                     <div className="flex items-center gap-1"><button type="button" disabled={disabled} onClick={() => void choose(team.id, true)} aria-label={`Gérer l’équipe ${team.name}`} className="min-h-11 min-w-11 rounded-lg px-2 text-xs text-muted hover:bg-slate-50 disabled:opacity-50">Gérer</button><button type="button" disabled={disabled} onClick={() => void choose(team.id, false)} aria-label={`Ouvrir l’équipe ${team.name}`} className={`${active ? primaryButton : secondaryButton} px-3`}>{openingId === team.id ? 'Ouverture…' : 'Ouvrir'}<ArrowForwardIcon aria-hidden="true" sx={{ fontSize: 14 }} /></button></div>
                   </div>
                 </li>;
@@ -173,7 +165,6 @@ export function TeamsPage() {
             <label htmlFor="new-team-name" className="text-xs font-medium text-ink">Nom de l’équipe</label>
             <input ref={nameInput} autoFocus id="new-team-name" value={name} onChange={event => { setName(event.target.value); setCreateError(''); }} placeholder="Ex. Squad Produit, Agilité…" aria-invalid={!!createError} aria-describedby={createError ? 'team-name-hint team-create-error' : 'team-name-hint'} required maxLength={60} className={`${field} w-full`} />
             <p id="team-name-hint" className="flex flex-wrap justify-between gap-1 text-[10px] text-muted"><span>Un nom reconnaissable.</span><span>60 caractères max.</span></p>
-            <fieldset className="mt-2"><legend className="mb-1 text-xs font-medium text-ink">Catégorie</legend><div className="flex flex-wrap gap-1">{teamCategories.map(item => <button key={item} type="button" aria-pressed={category === item} onClick={() => setCategory(category === item ? null : item)} className={`min-h-11 rounded-lg px-3 text-xs ${category === item ? 'bg-ink text-white' : 'bg-slate-100 text-muted hover:bg-slate-200'}`}>{item}</button>)}</div></fieldset>
             {kind === 'sprint' && <SprintPicker value={sprint} onChange={setSprint} disabled={pending} connected={!!connection.data?.connected} />}
             {createError && <p id="team-create-error" role="alert" className="text-sm text-danger">{createError}</p>}
           </form>

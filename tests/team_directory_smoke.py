@@ -50,23 +50,19 @@ class DirectoryMock:
             if method == 'PATCH':
                 body = request.post_data_json
                 self.patches.append(deepcopy(body))
-                assert set(body) in ({'teamId', 'favorite'}, {'teamId', 'category'}), body
+                assert set(body) == {'teamId', 'favorite'}, body
                 target = next(team for team in self.teams if team['id'] == body['teamId'])
                 if self.fail_next:
                     self.fail_next = False
                     route.fulfill(status=503, json={'error': 'Échec simulé du classement.'})
                     return
-                if 'favorite' in body:
-                    assert type(body['favorite']) is bool, body
-                    target['favorite'] = body['favorite']
-                else:
-                    assert body['category'] is None or body['category'] in CATEGORIES, body
-                    target['category'] = body['category']
+                assert type(body['favorite']) is bool, body
+                target['favorite'] = body['favorite']
                 # Metadata never changes the authoritative active team.
             elif method == 'POST':
                 body = request.post_data_json
                 assert set(body) == {'name', 'category'}, body
-                assert body['category'] in CATEGORIES, body
+                assert body['category'] is None, body
                 self.creations.append(deepcopy(body))
                 self.active = f'{len(self.teams) + 100:064x}'
                 self.teams.append({'id': self.active, 'name': body['name'], 'category': body['category'],
@@ -96,10 +92,6 @@ def listing(page):
 
 def card(page, name):
     return listing(page).get_by_role('listitem').filter(has=page.get_by_role('heading', name=name, exact=True))
-
-
-def category(page, name):
-    return page.get_by_role('combobox', name=f'Catégorie de {name}', exact=True)
 
 
 def favorite(page, name, selected):
@@ -236,33 +228,19 @@ def run_case(browser, width, height, motion, screenshots):
             screenshot(page, screenshots, f'team-directory-{width}x{height}')
 
         search = page.get_by_role('searchbox', name='Rechercher une équipe', exact=True)
-        search.fill('tech')  # Category text, not a team name.
+        expect(page.get_by_role('combobox')).to_have_count(0)
+        expect(listing(page)).not_to_contain_text(re.compile('Tech|Produit|Support|Marketing'))
+        search.fill('tech')
+        expect(page.get_by_text('Aucune équipe trouvée.', exact=True)).to_be_visible()
+        expect(listing(page)).to_have_count(0)
+        search.fill('atlas')
         expect(listing(page).get_by_role('listitem')).to_have_count(1)
         expect(card(page, 'Équipe Atlas')).to_be_visible()
         search.fill('boreal')  # Accent-insensitive name search.
         expect(card(page, 'Équipe Boréal')).to_be_visible()
         expect(listing(page).get_by_role('listitem')).to_have_count(1)
         search.fill('')
-        select = page.get_by_role('combobox', name='Filtrer par catégorie', exact=True)
-        assert select.locator('option').all_text_contents() == ['Toutes les catégories', *CATEGORIES, 'Sans catégorie']
-        for value, name in [('Tech', 'Équipe Atlas'), ('Produit', 'Équipe Boréal'), ('none', 'Équipe Cobalt')]:
-            select.select_option(value)
-            expect(listing(page).get_by_role('listitem')).to_have_count(1)
-            expect(card(page, name)).to_be_visible()
-        select.select_option('')
-
         reads, original_url = deepcopy(db.scoped_reads), page.url
-        category(page, 'Équipe Boréal').select_option('Support')
-        expect(category(page, 'Équipe Boréal')).to_have_value('Support')
-        expect(category(page, 'Équipe Boréal')).to_be_enabled()
-        assert db.patches[-1] == {'teamId': OTHER, 'category': 'Support'}
-        active_unchanged(page, db, reads, original_url)
-        # Absolute null assignment is not an omitted value or implicit selection.
-        category(page, 'Équipe Cobalt').select_option('Tech')
-        expect(category(page, 'Équipe Cobalt')).to_be_enabled()
-        category(page, 'Équipe Cobalt').select_option('')
-        expect(category(page, 'Équipe Cobalt')).to_be_enabled()
-        assert db.patches[-1] == {'teamId': UNCLASSIFIED, 'category': None}
 
         favorite(page, 'Équipe Atlas', False).click()
         expect(favorite(page, 'Équipe Atlas', True)).to_have_attribute('aria-pressed', 'true')
@@ -283,27 +261,20 @@ def run_case(browser, width, height, motion, screenshots):
 
         # Failed assignments must leave both the visible and durable mock unchanged.
         db.fail_next = True
-        category(page, 'Équipe Boréal').select_option('Marketing')
-        expect(page.get_by_text('Classement non confirmé. Réessayez ou rechargez pour vérifier le choix enregistré.', exact=True)).to_be_visible()
-        expect(category(page, 'Équipe Boréal')).to_have_value('Support')
-        expect(category(page, 'Équipe Boréal')).to_be_enabled()
-        assert db.teams[1]['category'] == 'Support'
-        active_unchanged(page, db, reads, original_url)
-        category(page, 'Équipe Boréal').select_option('Marketing')
-        expect(category(page, 'Équipe Boréal')).to_have_value('Marketing')
-        expect(category(page, 'Équipe Boréal')).to_be_enabled()
-        db.fail_next = True
         favorite(page, 'Équipe Atlas', True).click()
+        expect(page.get_by_text('Classement non confirmé. Réessayez ou rechargez pour vérifier le choix enregistré.', exact=True)).to_be_visible()
         expect(favorite(page, 'Équipe Atlas', True)).to_be_enabled()
         assert db.teams[0]['favorite'] is True
+        active_unchanged(page, db, reads, original_url)
         favorite(page, 'Équipe Atlas', True).click()
         expect(favorite(page, 'Équipe Atlas', False)).to_be_enabled()
         favorite(page, 'Équipe Atlas', False).click()
         expect(favorite(page, 'Équipe Atlas', True)).to_be_enabled()
 
         page.reload()
-        expect(category(page, 'Équipe Boréal')).to_have_value('Marketing')
+        expect(page.get_by_role('combobox')).to_have_count(0)
         expect(favorite(page, 'Équipe Atlas', True)).to_be_enabled()
+        assert [team['category'] for team in db.teams] == ['Tech', 'Produit', None]
         expect(card(page, 'Équipe Atlas').get_by_text('Actuelle', exact=True)).to_be_visible()
         assert parse_qs(urlparse(page.url).query)['team'] == [ACTIVE]
         # Real client navigation proves that the original roster still hydrates.
@@ -334,13 +305,11 @@ def run_case(browser, width, height, motion, screenshots):
         search.fill('')
         geometry(page)
 
-        for selected_category in ('Tech', 'Marketing'):
+        for suffix in ('Alpha', 'Bêta'):
             panel, field = creation_panel(page, width)
-            expect(panel.get_by_role('button', name='Tech', exact=True)).to_have_attribute('aria-pressed', 'true')
-            if selected_category != 'Tech':
-                panel.get_by_role('button', name=selected_category, exact=True).click()
-            expect(panel.get_by_role('button', name=selected_category, exact=True)).to_have_attribute('aria-pressed', 'true')
-            name = f'Nouvelle équipe {selected_category}'
+            expect(panel.get_by_role('group', name='Catégorie', exact=True)).to_have_count(0)
+            expect(panel.get_by_role('combobox')).to_have_count(0)
+            name = f'Nouvelle équipe {suffix}'
             field.fill(name)
             geometry(page)
             submit = panel.get_by_role('button', name='Créer l’équipe', exact=True)
@@ -350,15 +319,15 @@ def run_case(browser, width, height, motion, screenshots):
             expect(page).to_have_url(re.compile(r'/manage-team\?team=[a-f0-9]{64}$'))
             expect(page.get_by_role('heading', name=name, exact=True)).to_be_visible()
             expect(page.get_by_role('region', name='Gérer les membres', exact=True)).to_be_visible()
-            assert db.creations[-1] == {'name': name, 'category': selected_category}
+            assert db.creations[-1] == {'name': name, 'category': None}
             assert parse_qs(urlparse(page.url).query)['team'] == [db.active]
-            assert db.teams[-1]['category'] == selected_category
+            assert db.teams[-1]['category'] is None
             page.goto(f'{BASE}/teams?team={db.active}')
             expect(page.get_by_role('button', name=f'Choisir une équipe : {name}', exact=True)).to_be_enabled()
         assert len(db.creations) == 2
         bootstrap.assert_no_unexpected_api()
         assert not errors, errors
-        print(f'PASS {width}x{height} {motion}: filters/favorites/categories/no-selection/reload/errors/recovery/pagination/creation', flush=True)
+        print(f'PASS {width}x{height} {motion}: name search/favorites/no categories/no-selection/reload/errors/recovery/pagination/creation', flush=True)
     finally:
         bootstrap.assert_no_unexpected_api()
         context.close()
@@ -438,7 +407,7 @@ def run_stress_case(browser, width, height, screenshots):
         expect(page).to_have_url(re.compile(r'/manage-team\?team=[a-f0-9]{64}$'))
         expect(page.get_by_role('heading', name=name, exact=True)).to_be_visible()
         expect(page.get_by_role('region', name='Gérer les membres', exact=True)).to_be_visible()
-        assert db.creations == [{'name': name, 'category': 'Tech'}]
+        assert db.creations == [{'name': name, 'category': None}]
         assert len(db.teams) == 1 and db.teams[0]['id'] == db.active
         page.goto(f'{BASE}/teams?team={db.active}')
         expect(listing(page).get_by_role('listitem')).to_have_count(1)

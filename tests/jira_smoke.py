@@ -26,6 +26,10 @@ class JiraMock(DirectoryMock):
         self.ticket_statuses = []
         self.ticket_error = False
         self.connected = True
+        self.sites = [{'id': CLOUD, 'name': 'Infomil Jira'},
+                  {'id': '98765432-4321-4321-4321-cba987654321', 'name': 'Autre site Jira'}]
+        self.site_error = False
+        self.board_reads = []
         self.daily = {'day': mauritius_day(), 'meter': None}
         self.revision = 1
 
@@ -49,11 +53,16 @@ class JiraMock(DirectoryMock):
             if action == 'status':
                 payload = {'configured': True, 'connected': self.connected, 'name': 'Camille Jira'}
             elif action == 'sites':
-                payload = {'options': [{'id': CLOUD, 'name': 'Infomil Jira'}]}
+                if self.site_error:
+                    route.fulfill(status=503, json={'error': 'Sites Jira indisponibles.'})
+                    return
+                payload = {'options': self.sites}
             elif action == 'boards':
                 assert query['cloudId'] == [CLOUD]
+                self.board_reads.append(query['cloudId'][0])
                 payload = {'options': [{'id': '1', 'name': 'Scrum produit'}]}
             elif action == 'sprints':
+                assert query['cloudId'] == [CLOUD]
                 assert query['boardId'] == ['1']
                 payload = {'options': [{'id': str(number), 'name': f'Sprint {number}'}
                                        for number in (2, 3)]}
@@ -84,11 +93,11 @@ class JiraMock(DirectoryMock):
             return
         if path == '/api/teams' and method == 'POST':
             body = request.post_data_json
-            assert body == {'name': 'Équipe sprint', 'category': 'Tech',
+            assert body == {'name': 'Équipe sprint', 'category': None,
                             'kind': 'sprint', 'sprint': SELECTION}, body
             self.creations.append(deepcopy(body))
             self.active = SPRINT
-            self.teams.append({'id': SPRINT, 'name': body['name'], 'category': 'Tech',
+            self.teams.append({'id': SPRINT, 'name': body['name'], 'category': None,
                                'kind': 'sprint', 'sprintName': 'Sprint 2',
                                'memberCount': 2, 'favorite': False})
             self.states[SPRINT] = team_fixture(roster=[
@@ -140,17 +149,17 @@ def run_case(browser, width, height, motion, screenshots):
         field.fill('Équipe sprint')
         create = panel.get_by_role('button', name='Créer l’équipe', exact=True)
         expect(create).to_be_disabled()
-        panel.get_by_role('combobox', name='Site Jira', exact=True).select_option(CLOUD)
+        expect(panel.get_by_role('combobox', name='Site Jira', exact=True)).to_have_count(0)
         panel.get_by_role('combobox', name='Tableau Scrum', exact=True).select_option('1')
         panel.get_by_role('combobox', name='Sprint actif', exact=True).select_option('2')
         expect(create).to_be_enabled()
-        panel.get_by_role('combobox', name='Site Jira', exact=True).select_option('')
+        panel.get_by_role('combobox', name='Tableau Scrum', exact=True).select_option('')
         expect(panel.get_by_role('combobox', name='Tableau Scrum')).to_have_value('')
         expect(panel.get_by_role('combobox', name='Sprint actif')).to_have_value('')
         expect(create).to_be_disabled()
-        panel.get_by_role('combobox', name='Site Jira').select_option(CLOUD)
         panel.get_by_role('combobox', name='Tableau Scrum').select_option('1')
         panel.get_by_role('combobox', name='Sprint actif').select_option('2')
+        assert db.board_reads == [CLOUD], db.board_reads
         geometry(page)
         if width in (390, 1366) and motion == 'reduce':
             page.screenshot(path=str(screenshots / f'creation-{width}.png'), full_page=True)
@@ -297,6 +306,45 @@ def login_case(browser, width, height):
         context.close()
 
 
+def site_case(browser, unavailable):
+    context = browser.new_context(viewport={'width': 390, 'height': 844}, service_workers='block')
+    bootstrap = install_browser_bootstrap(context)
+    db = JiraMock()
+    db.site_error = unavailable
+    if not unavailable:
+        db.sites = []
+    context.route('**/api/**', db.api)
+    page = context.new_page()
+    try:
+        page.goto(BASE + '/teams')
+        expect(page.get_by_role('button', name='Ouvrir l’équipe Équipe Atlas', exact=True)).to_be_enabled()
+        panel, field = creation_panel(page, 390)
+        panel.get_by_role('button', name='Sprint Jira', exact=True).click()
+        field.fill('Équipe sprint')
+        expect(panel.get_by_role('combobox', name='Site Jira', exact=True)).to_have_count(0)
+        expect(panel.get_by_role('combobox', name='Tableau Scrum')).to_be_disabled()
+        expect(panel.get_by_role('button', name='Créer l’équipe', exact=True)).to_be_disabled()
+        if unavailable:
+            alert = panel.get_by_role('alert')
+            expect(alert).to_contain_text('Sites Jira indisponibles.')
+            assert db.board_reads == []
+            db.site_error = False
+            alert.get_by_role('button', name='Réessayer', exact=True).click()
+            expect(panel.get_by_role('combobox', name='Tableau Scrum')).to_be_enabled()
+            panel.get_by_role('combobox', name='Tableau Scrum').select_option('1')
+            panel.get_by_role('combobox', name='Sprint actif').select_option('2')
+            expect(panel.get_by_role('button', name='Créer l’équipe', exact=True)).to_be_enabled()
+            assert db.board_reads == [CLOUD]
+        else:
+            expect(panel.get_by_role('status').filter(has_text='Aucun site Jira accessible.')).to_be_visible()
+            assert db.board_reads == []
+        assert not db.creations
+        bootstrap.assert_no_unexpected_api()
+        print(f'PASS automatic first Jira site: {"retry" if unavailable else "empty"}', flush=True)
+    finally:
+        context.close()
+
+
 def main():
     if urlparse(BASE).hostname not in ('localhost', '127.0.0.1'):
         raise ValueError('Local mocked preview only')
@@ -304,6 +352,8 @@ def main():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         try:
+            for unavailable in (False, True):
+                site_case(browser, unavailable)
             for width, height in (SIZES[1], SIZES[3]):
                 login_case(browser, width, height)
             for motion in ('reduce', 'no-preference'):
@@ -311,7 +361,7 @@ def main():
                     run_case(browser, width, height, motion, screenshots)
         finally:
             browser.close()
-    print(f'PASS 10/10 Jira journeys. Screenshots: {screenshots}', flush=True)
+    print(f'PASS 12/12 Jira journeys. Screenshots: {screenshots}', flush=True)
 
 
 if __name__ == '__main__':
