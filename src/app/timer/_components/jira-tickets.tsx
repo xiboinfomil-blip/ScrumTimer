@@ -13,17 +13,18 @@ import BookmarkIcon from '@mui/icons-material/Bookmark';
 import KeyboardDoubleArrowUpIcon from '@mui/icons-material/KeyboardDoubleArrowUp';
 import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import { useJiraResource } from '@/hooks/use-jira-resource';
-import type { JiraTicket } from '@/lib/jira';
+import type { JiraStatusCategory, JiraTicket } from '@/lib/jira';
 import { secondaryButton } from '@/components/ui/styles';
 
 type TicketData = { name: string; tickets: JiraTicket[] };
 
 export function JiraTickets({ teamId, participantId }: { teamId: string | null; participantId?: string | null }) {
-  const resource = useJiraResource<TicketData>(teamId ? '/api/jira?action=tickets&scope=board' : null, teamId);
-  return <TicketList key={participantId ?? 'none'} resource={resource} participantId={participantId} />;
+  const [status, setStatus] = useState<JiraStatusCategory>('indeterminate');
+  const resource = useJiraResource<TicketData>(teamId ? `/api/jira?action=tickets&scope=board&status=${status}` : null, teamId);
+  return <TicketList key={participantId ?? 'none'} resource={resource} participantId={participantId} status={status} onStatus={setStatus} />;
 }
 
-function TicketList({ resource, participantId }: { resource: ReturnType<typeof useJiraResource<TicketData>>; participantId?: string | null }) {
+function TicketList({ resource, participantId, status, onStatus }: { resource: ReturnType<typeof useJiraResource<TicketData>>; participantId?: string | null; status: JiraStatusCategory; onStatus: (status: JiraStatusCategory) => void }) {
   const [page, setPage] = useState(0); const pageSize = 5;
   const [query, setQuery] = useState('');
   const [all, setAll] = useState(!participantId);
@@ -34,6 +35,9 @@ function TicketList({ resource, participantId }: { resource: ReturnType<typeof u
     <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line pb-2">
       <div className="min-w-0"><h2 id="jira-tickets-heading" className="flex items-center gap-2 text-base font-semibold text-ink"><AssignmentOutlinedIcon className="text-brand" fontSize="small" />Tickets Jira<span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] tabular-nums text-muted">{resource.data ? scoped.length : '—'}</span></h2><p className="mt-1 break-words text-xs text-muted">{resource.data?.name ?? ''}</p></div>
       <button type="button" onClick={resource.retry} disabled={resource.loading} className={`${secondaryButton} size-11 p-0`} aria-label="Actualiser les tickets Jira" title="Actualiser les tickets Jira"><RefreshIcon fontSize="small" /></button>
+    </div>
+    <div role="group" aria-label="Statut des tickets Jira" className="flex min-h-11 shrink-0 gap-1 border-b border-line">
+      {([['new', 'À faire'], ['indeterminate', 'En cours'], ['done', 'Terminés']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={status === value} onClick={() => { onStatus(value); setPage(0); }} className={`min-h-11 min-w-0 flex-1 border-b-2 px-1 text-xs font-semibold ${status === value ? 'border-brand text-brand' : 'border-transparent text-muted hover:bg-slate-50'}`}>{label}</button>)}
     </div>
     <div role="group" aria-label="Filtrer les tickets Jira" className="flex min-h-11 shrink-0 gap-1 rounded-md bg-slate-100 p-1">
       {([false, true] as const).map(value => <button key={String(value)} type="button" aria-pressed={all === value} disabled={!value && !participantId} onClick={() => { setAll(value); setPage(0); }} className={`min-h-11 min-w-0 flex-1 rounded px-2 text-xs font-semibold disabled:opacity-50 ${all === value ? 'bg-white text-brand shadow-xs' : 'text-muted hover:bg-white/60'}`}>{value ? 'Tout le tableau' : 'Intervenant'}</button>)}

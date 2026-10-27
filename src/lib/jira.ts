@@ -1,6 +1,7 @@
 export type JiraSprintSelection = { cloudId: string; boardId: number; sprintId: number };
 export type JiraOption = { id: string; name: string };
-export type JiraTicket = { id: string; key: string; summary: string; status: string; statusCategory?: 'new' | 'indeterminate' | 'done'; issueType?: string; priority: string | null; assigneeId: string | null; assigneeName: string | null; url: string };
+export type JiraStatusCategory = 'new' | 'indeterminate' | 'done';
+export type JiraTicket = { id: string; key: string; summary: string; status: string; statusCategory?: JiraStatusCategory; issueType?: string; priority: string | null; assigneeId: string | null; assigneeName: string | null; url: string };
 export type JiraParticipant = { id: string; name: string; present: boolean; mood: null; moodUpdatedAt: null; moodSlide: null };
 export type JiraConnection = { configured: boolean; connected: boolean; name?: string };
 

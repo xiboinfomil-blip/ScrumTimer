@@ -207,6 +207,7 @@ test('Jira board tickets share all assignees and pages without skipping fresh au
     }
     assert.ok(url.pathname.endsWith('/rest/software/1.0/board/7/issue'));
     assert.equal(url.searchParams.get('fields'), 'summary,status,priority,assignee,issuetype');
+    assert.ok(['statusCategory = "In Progress"', 'statusCategory = "To Do"', 'statusCategory = "Done"'].includes(url.searchParams.get('jql') ?? ''));
     issueReads++;
     return Response.json(url.searchParams.has('nextPageToken')
       ? { isLast: !looping, nextPageToken: 'next', issues: [issue('3', null)] }
@@ -223,9 +224,16 @@ test('Jira board tickets share all assignees and pages without skipping fresh au
     await assert.rejects(new JiraService('board-access').boardTickets(selection), { status: 403 });
     assert.equal(issueReads, 4);
     forbidden = false; looping = true;
-    await assert.rejects(new JiraService('board-access').boardTickets(selection, true), /incomplets/);
+    await assert.rejects(new JiraService('board-access').boardTickets(selection, 'indeterminate', true), /incomplets/);
     looping = false;
     await new JiraService('board-access').boardTickets(selection); assert.equal(issueReads, 8);
+    await new JiraService('board-access').boardTickets(selection, 'done'); assert.equal(issueReads, 10);
+    await new JiraService('board-access').boardTickets(selection, 'new'); assert.equal(issueReads, 12);
+    await new JiraService('board-access').boardTickets(selection, 'indeterminate'); assert.equal(issueReads, 12);
+    await new JiraService('board-access').boardTickets(selection, 'done'); assert.equal(issueReads, 12);
+    await assert.rejects(new JiraService('board-access').boardTickets(selection, 'all'), { status: 400 });
+    await assert.rejects(new JiraService('board-access').boardTickets(selection, 'done OR assignee IS NOT EMPTY'), { status: 400 });
+    assert.equal(issueReads, 12);
   } finally { globalThis.fetch = originalFetch; }
 });
 

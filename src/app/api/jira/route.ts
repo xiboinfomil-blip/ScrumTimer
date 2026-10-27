@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     if (action === 'tickets') {
       const id = await selectedTeam(request); const sprint = await jiraTeamSprint(database(), id);
       if (!sprint) throw new WorkspaceError(400, 'Cette équipe n’est pas liée à un sprint Jira.');
-      if (query.get('scope') === 'board') return response(await service.boardTickets(sprint, request.headers.get('X-Jira-Refresh') === '1'));
+      if (query.get('scope') === 'board') return response(await service.boardTickets(sprint, query.get('status') ?? 'indeterminate', request.headers.get('X-Jira-Refresh') === '1'));
       const participantId = query.get('participantId');
       if (!participantId?.startsWith('jira:') || participantId.length > 100) throw new WorkspaceError(400, 'Participant Jira invalide.');
       const imported = await service.tickets(sprint, false, request.headers.get('X-Jira-Refresh') === '1');

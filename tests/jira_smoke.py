@@ -23,6 +23,7 @@ class JiraMock(DirectoryMock):
         super().__init__()
         self.selection = deepcopy(SELECTION)
         self.syncs, self.ticket_reads = [], []
+        self.ticket_statuses = []
         self.ticket_error = False
         self.connected = True
         self.daily = {'day': mauritius_day(), 'meter': None}
@@ -62,6 +63,9 @@ class JiraMock(DirectoryMock):
             elif action == 'tickets':
                 assert request.headers.get('x-team-id') == SPRINT
                 assert query.get('scope') == ['board'] and 'participantId' not in query
+                status = query.get('status', [''])[0]
+                assert status in ('new', 'indeterminate', 'done'), query
+                self.ticket_statuses.append(status)
                 self.ticket_reads.append(request.headers.get('x-jira-refresh', 'initial'))
                 if self.ticket_error:
                     route.fulfill(status=401, json={'error': 'Session Jira expirée.'})
@@ -69,7 +73,7 @@ class JiraMock(DirectoryMock):
                 payload = {'name': 'Scrum produit', 'tickets': [
                     {'id': f'{prefix}:{index}', 'key': f'{prefix}-{index}',
                      'summary': f'{person or "Non attribué"} ticket {index} <texte sûr>',
-                     'status': 'En cours', 'statusCategory': 'indeterminate', 'issueType': 'Story', 'priority': 'Haute',
+                     'status': {'new': 'Ouvert', 'indeterminate': 'En cours', 'done': 'Terminé'}[status], 'statusCategory': status, 'issueType': 'Story', 'priority': 'Haute',
                      'assigneeId': person[5:] if person else None, 'assigneeName': person,
                      'url': f'https://example.atlassian.net/browse/{prefix}-{index}'}
                     for person, prefix in [('jira:a', 'DEV'), ('jira:b', 'BOB'), (None, 'FREE')]
@@ -191,6 +195,19 @@ def run_case(browser, width, height, motion, screenshots):
         sidebar.get_by_role('button', name='Tickets Jira', exact=True).click()
         expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-6 :'))).to_be_visible()
         assert db.ticket_reads == ['initial'], db.ticket_reads
+        assert db.ticket_statuses == ['indeterminate'], db.ticket_statuses
+        statuses = sidebar.get_by_role('group', name='Statut des tickets Jira', exact=True)
+        statuses.get_by_role('button', name='Terminés', exact=True).click()
+        expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-1 :'))).to_be_visible()
+        expect(sidebar.get_by_role('list')).to_contain_text('Terminé')
+        assert db.ticket_statuses == ['indeterminate', 'done'], db.ticket_statuses
+        statuses.get_by_role('button', name='À faire', exact=True).click()
+        expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-1 :'))).to_be_visible()
+        expect(sidebar.get_by_role('list')).to_contain_text('Ouvert')
+        assert db.ticket_statuses == ['indeterminate', 'done', 'new'], db.ticket_statuses
+        statuses.get_by_role('button', name='En cours', exact=True).click()
+        expect(sidebar.get_by_role('list')).to_contain_text('En cours')
+        assert db.ticket_statuses == ['indeterminate', 'done', 'new'], db.ticket_statuses
         search = sidebar.get_by_role('searchbox', name='Rechercher un ticket Jira')
         search.fill(first_prefix + '-7')
         expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-7 :'))).to_be_visible()
@@ -204,7 +221,7 @@ def run_case(browser, width, height, motion, screenshots):
         sidebar.get_by_role('button', name='Intervenant', exact=True).click()
         expect(sidebar.get_by_role('link', name=re.compile('FREE-1 :'))).to_have_count(0)
         search.fill('')
-        assert db.ticket_reads == ['initial'], db.ticket_reads
+        assert db.ticket_reads == ['initial'] * 3, db.ticket_reads
         db.ticket_error = True
         sidebar.get_by_role('button', name='Actualiser les tickets Jira').click()
         expect(sidebar.get_by_role('alert')).to_contain_text('Session Jira expirée.')
@@ -212,7 +229,7 @@ def run_case(browser, width, height, motion, screenshots):
         db.ticket_error = False
         sidebar.get_by_role('button', name='Réessayer', exact=True).click()
         expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-1 :'))).to_be_visible()
-        assert db.ticket_reads == ['initial', '1', '1'], db.ticket_reads
+        assert db.ticket_reads == ['initial'] * 3 + ['1', '1'], db.ticket_reads
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         if width in (390, 1366) and motion == 'reduce':
             page.screenshot(path=str(screenshots / f'tickets-{width}.png'), full_page=True)
@@ -230,7 +247,8 @@ def run_case(browser, width, height, motion, screenshots):
             page.get_by_role('button', name='Tickets & notes', exact=True).click()
         expect(sidebar).to_contain_text(('jira:b' if first_id == 'jira:a' else 'jira:a') + ' ticket 1')
         expect(sidebar.get_by_role('button', name='Intervenant', exact=True)).to_have_attribute('aria-pressed', 'true')
-        assert db.ticket_reads == ['initial', '1', '1'], db.ticket_reads
+        assert db.ticket_reads == ['initial'] * 3 + ['1', '1'], db.ticket_reads
+        assert db.ticket_statuses == ['indeterminate', 'done', 'new', 'indeterminate', 'indeterminate'], db.ticket_statuses
         page.goto(BASE + '/manage-team?team=' + SPRINT)
         expect(page.get_by_role('button', name='Synchroniser les participants', exact=True)).to_be_disabled()
         bootstrap.assert_no_unexpected_api()

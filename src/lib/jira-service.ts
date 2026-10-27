@@ -1,4 +1,4 @@
-import { jiraObject, jiraText, jiraTickets, sprintParticipants, type JiraOption, type JiraSprintSelection } from './jira.ts';
+import { jiraObject, jiraText, jiraTickets, sprintParticipants, type JiraOption, type JiraSprintSelection, type JiraStatusCategory } from './jira.ts';
 import { jiraFetch } from './jira-auth.ts';
 import { WorkspaceError } from './workspace-store.ts';
 import { createHash } from 'node:crypto';
@@ -80,19 +80,22 @@ export class JiraService {
     const scope = createHash('sha256').update(this.token).digest('hex');
     return ticketCache.read(`${scope}:${selection.cloudId}:${selection.boardId}:${selection.sprintId}`, 60_000, load);
   }
-  async boardTickets(selection: Pick<JiraSprintSelection, 'cloudId' | 'boardId'>, refresh = false) {
+  async boardTickets(selection: Pick<JiraSprintSelection, 'cloudId' | 'boardId'>, status: string = 'indeterminate', refresh = false) {
+    if (status !== 'new' && status !== 'indeterminate' && status !== 'done') throw new WorkspaceError(400, 'Statut Jira invalide.');
+    const categories: Record<JiraStatusCategory, string> = { new: '"To Do"', indeterminate: '"In Progress"', done: '"Done"' };
     const site = await this.site(selection.cloudId);
     const board = (await this.boards(selection.cloudId)).find(board => board.id === String(selection.boardId));
     if (!board) throw new WorkspaceError(403, 'Tableau Scrum inaccessible avec votre compte Jira.');
-    const load = () => this.issues(`/ex/jira/${selection.cloudId}/rest/software/1.0/board/${selection.boardId}/issue`, site.url, board.name);
+    const load = () => this.issues(`/ex/jira/${selection.cloudId}/rest/software/1.0/board/${selection.boardId}/issue`, site.url, board.name, `statusCategory = ${categories[status]}`);
     if (refresh) return ticketCache.mutate(load);
     const scope = createHash('sha256').update(this.token).digest('hex');
-    return ticketCache.read(`${scope}:${selection.cloudId}:${selection.boardId}:board`, 60_000, load);
+    return ticketCache.read(`${scope}:${selection.cloudId}:${selection.boardId}:board:${status}`, 60_000, load);
   }
-  private async issues(path: string, siteUrl: string, name: string) {
+  private async issues(path: string, siteUrl: string, name: string, jql?: string) {
     const issues: unknown[] = []; const seen = new Set<string>(); let token = '';
     for (let page = 0; page < 100; page++) {
       const query = new URLSearchParams({ maxResults: '100', fields: 'summary,status,priority,assignee,issuetype' });
+      if (jql) query.set('jql', jql);
       if (token) query.set('nextPageToken', token);
       const body = jiraObject(await this.get(`${path}?${query}`));
       if (!Array.isArray(body.issues) || typeof body.isLast !== 'boolean') throw new WorkspaceError(502, 'Liste des tickets Jira invalide.');
