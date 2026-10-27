@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../../../../packages/scrum-shared/src/loader.css";
 @source "../../../../packages/scrum-shared/src";
 @theme inline {
   --color-brand: #205f9d;

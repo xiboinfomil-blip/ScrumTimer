@@ -1,5 +1,6 @@
 @layer theme, base, mui, components, utilities;
 @import "tailwindcss" source("../");
+@import "../../packages/scrum-shared/src/loader.css";
 @source "../../packages/scrum-shared/src";
 
 @theme {

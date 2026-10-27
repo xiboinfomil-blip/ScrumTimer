@@ -1,0 +1,14 @@
+@keyframes cradle-left {
+  0%, 50%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(40deg); }
+}
+
+@keyframes cradle-right {
+  0%, 50%, 100% { transform: rotate(0deg); }
+  75% { transform: rotate(-40deg); }
+}
+
+@keyframes cradle-dot {
+  0%, 100% { opacity: .25; }
+  50% { opacity: 1; }
+}
