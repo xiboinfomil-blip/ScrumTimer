@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Loader } from '@infomil/scrum-shared/ui';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -42,7 +43,7 @@ function TicketList({ resource, participantId, status, onStatus }: { resource: R
     <div role="group" aria-label="Filtrer les tickets Jira" className="flex min-h-11 shrink-0 gap-1 rounded-md bg-slate-100 p-1">
       {([false, true] as const).map(value => <button key={String(value)} type="button" aria-pressed={all === value} disabled={!value && !participantId} onClick={() => { setAll(value); setPage(0); }} className={`min-h-11 min-w-0 flex-1 rounded px-2 text-xs font-semibold disabled:opacity-50 ${all === value ? 'bg-white text-brand shadow-xs' : 'text-muted hover:bg-white/60'}`}>{value ? 'Tout le tableau' : 'Intervenant'}</button>)}
     </div>
-    {resource.loading && <div role="status" className="min-h-0 overflow-hidden"><span className="sr-only">Chargement des tickets…</span>{[0, 1, 2].map(row => <div key={row} aria-hidden="true" className="space-y-2 border-b border-line py-4 motion-safe:animate-pulse"><div className="h-3 w-20 rounded bg-slate-200" /><div className="h-4 w-5/6 rounded bg-slate-100" /><div className="h-5 w-24 rounded bg-slate-100" /></div>)}</div>}
+    {resource.loading && <div className="grid min-h-0 flex-1 place-items-center overflow-hidden py-2"><Loader size="sm" label="Chargement des tickets…" /></div>}
     {resource.error && <div role="alert" className="text-xs text-danger">{resource.error}<button type="button" className={`${secondaryButton} mt-2 w-full`} onClick={resource.retry}><RefreshIcon fontSize="small" />Réessayer</button>
       {resource.status === 401 && <form method="post" action="/api/jira/login"><button type="submit" className={`${secondaryButton} mt-2 w-full`}><LoginIcon fontSize="small" />Se reconnecter à Jira</button></form>}
     </div>}

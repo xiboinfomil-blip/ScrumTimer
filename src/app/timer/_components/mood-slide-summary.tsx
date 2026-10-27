@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Loader } from '@infomil/scrum-shared/ui';
 import { Button, Paper } from '@mui/material';
 import { type MoodMeterSlide } from '@/lib/mood-meter';
 import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood-catalog-client';
@@ -34,7 +35,7 @@ export function MoodSlideSummary({ people }: { people: SessionSpeaker[] }) {
       const peopleForSlide = people.filter(person => person.moodSlide?.image === context.image);
       const slide = slides.get(context.image);
       return <Paper component="article" elevation={0} sx={{ borderRadius: 2 }} key={context.image} className="rounded-lg border border-line p-2"><h4 className="truncate text-xs font-medium" title={context.title}>{context.title} · Diapositive {context.slideNumber}</h4>
-        <div className="mt-2 flex h-40 min-w-0 flex-col">{slide ? <MeterSlide idPrefix={`result-meter-${index}`} slide={slide} title={`${context.title} — diapositive ${context.slideNumber}`} paused={!playing} /> : <p role="status" className="grid h-full place-items-center bg-slate-50 text-[11px] text-muted">{error || slides.size ? 'Aperçu indisponible.' : 'Chargement du baromètre…'}</p>}</div>
+        <div className="mt-2 flex h-40 min-w-0 flex-col">{slide ? <MeterSlide idPrefix={`result-meter-${index}`} slide={slide} title={`${context.title} — diapositive ${context.slideNumber}`} paused={!playing} /> : <div className="grid h-full place-items-center bg-slate-50">{error || slides.size ? <p role="status" className="text-[11px] text-muted">Aperçu indisponible.</p> : <Loader size="sm" label="Chargement du baromètre…" />}</div>}</div>
         <ul className="mt-2 space-y-1 text-[10px] text-muted">{peopleForSlide.map(person => <li key={person.id}><span className="font-medium text-ink">{person.name}</span> · Humeur {person.mood}</li>)}</ul>
       </Paper>;
     })}

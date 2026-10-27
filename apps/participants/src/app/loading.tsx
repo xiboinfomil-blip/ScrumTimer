@@ -1,1 +1,3 @@
-export default function Loading() { return <p role="status" className="rounded-2xl border border-slate-200 bg-white p-8 text-brand">Ouverture de votre espace…</p>; }
+import { Loader } from '@infomil/scrum-shared/ui';
+
+export default function Loading() { return <div className="grid min-h-64 place-items-center p-6"><Loader size="lg" label="Ouverture de votre espace…" /></div>; }

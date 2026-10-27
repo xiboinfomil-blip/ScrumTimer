@@ -2,11 +2,11 @@
 
 import { useId, type ReactNode } from 'react';
 
-export function Loader({ label = 'Chargement…', size = 'md', className = '' }: { label?: string; size?: 'sm' | 'md' | 'lg'; className?: string }) {
+export function Loader({ label = 'Chargement…', size = 'md', className = '' }: { label?: string; size?: 'text' | 'sm' | 'md' | 'lg'; className?: string }) {
   const id = useId();
   const dimensions = { sm: 'w-20', md: 'w-40', lg: 'w-56 [@media(max-height:650px)]:w-40' };
   return <span role="status" aria-live="polite" aria-atomic="true" aria-label={label} data-loader="cradle" data-size={size} className={`inline-flex max-w-full shrink-0 flex-col items-center justify-center gap-1 text-center align-middle ${className}`}>
-    <svg viewBox="0 0 176 112" width="176" height="112" aria-hidden="true" focusable="false" className={`block h-auto max-w-full shrink-0 ${dimensions[size]}`}>
+    {size !== 'text' && <svg viewBox="0 0 176 112" width="176" height="112" aria-hidden="true" focusable="false" className={`block h-auto max-w-full shrink-0 ${dimensions[size]}`}>
       <defs>
         <radialGradient id={`${id}-ball`} cx="32%" cy="25%" r="72%"><stop offset="0" stopColor="#e5e7eb" /><stop offset=".28" stopColor="#777777" /><stop offset="1" stopColor="#323232" /></radialGradient>
         <linearGradient id={`${id}-base`} x2="0" y2="1"><stop stopColor="#121212" /><stop offset="1" stopColor="#282828" /></linearGradient>
@@ -19,7 +19,7 @@ export function Loader({ label = 'Chargement…', size = 'md', className = '' }:
       </g>)}
       <rect x="20" y="90" width="136" height="16" rx="4" fill={`url(#${id}-base)`} />
       <path d="M24 96H152" stroke="#444443" strokeWidth="1" />
-    </svg>
+    </svg>}
     <span aria-hidden="true" className="max-w-full break-words text-xs font-medium leading-5 text-slate-600">{label.replace(/[.…]+$/u, '')}<span className="inline-flex w-4 justify-start"><span className="motion-safe:animate-[cradle-dot_1.2s_ease-in-out_infinite]">.</span><span className="motion-safe:animate-[cradle-dot_1.2s_ease-in-out_infinite] [animation-delay:200ms]">.</span><span className="motion-safe:animate-[cradle-dot_1.2s_ease-in-out_infinite] [animation-delay:400ms]">.</span></span></span>
   </span>;
 }

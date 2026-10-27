@@ -7,6 +7,7 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
 import { useState } from 'react';
+import { Loader } from '@infomil/scrum-shared/ui';
 import type { useDailyHints } from '@/hooks/use-daily-hints';
 import { primaryButton, secondaryButton } from '@/components/ui/styles';
 import { ParticipantNote } from '@/components/ui/participant-note';
@@ -85,7 +86,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
         <DialogTitle id="speaker-note-title">Le pense-bête de {person?.name ?? 'ce participant'}</DialogTitle>
         <DialogContent dividers>
           <p className="mb-3 text-[11px] text-muted">Note partagée avec l’équipe · aujourd’hui, heure de Maurice. Le minuteur garde son état : ouvrir cette note ne le suspend pas.</p>
-          {notes.loading ? <p role="status">Chargement de la note…</p> : notes.error ? <div role="alert"><p>{notes.error}</p><Button onClick={notes.retry}>Réessayer</Button></div> : <ParticipantNote hint={note?.hint ?? 'Aucun pense-bête préparé pour aujourd’hui.'} />}
+          {notes.loading ? <div className="grid min-h-32 place-items-center"><Loader label="Chargement de la note…" /></div> : notes.error ? <div role="alert"><p>{notes.error}</p><Button onClick={notes.retry}>Réessayer</Button></div> : <ParticipantNote hint={note?.hint ?? 'Aucun pense-bête préparé pour aujourd’hui.'} />}
         </DialogContent>
         <DialogActions><Button onClick={() => setReadingNote(false)}>Fermer</Button></DialogActions>
       </Dialog>

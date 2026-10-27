@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { Loader } from '@infomil/scrum-shared/ui';
 import { button, field, Pagination, Panel, StateScreen } from '@/components/ui';
 import { useTeam } from '@/hooks/use-team';
 import { pageItems, searchText } from '@/lib/statistics';
@@ -14,7 +15,7 @@ export function TeamPortal({ token }: { token: string }) {
   const data = team.data;
   if (!data) {
     if (team.error) return <StateScreen title={team.error.status === 401 ? 'Lien d’équipe invalide' : 'Équipe indisponible'}><p role="alert">{team.error.message}</p><button className={button} disabled={team.loading} onClick={() => void team.refresh()}>Réessayer</button></StateScreen>;
-    return <p role="status" className="rounded-2xl border border-slate-200 bg-white p-8 text-brand">Chargement de votre équipe…</p>;
+    return <div className="grid min-h-64 place-items-center p-6"><Loader size="lg" label="Chargement de votre équipe…" /></div>;
   }
   const filtered = data.team.roster.filter(p => searchText(p.name).includes(searchText(query)));
   const list = pageItems(filtered, page);
