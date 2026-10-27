@@ -215,8 +215,7 @@ async def main_flow(page, api):
     assert not api.puts
     api.initial_gate.set()
     await loaded(page)
-    await expect(page.get_by_text("40 participants", exact=True)).to_be_visible()
-    await expect(page.get_by_text(f"{api.data['day']} · Maurice", exact=True)).to_be_visible()
+    await expect(page.get_by_text(f"40 participants · {api.data['day']} · Maurice", exact=True)).to_be_visible()
     await layout(page)
 
     panel = notes_panel(page)

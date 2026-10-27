@@ -10,6 +10,7 @@ import { MoodMeter } from './mood-meter';
 import { MoodCheckin } from './mood-checkin';
 import { MoodIcon } from './mood-icon';
 import { useViewMotion } from '@/hooks/use-view-motion';
+import { WorkflowHeading } from '@/components/ui/workflow-heading';
 
 export function MoodPage() {
   const allowed = useStepGuard('mood');
@@ -19,10 +20,7 @@ export function MoodPage() {
   if (!allowed) return null;
   return (
     <div id="mood-page" className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-3 text-ink max-[650px]:gap-2 [@media(max-height:650px)]:gap-1">
-      <header className="flex shrink-0 items-center justify-between gap-3 px-1">
-        <h1 className="min-w-0 text-xl font-bold tracking-tight text-ink">Humeurs</h1>
-        <Link href={`/participants?team=${activeTeamId}`} aria-label="Retour aux participants" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-muted hover:border-brand/30 hover:bg-blue-50 hover:text-brand"><MoodIcon name="back" /><span className="max-[650px]:sr-only">Participants</span></Link>
-      </header>
+      <WorkflowHeading step={2} title="Humeurs" description="Le baromètre du jour" action={<Link href={`/participants?team=${activeTeamId}`} aria-label="Retour aux participants" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 text-xs font-semibold text-muted hover:border-brand/30 hover:bg-blue-50 hover:text-brand"><MoodIcon name="back" /><span className="max-[650px]:sr-only">Participants</span></Link>} />
       <ScreenTabs
         className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 [@media(max-height:650px)]:h-11 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0`}
         label="Panneau du bilan" value={view} onChange={setView}

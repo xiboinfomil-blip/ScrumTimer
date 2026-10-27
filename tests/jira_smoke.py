@@ -70,7 +70,7 @@ class JiraMock(DirectoryMock):
                 payload = {'name': 'Sprint 3', 'tickets': [
                     {'id': f'{person}:{index}', 'key': f'DEV-{index}',
                      'summary': f'{person} ticket {index} <texte sûr>',
-                     'status': 'En cours', 'priority': 'Haute',
+                     'status': 'En cours', 'statusCategory': 'indeterminate', 'issueType': 'Story', 'priority': 'Haute',
                      'assigneeId': person[5:], 'assigneeName': person,
                      'url': f'https://example.atlassian.net/browse/DEV-{index}'}
                     for index in range(1, 8)]}
@@ -188,6 +188,14 @@ def run_case(browser, width, height, motion, screenshots):
         sidebar.get_by_role('button', name='Questions', exact=True).click()
         expect(sidebar.get_by_role('heading', name='Le fil du point')).to_be_visible()
         sidebar.get_by_role('button', name='Tickets Jira', exact=True).click()
+        expect(sidebar.get_by_role('link', name=re.compile('DEV-1 :'))).to_be_visible()
+        assert db.ticket_reads.count(first_id) == 1, db.ticket_reads
+        search = sidebar.get_by_role('searchbox', name='Rechercher un ticket Jira')
+        search.fill('DEV-7')
+        expect(sidebar.get_by_role('link', name=re.compile('DEV-7 :'))).to_be_visible()
+        expect(sidebar.get_by_role('link', name=re.compile('DEV-1 :'))).to_have_count(0)
+        search.fill('')
+        assert db.ticket_reads.count(first_id) == 1, db.ticket_reads
         db.ticket_error = True
         sidebar.get_by_role('button', name='Actualiser les tickets Jira').click()
         expect(sidebar.get_by_role('alert')).to_contain_text('Session Jira expirée.')

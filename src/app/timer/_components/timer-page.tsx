@@ -23,6 +23,7 @@ import { LateCheckinDialog } from './late-checkin-dialog';
 import { useTimerRemote } from '@/hooks/use-timer-remote';
 import { RemotePairingDialog } from './remote-pairing-dialog';
 import SmartphoneRounded from '@mui/icons-material/SmartphoneRounded';
+import { WorkflowHeading } from '@/components/ui/workflow-heading';
 
 export type StandupTimer = ReturnType<typeof useStandupTimer>;
 
@@ -40,7 +41,12 @@ export function TimerPage() {
   const isSprint = teams.find(team => team.id === activeTeamId)?.kind === 'sprint';
   const notes = useDailyHints(activeTeamId);
   const refreshNotes = notes.retry;
-  useEffect(() => { refreshNotes(); }, [timer.activeId, refreshNotes]);
+  const noteSpeaker = useRef({ teamId: activeTeamId, participantId: timer.activeId });
+  useEffect(() => {
+    const previous = noteSpeaker.current;
+    noteSpeaker.current = { teamId: activeTeamId, participantId: timer.activeId };
+    if (previous.teamId === activeTeamId && previous.participantId !== timer.activeId && !notes.loading) refreshNotes();
+  }, [activeTeamId, timer.activeId, notes.loading, refreshNotes]);
   const note = notes.data?.hints.find(hint => hint.participantId === timer.person?.id);
   const target = useRef<HTMLDivElement>(null);
   const presentation = usePresentation(target);
@@ -95,14 +101,11 @@ export function TimerPage() {
         <span role="status" className="text-[10px] text-muted">{broadcast.enabled ? broadcast.status : presentation.notice}</span>
         </div></DialogContent><DialogActions><Button onClick={() => setSharing(false)}>Fermer</Button></DialogActions>
       </Dialog>
-      <header className="flex shrink-0 items-center justify-between gap-3 px-1">
-        <div className="min-w-0"><h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-ink"><span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${timer.running ? 'bg-success' : 'bg-accent'}`} />Minuteur</h1><p id="overview-people" className="mt-1 truncate text-xs text-muted">{timer.people.length} personnes · {perPerson} chacun</p></div>
-        <div className="flex shrink-0 items-center gap-2">
+      <WorkflowHeading step={3} title="Minuteur" description={<span id="overview-people">{timer.people.length} personnes · {perPerson} chacun</span>} action={<div className="flex shrink-0 items-center gap-2 max-[360px]:gap-1">
         <button type="button" onClick={() => setRemoteOpen(true)} aria-label="Télécommande mobile" aria-pressed={remote.enabled} className={`inline-flex size-11 shrink-0 items-center justify-center rounded-xl border ${remote.enabled ? 'border-brand bg-blue-50 text-brand' : 'border-line bg-white text-brand'} hover:bg-blue-50`}><SmartphoneRounded fontSize="small" /></button>
         <button type="button" onClick={() => { if (timer.running) timer.toggle(); setLineupOpen(true); }} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand" aria-label="Voir le tour de parole"><span className="max-[650px]:hidden">Participants</span><span className="tabular-nums">{timer.people.filter(person => person.done).length}/{timer.people.length}</span></button>
         <button type="button" onClick={() => presentation.presenting ? void presentation.toggle() : setSharing(true)} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand hover:border-brand/30 hover:bg-blue-50">{broadcast.enabled && <span aria-hidden="true" className="size-1.5 rounded-full bg-success" />}{presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'}</button>
-        </div>
-      </header>
+        </div>} />
       {!presentation.presenting && <ScreenTabs
         className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 [@media(max-height:650px)]:h-11 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0`}
         label="Panneau du minuteur"

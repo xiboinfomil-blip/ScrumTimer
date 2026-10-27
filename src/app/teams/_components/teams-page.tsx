@@ -92,8 +92,8 @@ export function TeamsPage() {
   return <div className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-y-auto pb-4" aria-labelledby="teams-heading">
         <header className="mb-5 flex shrink-0 items-center justify-between gap-3 pt-2 pb-5 sm:mb-6 sm:border-b sm:border-line lg:pt-4 lg:pb-7">
           <div>
-            <div className="flex flex-wrap items-center gap-2"><h1 id="teams-heading" className="text-xl font-bold tracking-tight text-ink sm:text-2xl">Vos équipes</h1><span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-muted sm:hidden">{ready ? teams.length : '—'} équipes</span></div>
-            <p className="mt-1 text-[11px] text-muted"><span className="hidden sm:inline">Rituels d’équipe, humeurs du jour et synchronisations en direct.</span><span className="sm:hidden">{ready ? totalMembers : '—'} collaborateurs synchronisés</span></p>
+            <div className="flex flex-wrap items-center gap-2"><h1 id="teams-heading" className="text-xl font-bold text-ink sm:text-2xl">Vos équipes</h1><span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-muted sm:hidden">{ready ? teams.length : '—'} équipes</span></div>
+            <p className="mt-1 text-xs text-muted">{ready ? totalMembers : '—'} collaborateurs</p>
           </div>
           <dl className="ml-auto hidden shrink-0 items-center gap-7 text-right sm:flex" aria-label="Résumé des équipes"><div><dt className="text-[10px] text-muted uppercase">Équipes</dt><dd className="mt-1 text-xl font-bold tabular-nums text-ink">{ready ? teams.length : '—'}</dd></div><div className="border-l border-line pl-7"><dt className="text-[10px] text-muted uppercase">Membres</dt><dd className="mt-1 text-xl font-bold tabular-nums text-ink">{ready ? totalMembers : '—'}</dd></div></dl>
           <button type="button" onClick={revealCreate} aria-expanded={showCreate} aria-controls="create-team-panel" className={`${primaryButton} lg:hidden`}><NavIcon name="plus" width="16" height="16" />Nouvelle</button>
@@ -106,7 +106,7 @@ export function TeamsPage() {
       </Dialog>
     <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2.1fr)_minmax(280px,1fr)] lg:gap-7">
       <section className="min-w-0" aria-labelledby="team-list-heading">
-        <div className="min-w-0 sm:rounded-xl sm:border sm:border-line sm:bg-white sm:p-5">
+        <div className="min-w-0">
         <div className="mb-4 flex items-center justify-between gap-3 sm:border-b sm:border-slate-100 sm:pb-3"><h2 ref={listHeading} tabIndex={-1} id="team-list-heading" className="text-[10px] font-medium tracking-wide text-muted uppercase sm:text-xs sm:font-semibold sm:tracking-normal sm:text-ink sm:normal-case"><span className="sm:hidden">Équipes</span><span className="hidden sm:inline">Choisir une équipe</span></h2><span role="status" aria-live="polite" aria-atomic="true" className="text-[10px] text-muted">{!ready ? 'Chargement…' : `${results.length} résultat${results.length === 1 ? '' : 's'}`}</span></div>
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <div className="flex min-h-11 min-w-0 basis-full items-center gap-2 rounded-lg border border-line bg-slate-50/70 px-3 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
@@ -137,13 +137,13 @@ export function TeamsPage() {
             </div> : <motion.ul key={currentPage} initial={reducedMotion || !direction ? false : { y: direction * 20, opacity: .35 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: reducedMotion ? 0 : .3 }} aria-label="Équipes disponibles" aria-busy={teamBusy || pending} className="grid list-none gap-3">
               {visibleTeams.map(team => {
                 const active = activeTeamId === team.id;
-                return <li key={team.id} className="group min-w-0 rounded-xl border border-line bg-white p-3 transition-colors hover:border-brand/30 sm:rounded-lg xl:grid xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center xl:gap-x-2 xl:px-3 xl:py-2">
+                return <li key={team.id} className={`group min-w-0 rounded-lg border bg-white p-3 transition-colors hover:border-brand/40 xl:grid xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center xl:gap-x-2 xl:px-4 xl:py-3 ${active ? 'border-brand/40 ring-1 ring-brand/5' : 'border-line'}`}>
                   <div className="flex min-w-0 items-center gap-2.5 xl:row-span-2">
                     <span aria-hidden="true" className={`grid size-11 shrink-0 place-items-center rounded-lg border text-sm font-semibold ${active ? 'border-brand bg-brand text-white max-sm:border-blue-200 max-sm:bg-blue-50 max-sm:text-brand' : team.category === 'Support' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-100 bg-slate-50 text-slate-500'}`}>{team.name.split(/\s+/).slice(0, 2).map(word => Array.from(word)[0]).join('').toLocaleUpperCase('fr-FR')}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><h3 className="text-sm font-semibold wrap-anywhere text-ink">{team.name}</h3>{active && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Actuelle</span>}</div>
                       <p className="mt-1 text-[11px] text-muted">{team.jiraLocked ? 'Connexion Jira requise' : <>{team.memberCount} membre{team.memberCount === 1 ? '' : 's'}{team.category && <span> · {team.category}</span>}{team.memberCount === 0 && ' · À compléter'}</>}</p>
-                      <p className="mt-1 break-words text-[10px] text-brand">{team.kind === 'sprint' ? `Sprint Jira · ${team.sprintName ?? ''}` : 'Équipe ordinaire'}</p>
+                      {team.kind === 'sprint' && <p className="mt-1 break-words text-[11px] text-brand">Sprint Jira · {team.sprintName ?? ''}</p>}
                     </div>
                     <button type="button" disabled={disabled || team.jiraLocked} aria-label={`${team.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} : ${team.name}`} aria-pressed={team.favorite} onClick={() => void updateTeamDirectory({ teamId: team.id, favorite: !team.favorite })} className={`grid size-11 shrink-0 place-items-center rounded-lg hover:bg-amber-50 disabled:opacity-50 ${team.favorite ? 'text-amber-500' : 'text-slate-400'}`}>{team.favorite ? <StarIcon aria-hidden="true" sx={{ fontSize: 21 }} /> : <StarOutlineIcon aria-hidden="true" sx={{ fontSize: 21 }} />}</button>
                   </div>
@@ -162,15 +162,12 @@ export function TeamsPage() {
           </nav>}
         </div>
         </div>
-        <p className="mt-4 hidden px-1 text-[11px] leading-relaxed text-muted sm:block">Ouvrir pour préparer le point · Gérer pour modifier les membres et les réglages.</p>
         <div className="mt-7 text-center text-[10px] leading-5 text-muted sm:hidden"><p><AutoAwesomeIcon aria-hidden="true" className="mr-1 text-accent" sx={{ fontSize: 12 }} />Moins de réunions. Plus de sens.</p><p className="text-[9px]">Infomil Mauritius · Persistance Neon DB</p></div>
       </section>
 
       <aside id="create-team-panel" className={`min-w-0 ${showCreate ? '' : 'max-lg:hidden'}`} aria-labelledby="create-team-heading">
-        <div className="relative isolate overflow-hidden rounded-xl border border-line bg-white p-5 lg:p-6">
-          <span aria-hidden="true" className="pointer-events-none absolute -top-8 -right-8 -z-10 size-28 rounded-full bg-blue-50/60" />
-          <span aria-hidden="true" className="mb-4 grid size-11 place-items-center rounded-xl border border-blue-200 bg-blue-50 text-brand"><NavIcon name="plus" /></span>
-          <h2 id="create-team-heading" className="text-base font-bold tracking-tight text-ink">Une nouvelle équipe ?</h2>
+        <div className="min-w-0 border-t border-line pt-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-7">
+          <h2 id="create-team-heading" className="flex items-center gap-2 text-base font-bold text-ink"><NavIcon name="plus" className="text-brand" />Une nouvelle équipe ?</h2>
           <p className="mt-1.5 mb-5 text-xs leading-relaxed text-muted">{kind === 'sprint' ? 'Jira · Sprint actif' : 'Équipe ordinaire · Sans connexion Jira'}</p>
           <fieldset className="my-2"><legend className="mb-1 text-xs font-medium text-ink">Type d’équipe</legend><div className="flex gap-1" role="group" aria-label="Type d’équipe">{(['ordinary', 'sprint'] as const).map(value => <button key={value} type="button" disabled={pending} aria-pressed={kind === value} onClick={() => { setKind(value); setCreateError(''); }} className={`min-h-11 min-w-0 flex-1 rounded-lg px-2 text-xs ${kind === value ? 'bg-brand text-white' : 'bg-slate-100 text-muted'}`}>{value === 'ordinary' ? 'Ordinaire' : 'Sprint Jira'}</button>)}</div></fieldset>
           {kind === 'sprint' && <JiraAccount connection={connection.data} loading={connection.loading} error={connection.error} onRetry={connection.retry} />}

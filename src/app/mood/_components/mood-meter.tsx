@@ -17,7 +17,7 @@ import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
 import PauseRounded from '@mui/icons-material/PauseRounded';
 
 const slideError = 'Diapositive indisponible. Le baromètre par défaut est affiché.';
-const meterStage = 'meter-stage relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden rounded-[14px] border border-line bg-slate-50';
+const meterStage = 'meter-stage relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden rounded-md border border-line bg-slate-50';
 const backgroundImage = 'block h-full w-full object-contain';
 
 // Slide-local state is isolated by a key so old image events cannot affect a
@@ -291,7 +291,7 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
   const playing = !paused && (wide || mobileVisible);
 
   return (
-    <Paper component="section" elevation={0} ref={panelRef} className={`flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden rounded-[28px] border border-line bg-white p-5 shadow-sm shadow-brand/3 max-[650px]:rounded-2xl max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-2.5 ${className}`} aria-labelledby="meter-title">
+    <Paper component="section" elevation={0} ref={panelRef} className={`flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden rounded-lg border border-line bg-white p-4 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-2.5 ${className}`} aria-labelledby="meter-title">
       <Dialog open={expanded} onClose={() => setExpanded(false)} fullScreen aria-labelledby="expanded-meter-title" sx={{ zIndex: 1700 }}>
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-2"><DialogTitle id="expanded-meter-title" className="min-w-0 truncate p-0! text-base!">{title}</DialogTitle><Button onClick={() => setExpanded(false)} sx={{ minHeight: 44 }}>Fermer le plein écran</Button></div>
         <DialogContent className="flex min-h-0 flex-1 flex-col gap-3 bg-slate-50 p-3! sm:p-5!">

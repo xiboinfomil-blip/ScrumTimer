@@ -1,6 +1,11 @@
 import { jiraObject, jiraText, jiraTickets, sprintParticipants, type JiraOption, type JiraSprintSelection } from './jira.ts';
 import { jiraFetch } from './jira-auth.ts';
 import { WorkspaceError } from './workspace-store.ts';
+import { createHash } from 'node:crypto';
+import { SharedReadCache } from './shared-read-cache.ts';
+
+const shared = globalThis as typeof globalThis & { scrumJiraTickets?: SharedReadCache };
+const ticketCache = shared.scrumJiraTickets ??= new SharedReadCache(64);
 
 export type JiraSite = JiraOption & { url: string };
 export class JiraService {
@@ -66,21 +71,27 @@ export class JiraService {
     const values = await this.options(`/ex/jira/${cloudId}/rest/agile/1.0/board/${boardId}/sprint${activeOnly ? '?state=active' : ''}`);
     return values.filter(sprint => !activeOnly || sprint.state === 'active').map(sprint => ({ id: String(sprint.id), name: jiraText(sprint.name, 200) }));
   }
-  async tickets(selection: JiraSprintSelection, activeOnly = false) {
+  async tickets(selection: JiraSprintSelection, activeOnly = false, refresh = false) {
     const site = await this.site(selection.cloudId);
     const sprint = (await this.sprints(selection.cloudId, selection.boardId, activeOnly)).find(sprint => sprint.id === String(selection.sprintId));
     if (!sprint) throw new WorkspaceError(409, activeOnly ? 'Le sprint choisi n’est plus actif sur ce tableau.' : 'Ce sprint n’est plus disponible sur ce tableau.');
+    const load = () => this.sprintIssues(selection, site.url, sprint.name);
+    if (activeOnly || refresh) return ticketCache.mutate(load);
+    const scope = createHash('sha256').update(this.token).digest('hex');
+    return ticketCache.read(`${scope}:${selection.cloudId}:${selection.boardId}:${selection.sprintId}`, 60_000, load);
+  }
+  private async sprintIssues(selection: JiraSprintSelection, siteUrl: string, name: string) {
     const issues: unknown[] = []; const seen = new Set<string>(); let token = '';
     for (let page = 0; page < 100; page++) {
-      const query = new URLSearchParams({ maxResults: '100', fields: 'summary,status,priority,assignee' });
+      const query = new URLSearchParams({ maxResults: '100', fields: 'summary,status,priority,assignee,issuetype' });
       if (token) query.set('nextPageToken', token);
       const body = jiraObject(await this.get(`/ex/jira/${selection.cloudId}/rest/software/1.0/board/${selection.boardId}/sprint/${selection.sprintId}/issue?${query}`));
       if (!Array.isArray(body.issues) || typeof body.isLast !== 'boolean') throw new WorkspaceError(502, 'Liste des tickets Jira invalide.');
       issues.push(...body.issues);
       if (body.isLast) {
-        const tickets = jiraTickets(issues, site.url);
+        const tickets = jiraTickets(issues, siteUrl);
         if (new Set(tickets.map(ticket => ticket.id)).size !== tickets.length) throw new WorkspaceError(502, 'Jira a renvoyé des tickets répétés.');
-        return { name: sprint.name, tickets };
+        return { name, tickets };
       }
       token = jiraText(body.nextPageToken, 4000);
       if (seen.has(token) || !body.issues.length) break;

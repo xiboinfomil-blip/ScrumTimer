@@ -40,8 +40,8 @@ export function SpectatorPage() {
   const snapshot = live && !error && !stale ? live.snapshot : null;
   const remaining = snapshot ? liveRemaining(snapshot, now + live!.offset) : 0;
   const seconds = Math.ceil(Math.abs(remaining));
-  return <section ref={target} aria-label="Vue spectateur" className={`${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh' : 'min-h-0 flex-1 rounded-2xl border border-line'} flex flex-col gap-3 overflow-auto bg-white p-4 text-center sm:p-6`}>
-    <header className="flex flex-wrap items-center justify-between gap-2 text-left"><h1 className="min-w-0 text-xl font-bold wrap-anywhere text-brand">{activeTeamName} · Spectateur</h1><Button variant="outlined" onClick={() => void presentation.toggle()} sx={{ minHeight: 44 }}>{presentation.presenting ? 'Quitter la présentation' : 'Présentation'}</Button></header>
+  return <section ref={target} aria-label="Vue spectateur" className={`${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh' : 'min-h-0 flex-1'} flex flex-col gap-3 overflow-auto bg-white p-4 text-center sm:p-6`}>
+    <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3 text-left"><h1 className="min-w-0 text-xl font-bold wrap-anywhere text-ink">{activeTeamName} · Spectateur</h1><Button variant="outlined" onClick={() => void presentation.toggle()} sx={{ minHeight: 44 }}>{presentation.presenting ? 'Quitter la présentation' : 'Présentation'}</Button></header>
     {presentation.notice && <p role="status" className="text-xs text-muted">{presentation.notice}</p>}
     {localOnly && <Alert severity="info">Diffusion limitée à cette instance. Un service Redis partagé est nécessaire sur un hébergement multi-instance.</Alert>}
     {error && <Alert severity="warning">{error} Reconnexion automatique…</Alert>}
@@ -50,7 +50,7 @@ export function SpectatorPage() {
       {!snapshot ? <p role="status" className="text-lg text-muted">{error || stale ? 'Direct indisponible' : 'En attente de la diffusion du facilitateur…'}</p> : <>
         <p role="status" className="font-semibold text-brand">{snapshot.running ? remaining <= 0 ? 'Temps écoulé' : 'À la parole' : 'En pause / prêt'}</p>
         <h2 className="max-w-full break-words text-3xl font-bold text-ink sm:text-5xl">{snapshot.speaker || 'Tour terminé'}</h2>
-        <p role="timer" aria-live="off" className={`text-7xl font-semibold tabular-nums sm:text-9xl ${remaining <= 0 ? 'text-danger' : 'text-brand'}`}>{remaining < 0 ? '+' : ''}{String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}</p>
+        <p role="timer" aria-live="off" className={`max-w-full break-all text-5xl font-semibold tabular-nums sm:text-8xl ${remaining <= 0 ? 'text-danger' : 'text-ink'}`}>{remaining < 0 ? '+' : ''}{String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}</p>
         <p className="text-sm text-muted">{snapshot.completed} / {snapshot.total} passages terminés</p>
         {snapshot.nextSpeaker && <p className="text-lg">Ensuite : <strong>{snapshot.nextSpeaker}</strong></p>}
       </>}

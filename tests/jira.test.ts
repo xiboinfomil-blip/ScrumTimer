@@ -9,8 +9,42 @@ import { JiraService } from '../src/lib/jira-service.ts';
 import { assertJiraRoster, authorizeJiraTeam, jiraTeamSprint, syncJiraRoster, visibleJiraTeams } from '../src/lib/jira-store.ts';
 import { createTeam, deleteTeam, listTeams } from '../src/lib/workspace-store.ts';
 import { readTeam, writeTeam } from '../src/lib/relational-store.ts';
-import { sprintParticipants } from '../src/lib/jira.ts';
+import { jiraTickets, sprintParticipants } from '../src/lib/jira.ts';
 import { validateTeamCreation } from '../src/lib/team-directory.ts';
+import { JiraResourceCache } from '../src/lib/jira-resource-cache.ts';
+
+test('Jira resource cache coalesces requests, reuses speakers, isolates teams and expires', async () => {
+  const cache = new JiraResourceCache();
+  let calls = 0; let clock = 0;
+  const request = (async (_input, init) => {
+    calls++;
+    return Response.json({ team: new Headers(init?.headers).get('X-Team-Id'), tickets: ['DEV-1'] });
+  }) as typeof fetch;
+  const url = '/api/jira?action=tickets&participantId=jira%3Aalice';
+  const read = (team = 'one', refresh = false) => cache.read(url, team, refresh, request, () => clock);
+  const [first, second] = await Promise.all([read(), read()]);
+  assert.deepEqual(first, second); assert.equal(calls, 1);
+  await read(); assert.equal(calls, 1);
+  await read('two'); assert.equal(calls, 2);
+  await read('one', true); assert.equal(calls, 3);
+  clock = 60_001; await read(); assert.equal(calls, 4);
+  cache.clear(); await read(); assert.equal(calls, 5);
+  cache.invalidate(url, 'one'); await read(); assert.equal(calls, 6);
+  await read(); assert.equal(calls, 6);
+});
+
+test('Jira resource cache does not retain failures or refill cleared entries', async () => {
+  const cache = new JiraResourceCache(); let calls = 0;
+  const failure = (async () => { calls++; return Response.json({ error: 'Non autorisé' }, { status: 401 }); }) as typeof fetch;
+  await cache.read('/api/jira', 'one', false, failure);
+  await cache.read('/api/jira', 'one', false, failure);
+  assert.equal(calls, 2);
+  let finish!: (response: Response) => void;
+  const delayed = (() => new Promise<Response>(resolve => { finish = resolve; })) as typeof fetch;
+  const pending = cache.read('/api/jira', 'one', false, delayed);
+  cache.clear(); finish(Response.json({ connected: true })); await pending;
+  await cache.read('/api/jira', 'one', false, failure); assert.equal(calls, 3);
+});
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 function configuration() {
@@ -121,15 +155,17 @@ test('Jira service follows current token pagination, deduplicates assignees and 
   const originalFetch = globalThis.fetch;
   const selection = { cloudId: '12345678-1234-1234-1234-123456789abc', boardId: 1, sprintId: 2 };
   let looping = false; let forbidden = false;
+  let issueReads = 0;
   const issue = (id: string, accountId: string | null) => ({ id, key: `DEV-${id}`, fields: { summary: `Ticket ${id}`, status: { name: 'En cours' }, priority: null, assignee: accountId ? { accountId, displayName: 'Camille' } : null } });
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input)); assert.equal(url.origin, 'https://api.atlassian.com');
-    assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer fixture-access');
+    assert.ok(['Bearer fixture-access', 'Bearer other-access'].includes(new Headers(init?.headers).get('authorization') ?? ''));
     if (forbidden) return new Response(null, { status: 403 });
     if (url.pathname.endsWith('accessible-resources')) return Response.json([{ id: selection.cloudId, name: 'Site', url: 'https://example.atlassian.net', scopes: ['read:board-scope:jira-software'] }]);
     if (url.pathname.endsWith('/board')) return Response.json({ startAt: 0, isLast: true, values: [{ id: 1, name: 'Scrum', type: 'scrum' }] });
     if (url.pathname.endsWith('/sprint')) return Response.json({ startAt: 0, isLast: true, values: [{ id: 2, name: 'Sprint 2', state: 'active' }] });
     assert.ok(url.pathname.endsWith('/rest/software/1.0/board/1/sprint/2/issue'));
+    issueReads++;
     if (url.searchParams.has('nextPageToken')) return Response.json({ isLast: !looping, nextPageToken: 'page-2', issues: [issue('3', null), issue('4', 'b')] });
     return Response.json({ isLast: false, nextPageToken: 'page-2', issues: [issue('1', 'a'), issue('2', 'a')] });
   };
@@ -138,12 +174,32 @@ test('Jira service follows current token pagination, deduplicates assignees and 
     assert.equal(imported.tickets.length, 4);
     assert.equal(sprintParticipants(imported.tickets).length, 2);
     assert.equal(imported.tickets[0].url, 'https://example.atlassian.net/browse/DEV-1');
+    const before = issueReads;
+    await Promise.all([new JiraService('fixture-access').tickets(selection), new JiraService('fixture-access').tickets(selection)]);
+    assert.equal(issueReads, before + 2);
+    await new JiraService('fixture-access').tickets(selection);
+    assert.equal(issueReads, before + 2);
+    await new JiraService('other-access').tickets(selection);
+    assert.equal(issueReads, before + 4);
+    forbidden = true;
+    await assert.rejects(new JiraService('fixture-access').tickets(selection), { status: 403 });
+    assert.equal(issueReads, before + 4);
+    forbidden = false;
     await assert.rejects(new JiraService('fixture-access').tickets({ ...selection, boardId: 99 }), { status: 403 });
     looping = true;
-    await assert.rejects(new JiraService('fixture-access').tickets(selection), /incomplets/);
+    await assert.rejects(new JiraService('fixture-access').tickets(selection, false, true), /incomplets/);
     forbidden = true;
     await assert.rejects(new JiraService('fixture-access').tickets(selection), { status: 403 });
   } finally { globalThis.fetch = originalFetch; }
+});
+
+test('Jira ticket presentation retains real issue types and categories without guessing custom statuses', () => {
+  const issue = (category: string) => ({ id: '1', key: 'DEV-1', fields: { summary: 'Résumé', status: { name: 'Validation personnalisée', statusCategory: { key: category } }, issuetype: { name: 'Story' }, priority: null, assignee: null } });
+  const [ticket] = jiraTickets([issue('done')], 'https://example.atlassian.net');
+  assert.equal(ticket.statusCategory, 'done');
+  assert.equal(ticket.issueType, 'Story');
+  assert.equal(ticket.status, 'Validation personnalisée');
+  assert.equal(jiraTickets([issue('custom')], 'https://example.atlassian.net')[0].statusCategory, undefined);
 });
 
 test('Jira access is caller-scoped; explicit roster refresh preserves attendance, resets moods and rolls back failures', async () => {

@@ -39,7 +39,9 @@ class MockAPI:
     def route(self, route):
         request = route.request
         path, method = urlparse(request.url).path, request.method
-        if path == '/api/teams' and method == 'GET':
+        if path == '/api/jira' and method == 'GET':
+            route.fulfill(json={'configured': False, 'connected': False})
+        elif path == '/api/teams' and method == 'GET':
             # Deliberately NOT the first/default team: URL context must win.
             route.fulfill(json={'teams': [
                 {'id': OTHER, 'name': 'Autre équipe', 'memberCount': 1},

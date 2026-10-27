@@ -6,6 +6,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import type { JiraConnection } from '@/lib/jira';
 import { secondaryButton } from '@/components/ui/styles';
+import { jiraResourceCache } from '@/lib/jira-resource-cache';
 
 export function JiraAccount({ connection, loading, error, onRetry }: { connection?: JiraConnection; loading: boolean; error?: string; onRetry: () => void }) {
   const [failure, setFailure] = useState(''); const [busy, setBusy] = useState(false);
@@ -14,6 +15,7 @@ export function JiraAccount({ connection, loading, error, onRetry }: { connectio
     try {
       const response = await fetch('/api/jira', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'logout' }), signal: AbortSignal.timeout(15_000) });
       if (!response.ok) throw new Error();
+      jiraResourceCache.clear();
       window.location.assign(new URL('/teams', window.location.origin).href);
     } catch { setFailure('Déconnexion non confirmée. Réessayez.'); setBusy(false); }
   }

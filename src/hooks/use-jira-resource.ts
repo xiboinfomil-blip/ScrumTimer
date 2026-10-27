@@ -1,24 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { jiraResourceCache, type JiraResourceResult } from '@/lib/jira-resource-cache';
 
 export function useJiraResource<T>(url: string | null, teamId?: string | null) {
   const [reload, setReload] = useState(0);
   const key = `${url ?? ''}|${teamId ?? ''}|${reload}`;
-  const [result, setResult] = useState<{ key: string; data?: T; error?: string; status?: number }>();
+  const [result, setResult] = useState<JiraResourceResult<T> & { key: string }>();
   useEffect(() => {
     if (!url) return;
-    const controller = new AbortController();
-    void (async () => {
-      try {
-        const response = await fetch(url, { cache: 'no-store', headers: teamId ? { 'X-Team-Id': teamId } : {}, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]) });
-        const body = await response.json();
-        if (!controller.signal.aborted) setResult(response.ok ? { key, data: body as T } : { key, error: typeof body.error === 'string' ? body.error : 'Jira est indisponible.', status: response.status });
-      } catch (failure) {
-        if (!controller.signal.aborted) setResult({ key, error: failure instanceof Error && failure.name === 'TimeoutError' ? 'Jira met trop de temps à répondre.' : 'Connexion Jira indisponible.' });
-      }
-    })();
-    return () => controller.abort();
-  }, [key, teamId, url]);
-  return { data: result?.key === key ? result.data : undefined, error: result?.key === key ? result.error : undefined, status: result?.key === key ? result.status : undefined, loading: !!url && result?.key !== key, retry: () => setReload(value => value + 1) };
+    let active = true;
+    void jiraResourceCache.read<T>(url, teamId).then(value => {
+      if (active) setResult({ key, ...value });
+    });
+    return () => { active = false; };
+  }, [key, reload, teamId, url]);
+  return { data: result?.key === key ? result.data : undefined, error: result?.key === key ? result.error : undefined, status: result?.key === key ? result.status : undefined, loading: !!url && result?.key !== key, retry: () => { if (url) jiraResourceCache.invalidate(url, teamId); setReload(value => value + 1); } };
 }

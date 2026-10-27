@@ -33,7 +33,7 @@ export async function GET(request: Request) {
       if (!sprint) throw new WorkspaceError(400, 'Cette équipe n’est pas liée à un sprint Jira.');
       const participantId = query.get('participantId');
       if (!participantId?.startsWith('jira:') || participantId.length > 100) throw new WorkspaceError(400, 'Participant Jira invalide.');
-      const imported = await service.tickets(sprint);
+      const imported = await service.tickets(sprint, false, request.headers.get('X-Jira-Refresh') === '1');
       return response({ name: imported.name, tickets: imported.tickets.filter(ticket => `jira:${ticket.assigneeId}` === participantId) });
     }
     throw new WorkspaceError(400, 'Requête Jira invalide.');

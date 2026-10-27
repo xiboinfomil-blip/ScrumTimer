@@ -2,6 +2,7 @@
 import os
 from copy import deepcopy
 from playwright.sync_api import sync_playwright, expect
+from browser_bootstrap import install_browser_bootstrap
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 SIZES = [(320, 568), (390, 844), (650, 600), (768, 1024), (820, 568), (1024, 576), (1366, 768), (1920, 1080)]
@@ -9,7 +10,8 @@ SIZES = [(320, 568), (390, 844), (650, 600), (768, 1024), (820, 568), (1024, 576
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for motion in ['reduce', 'no-preference']:
-        context = browser.new_context(reduced_motion=motion)
+        context = browser.new_context(reduced_motion=motion, service_workers='block')
+        install_browser_bootstrap(context)
         data = {'team': {'roster': [], 'session': [], 'duration': 120, 'warning': 30, 'sound': False, 'usedMoodMeters': []}, 'revision': 1}
         def api(route):
             path = route.request.url.split('/api/', 1)[1]
@@ -29,7 +31,7 @@ with sync_playwright() as p:
         for count in [0, 40]:
             data['team']['roster'] = [dict(id=str(i), name=f'Participant au nom particulièrement long {i}', present=i % 3 != 0, mood=None, moodUpdatedAt=None) for i in range(count)]
             page.goto(BASE + '/participants')
-            expect(page.get_by_role('heading', name='Qui est là aujourd’hui ?', exact=True)).to_be_visible()
+            expect(page.get_by_role('heading', name='Présences', exact=True)).to_be_visible()
             expect(page.get_by_role('link', name='Gérer l’équipe', exact=True)).to_be_visible()
             expect(page.locator('#checkin-name')).to_have_count(0)
             expect(page.get_by_role('button', name='Continuer vers les humeurs')).to_be_enabled() if count else expect(page.get_by_role('button', name='Continuer vers les humeurs')).to_be_disabled()

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 from playwright.sync_api import expect, sync_playwright
-from fullscreen_helpers import emulate_fullscreen
+from browser_bootstrap import install_browser_bootstrap
 
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3001').rstrip('/')
@@ -23,7 +23,7 @@ def setup(browser, width, height, motion):
         viewport={'width': width, 'height': height}, reduced_motion=motion,
         service_workers='block',
     )
-    emulate_fullscreen(context)
+    install_browser_bootstrap(context)
     now = datetime.now(timezone.utc)
     day = (now + timedelta(hours=4)).date().isoformat()
     team = {

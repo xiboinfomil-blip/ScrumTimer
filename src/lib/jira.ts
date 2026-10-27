@@ -1,6 +1,6 @@
 export type JiraSprintSelection = { cloudId: string; boardId: number; sprintId: number };
 export type JiraOption = { id: string; name: string };
-export type JiraTicket = { id: string; key: string; summary: string; status: string; priority: string | null; assigneeId: string | null; assigneeName: string | null; url: string };
+export type JiraTicket = { id: string; key: string; summary: string; status: string; statusCategory?: 'new' | 'indeterminate' | 'done'; issueType?: string; priority: string | null; assigneeId: string | null; assigneeName: string | null; url: string };
 export type JiraParticipant = { id: string; name: string; present: boolean; mood: null; moodUpdatedAt: null; moodSlide: null };
 export type JiraConnection = { configured: boolean; connected: boolean; name?: string };
 
@@ -26,9 +26,13 @@ export function jiraTickets(value: unknown, siteUrl: string): JiraTicket[] {
   return value.map(item => {
     const issue = jiraObject(item); const fields = jiraObject(issue.fields);
     const assignee = fields.assignee == null ? null : jiraObject(fields.assignee);
+    const status = jiraObject(fields.status);
+    const category = status.statusCategory == null ? undefined : jiraObject(status.statusCategory).key;
     const key = jiraText(issue.key, 100);
     if (!/^[A-Z][A-Z0-9_]*-\d+$/.test(key)) throw new Error('Clé Jira invalide.');
-    return { id: jiraText(issue.id, 100), key, summary: jiraText(fields.summary), status: jiraText(jiraObject(fields.status).name, 100),
+    return { id: jiraText(issue.id, 100), key, summary: jiraText(fields.summary), status: jiraText(status.name, 100),
+      ...(category === 'new' || category === 'indeterminate' || category === 'done' ? { statusCategory: category } : {}),
+      ...(fields.issuetype == null ? {} : { issueType: jiraText(jiraObject(fields.issuetype).name, 100) }),
       priority: fields.priority == null ? null : jiraText(jiraObject(fields.priority).name, 100),
       assigneeId: assignee ? jiraText(assignee.accountId, 100) : null, assigneeName: assignee ? jiraText(assignee.displayName, 300) : null,
       url: new URL(`/browse/${encodeURIComponent(key)}`, origin.origin).href };

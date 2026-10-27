@@ -9,6 +9,7 @@ import { SprintPicker } from '@/components/jira/sprint-picker';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { primaryButton, secondaryButton } from '@/components/ui/styles';
 import type { JiraSprintSelection } from '@/lib/jira';
+import { jiraResourceCache } from '@/lib/jira-resource-cache';
 
 type Sprint = JiraSprintSelection & { name: string };
 export function SprintManagement() {
@@ -31,7 +32,7 @@ function SprintForm({ sprint, onSaved }: { sprint: Sprint; onSaved: () => void }
   async function sync() {
     setPending(true); setNotice('');
     const success = await syncSprint(selection);
-    if (success) onSaved();
+    if (success) { jiraResourceCache.clear(); onSaved(); }
     else setNotice('Synchronisation non confirmée. Vérifiez la connexion Jira et les sauvegardes.');
     setPending(false);
   }

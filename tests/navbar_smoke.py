@@ -3,6 +3,7 @@ import os
 import tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
+from browser_bootstrap import install_browser_bootstrap
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 TEAM_ID = 'a' * 64
@@ -11,7 +12,8 @@ SIZES = [(320, 568), (390, 844), (650, 600), (768, 1024), (800, 600), (820, 600)
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for preference in ['reduce', 'no-preference']:
-        context = browser.new_context(reduced_motion=preference)
+        context = browser.new_context(reduced_motion=preference, service_workers='block')
+        install_browser_bootstrap(context)
         failing = [False]
         def api(route):
             path = route.request.url.split('/api/', 1)[1]

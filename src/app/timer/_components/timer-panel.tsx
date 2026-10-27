@@ -41,14 +41,14 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
   const FeedbackIcon = complete ? CheckIcon : ended ? ErrorOutlineIcon : nearly ? AccessTimeIcon : running ? RadioButtonCheckedIcon : NorthEastIcon;
 
   return (
-    <Paper component="section" elevation={0} className={`timer-panel relative isolate grid min-h-0 min-w-0 grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-2 overflow-hidden rounded-[28px] border border-line bg-white p-5 text-center shadow-sm shadow-brand/3 max-[650px]:gap-1 max-[650px]:rounded-2xl max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-3 ${panelColor} ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
+    <Paper component="section" elevation={0} className={`timer-panel relative isolate grid min-h-0 min-w-0 grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-2 overflow-hidden rounded-lg border border-line bg-white p-5 text-center max-[650px]:gap-1 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-3 ${panelColor} ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
       <div className="col-span-full flex min-w-0 items-center justify-between gap-2 self-start">
         <span className="text-left text-xs font-semibold tabular-nums text-muted">{person ? `Passage ${people.findIndex(candidate => candidate.id === person.id) + 1} / ${people.length}` : 'Terminé'}</span>
         {person && <Button onClick={() => setReadingNote(true)} aria-label={`Lire la note de ${person.name}`} sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 10 }}><TimerIcon name="edit" className="mr-1 size-3.5" />Pense-bête</Button>}
         <span className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1.5 text-[9px] font-semibold max-[650px]:px-1.5 max-[650px]:py-1 max-[650px]:text-[8px] ${statusColor}`} id="status-pill" data-status={status} role="status"><span className={`size-1.5 shrink-0 rounded-full bg-current ${running ? 'motion-safe:animate-pulse' : ''} motion-reduce:animate-none`} aria-hidden="true" />{status}</span>
       </div>
       <div className="min-w-0 overflow-hidden">
-        {timer.focusMode ? <SpeakerSlider timer={timer} /> : <div><p className="mb-1 text-[10px] font-bold tracking-[.18em] text-brand">LA PAROLE EST À</p><h2 key={timer.activeId} id="speaker-name" className="truncate text-4xl font-bold leading-tight tracking-tight motion-safe:animate-enter max-[650px]:text-2xl" title={speakerName} aria-live="polite" aria-atomic="true">{speakerName}</h2></div>}
+        {timer.focusMode ? <SpeakerSlider timer={timer} /> : <div><p className="mb-1 text-xs font-medium text-muted">La parole est à</p><h2 key={timer.activeId} id="speaker-name" className="truncate text-3xl font-bold leading-tight motion-safe:animate-enter max-[650px]:text-2xl" title={speakerName} aria-live="polite" aria-atomic="true">{speakerName}</h2></div>}
         {ended ? <p id="time-up-alert" role="alert" className="text-[11px] font-semibold text-danger"><span className="sr-only">{person?.name}, </span>Temps utilisé. Merci de passer la parole.</p> : <span className="sr-only" id="speaker-mood" hidden={!person}>{person ? `Humeur ${person.mood} / 4 · ${running ? 'Parle maintenant' : 'À vous la parole'}` : ''}</span>}
       </div>
       <div className="row-start-3 grid h-full min-h-0 min-w-0 place-items-center [container-type:size]">
@@ -61,7 +61,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-[10%]">
             <span className="text-[clamp(5px,3cqw,8px)] font-bold leading-relaxed tracking-wide text-muted" id="timer-label">{ended ? 'DÉPASSEMENT · PASSEZ LA PAROLE' : critical ? 'CONCLUEZ MAINTENANT' : nearly ? 'PRÉPAREZ LA CONCLUSION' : running ? 'TEMPS RESTANT' : 'TEMPS PAR PERSONNE'}</span>
-            <div id="timer-display" className={`text-[clamp(24px,23cqw,88px)] leading-none font-semibold tracking-[-2px] tabular-nums ${ended || critical ? 'text-danger' : 'text-ink'}`} role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
+            <div id="timer-display" className={`text-[clamp(24px,23cqw,88px)] leading-none font-semibold tabular-nums ${ended || critical ? 'text-danger' : 'text-ink'}`} role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
               {ended ? '+' : ''}{String(minutes).padStart(2, '0')}<span className={ringColor}>:</span>{String(secs).padStart(2, '0')}
             </div>
           </div>

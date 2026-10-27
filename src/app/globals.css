@@ -6,14 +6,14 @@
 	--color-brand: #205f9d;
 	--color-brand-dark: #164b80;
 	--color-accent: #ec8b23;
-	--color-ink: #193752;
-	--color-muted: #65798d;
-	--color-line: #e3ebf4;
+	--color-ink: #202b36;
+	--color-muted: #596979;
+	--color-line: #dce3e9;
 	--color-danger: #b94b43;
 	--color-success: #147d52;
 	--color-success-soft: #edf9f2;
 	--color-danger-soft: #fff1f0;
-	--font-sans: ui-sans-serif, system-ui, sans-serif;
+	--font-sans: "Aptos", "Trebuchet MS", sans-serif;
 	--animate-speaker-float: speaker-float 5s ease-in-out infinite;
 	--animate-finish-pop: finish-pop .7s ease-out;
 	--animate-particle-fall: particle-fall 1.8s ease-out var(--delay, 0s) forwards;
@@ -52,6 +52,8 @@
 }
 
 @layer base {
+	html { letter-spacing: 0; }
+	input, textarea, select { font: inherit; }
 	[hidden] { display: none !important; }
 	button:not(:disabled), a, select { cursor: pointer; }
 	:is(button, a, input, select, summary):focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
