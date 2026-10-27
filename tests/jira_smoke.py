@@ -61,19 +61,19 @@ class JiraMock(DirectoryMock):
                 payload = {'sprint': {**self.selection, 'name': f"Sprint {self.selection['sprintId']}"}}
             elif action == 'tickets':
                 assert request.headers.get('x-team-id') == SPRINT
-                person = query['participantId'][0]
-                assert person in ('jira:a', 'jira:b')
-                self.ticket_reads.append(person)
+                assert query.get('scope') == ['board'] and 'participantId' not in query
+                self.ticket_reads.append(request.headers.get('x-jira-refresh', 'initial'))
                 if self.ticket_error:
                     route.fulfill(status=401, json={'error': 'Session Jira expirée.'})
                     return
-                payload = {'name': 'Sprint 3', 'tickets': [
-                    {'id': f'{person}:{index}', 'key': f'DEV-{index}',
-                     'summary': f'{person} ticket {index} <texte sûr>',
+                payload = {'name': 'Scrum produit', 'tickets': [
+                    {'id': f'{prefix}:{index}', 'key': f'{prefix}-{index}',
+                     'summary': f'{person or "Non attribué"} ticket {index} <texte sûr>',
                      'status': 'En cours', 'statusCategory': 'indeterminate', 'issueType': 'Story', 'priority': 'Haute',
-                     'assigneeId': person[5:], 'assigneeName': person,
-                     'url': f'https://example.atlassian.net/browse/DEV-{index}'}
-                    for index in range(1, 8)]}
+                     'assigneeId': person[5:] if person else None, 'assigneeName': person,
+                     'url': f'https://example.atlassian.net/browse/{prefix}-{index}'}
+                    for person, prefix in [('jira:a', 'DEV'), ('jira:b', 'BOB'), (None, 'FREE')]
+                    for index in range(1, 8 if person else 2)]}
             else:
                 raise AssertionError(action)
             route.fulfill(json=payload)
@@ -178,34 +178,49 @@ def run_case(browser, width, height, motion, screenshots):
         if width <= 800:
             page.get_by_role('button', name='Tickets & notes', exact=True).click()
         sidebar = page.locator('[data-speaker-sidebar]')
-        expect(sidebar.get_by_role('link', name=re.compile('DEV-1 :'))).to_be_visible()
         first_id = 'jira:a' if first == 'Alice <texte>' else 'jira:b'
+        first_prefix = 'DEV' if first_id == 'jira:a' else 'BOB'
+        expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-1 :'))).to_be_visible()
         expect(sidebar).to_contain_text(first_id + ' ticket 1 <texte sûr>')
         expect(sidebar.locator('script, iframe, img')).to_have_count(0)
         sidebar.get_by_role('button', name='Tickets suivants', exact=True).click()
         expect(sidebar).to_contain_text(first_id + ' ticket 6')
-        expect(sidebar.get_by_role('link', name=re.compile('DEV-6 :'))).to_have_attribute('href', 'https://example.atlassian.net/browse/DEV-6')
+        expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-6 :'))).to_have_attribute('href', f'https://example.atlassian.net/browse/{first_prefix}-6')
         sidebar.get_by_role('button', name='Questions', exact=True).click()
         expect(sidebar.get_by_role('heading', name='Le fil du point')).to_be_visible()
         sidebar.get_by_role('button', name='Tickets Jira', exact=True).click()
-        expect(sidebar.get_by_role('link', name=re.compile('DEV-1 :'))).to_be_visible()
-        assert db.ticket_reads.count(first_id) == 1, db.ticket_reads
+        expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-6 :'))).to_be_visible()
+        assert db.ticket_reads == ['initial'], db.ticket_reads
         search = sidebar.get_by_role('searchbox', name='Rechercher un ticket Jira')
-        search.fill('DEV-7')
-        expect(sidebar.get_by_role('link', name=re.compile('DEV-7 :'))).to_be_visible()
-        expect(sidebar.get_by_role('link', name=re.compile('DEV-1 :'))).to_have_count(0)
+        search.fill(first_prefix + '-7')
+        expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-7 :'))).to_be_visible()
+        expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-1 :'))).to_have_count(0)
         search.fill('')
-        assert db.ticket_reads.count(first_id) == 1, db.ticket_reads
+        sidebar.get_by_role('button', name='Tout le tableau', exact=True).click()
+        expect(sidebar.get_by_role('status').filter(has_text='15 tickets')).to_be_visible()
+        search.fill('FREE-1')
+        expect(sidebar).to_contain_text('Non attribué')
+        expect(sidebar.get_by_role('link', name=re.compile('FREE-1 :'))).to_be_visible()
+        sidebar.get_by_role('button', name='Intervenant', exact=True).click()
+        expect(sidebar.get_by_role('link', name=re.compile('FREE-1 :'))).to_have_count(0)
+        search.fill('')
+        assert db.ticket_reads == ['initial'], db.ticket_reads
         db.ticket_error = True
         sidebar.get_by_role('button', name='Actualiser les tickets Jira').click()
         expect(sidebar.get_by_role('alert')).to_contain_text('Session Jira expirée.')
         expect(sidebar.locator('form[action="/api/jira/login"]')).to_have_attribute('method', 'post')
         db.ticket_error = False
         sidebar.get_by_role('button', name='Réessayer', exact=True).click()
-        expect(sidebar.get_by_role('link', name=re.compile('DEV-1 :'))).to_be_visible()
+        expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-1 :'))).to_be_visible()
+        assert db.ticket_reads == ['initial', '1', '1'], db.ticket_reads
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         if width in (390, 1366) and motion == 'reduce':
             page.screenshot(path=str(screenshots / f'tickets-{width}.png'), full_page=True)
+        sidebar.get_by_role('button', name='Tout le tableau', exact=True).click()
+        if width in (390, 1366) and motion == 'reduce':
+            page.screenshot(path=str(screenshots / f'board-tickets-{width}.png'), full_page=True)
+        page.clock.install()
+        page.clock.fast_forward(61_000)
         if width <= 800:
             sidebar.get_by_role('button', name='Revenir au minuteur').click()
         expect(page.locator('#start-button')).to_contain_text('Pause')
@@ -214,7 +229,8 @@ def run_case(browser, width, height, motion, screenshots):
         if width <= 800:
             page.get_by_role('button', name='Tickets & notes', exact=True).click()
         expect(sidebar).to_contain_text(('jira:b' if first_id == 'jira:a' else 'jira:a') + ' ticket 1')
-        assert len(set(db.ticket_reads)) == 2
+        expect(sidebar.get_by_role('button', name='Intervenant', exact=True)).to_have_attribute('aria-pressed', 'true')
+        assert db.ticket_reads == ['initial', '1', '1'], db.ticket_reads
         page.goto(BASE + '/manage-team?team=' + SPRINT)
         expect(page.get_by_role('button', name='Synchroniser les participants', exact=True)).to_be_disabled()
         bootstrap.assert_no_unexpected_api()

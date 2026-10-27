@@ -68,7 +68,7 @@ def run_case(browser, case):
             assert url.path in SLIDES, url.path
             images.append((url.path, parse_qs(url.query), monotonic()))
             if url.path == SLIDES[0]:
-                if case == 'image_retry' and len(images) == 1:
+                if case == 'image_retry' and sum(path == SLIDES[0] for path, _, _ in images) == 1:
                     route.fulfill(status=503, content_type='text/plain', body='Temporary SVG failure')
                 else:
                     # Return without fulfilling: the test explicitly releases
@@ -91,34 +91,32 @@ def run_case(browser, case):
             # Waiting for window.load would deadlock on the deliberately held SVG.
             page.goto(BASE + '/mood?team=' + TEAM_ID, wait_until='domcontentloaded')
         expect(page.locator('#meter-page-1-slide')).to_be_attached()
-        # Pump browser events while the response is held: eager loading would
-        # request page 2 here, even though neither SVG has decoded successfully.
-        page.wait_for_timeout(350)
+        page.wait_for_function("document.querySelector('#meter-page-2-slide')?.naturalWidth > 0")
         assert len(held) == 1, f'{case}: expected one pending first-slide response'
-        assert all(path == SLIDES[0] for path, _, _ in images), images
-        expect(page.locator('#meter-page-2-slide')).to_have_count(0)
+        first_images = [image for image in images if image[0] == SLIDES[0]]
+        second_images = [image for image in images if image[0] == SLIDES[1]]
+        assert len(second_images) == 1, images
 
         if case == 'image_retry':
-            assert len(images) == 2, images
-            assert images[0][1] == {} and images[1][1] == {'retry': ['1']}, images
-            delay = images[1][2] - images[0][2]
+            assert len(first_images) == 2, images
+            assert first_images[0][1] == {} and first_images[1][1] == {'retry': ['1']}, images
+            delay = first_images[1][2] - first_images[0][2]
             assert 0.9 <= delay <= 5, f'SVG retry delay: {delay:.3f}s'
         else:
-            assert len(images) == 1, images
+            assert len(first_images) == 1, images
         assert len(metadata) == (2 if case == 'metadata_retry' else 1), metadata
         if case == 'metadata_retry':
             delay = metadata[1] - metadata[0]
             assert 0.9 <= delay <= 5, f'Metadata retry delay: {delay:.3f}s'
 
         released = monotonic()
-        with page.expect_request(lambda req: urlparse(req.url).path == SLIDES[1]):
-            held.pop().fulfill(content_type='image/svg+xml', body=SVG)
+        held.pop().fulfill(content_type='image/svg+xml', body=SVG)
         page.wait_for_function("""() => [1, 2].every(i => {
             const image = document.querySelector(`#meter-page-${i}-slide`);
             return image?.complete && image.naturalWidth > 0;
         })""")
-        assert [path for path, _, _ in images] == ([SLIDES[0]] * (2 if case == 'image_retry' else 1) + [SLIDES[1]]), images
-        assert images[-1][2] >= released, 'Second SVG requested before first response was released'
+        assert len(images) == (3 if case == 'image_retry' else 2), images
+        assert second_images[0][2] < released, 'Second SVG waited for the first response'
         expect(page.locator('#meter-slide-stack img')).to_have_count(2)
         expect(page.locator('#default-mood-meter')).to_have_count(0)
         assert not errors, errors
@@ -131,7 +129,7 @@ def main():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         try:
-            for case in ('sequential', 'image_retry', 'metadata_retry'):
+            for case in ('parallel', 'image_retry', 'metadata_retry'):
                 run_case(browser, case)
         finally:
             browser.close()

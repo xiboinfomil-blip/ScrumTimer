@@ -89,7 +89,8 @@ function TeamPrompts({ teamId, sprint, className, speakerId, speakerName, note, 
         <span className={`shrink-0 text-xl font-bold tabular-nums ${remaining < 0 ? 'text-danger' : 'text-brand'}`}>{remaining < 0 ? '+' : ''}{String(Math.floor(Math.ceil(Math.abs(remaining)) / 60)).padStart(2, '0')}:{String(Math.ceil(Math.abs(remaining)) % 60).padStart(2, '0')}</span>
       </button>
       {sprint && <div role="group" aria-label="Contenu de l’intervenant" className="mb-3 flex h-11 shrink-0 gap-1 border-b border-line">{(['tickets', 'notes'] as const).map(tab => <button key={tab} type="button" aria-pressed={view === tab} onClick={() => setView(tab)} className={`min-w-0 flex-1 rounded-t-lg px-2 text-xs font-semibold ${view === tab ? 'border-b-2 border-brand bg-blue-50 text-brand' : 'text-muted hover:bg-slate-50'}`}>{tab === 'tickets' ? 'Tickets Jira' : note ? 'Pense-bête' : 'Questions'}</button>)}</div>}
-      {sprint && view === 'tickets' ? <JiraTickets key={speakerId} teamId={teamId} participantId={speakerId} /> : <>
+      {sprint && <div className={view === 'tickets' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><JiraTickets teamId={teamId} participantId={speakerId} /></div>}
+      {(!sprint || view === 'notes') && <>
       <motion.div key={`${speakerId ?? 'none'}-${note ? 'note' : 'questions'}`} initial={reduced ? false : { x: '100%' }} animate={{ x: 0 }} transition={reduced ? { duration: 0 } : { duration: .32, ease: [.22, 1, .36, 1] }} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" data-sidebar-slide>
       {notesError && <div role="alert" className="shrink-0 text-[11px] text-danger">{notesError} <Button size="small" onClick={retryNotes}>Réessayer les notes</Button></div>}
       {note ? <>

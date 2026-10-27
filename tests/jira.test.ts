@@ -193,6 +193,42 @@ test('Jira service follows current token pagination, deduplicates assignees and 
   } finally { globalThis.fetch = originalFetch; }
 });
 
+test('Jira board tickets share all assignees and pages without skipping fresh authorization', async () => {
+  const originalFetch = globalThis.fetch;
+  const selection = { cloudId: '12345678-1234-1234-1234-123456789abc', boardId: 7 };
+  let issueReads = 0; let boardReads = 0; let forbidden = false; let looping = false;
+  const issue = (id: string, accountId: string | null) => ({ id, key: `DEV-${id}`, fields: { summary: `Ticket ${id}`, status: { name: 'Ouvert' }, assignee: accountId ? { accountId, displayName: accountId } : null } });
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('accessible-resources')) return Response.json([{ id: selection.cloudId, name: 'Site', url: 'https://example.atlassian.net', scopes: ['read:board-scope:jira-software'] }]);
+    if (url.pathname.endsWith('/board')) {
+      boardReads++;
+      return Response.json({ startAt: 0, isLast: true, values: forbidden ? [] : [{ id: 7, name: 'Tableau produit', type: 'scrum' }] });
+    }
+    assert.ok(url.pathname.endsWith('/rest/software/1.0/board/7/issue'));
+    assert.equal(url.searchParams.get('fields'), 'summary,status,priority,assignee,issuetype');
+    issueReads++;
+    return Response.json(url.searchParams.has('nextPageToken')
+      ? { isLast: !looping, nextPageToken: 'next', issues: [issue('3', null)] }
+      : { isLast: false, nextPageToken: 'next', issues: [issue('1', 'alice'), issue('2', 'bob')] });
+  };
+  try {
+    const [first, second] = await Promise.all([new JiraService('board-access').boardTickets(selection), new JiraService('board-access').boardTickets(selection)]);
+    assert.deepEqual(first, second); assert.equal(issueReads, 2); assert.equal(boardReads, 2);
+    assert.equal(first.name, 'Tableau produit');
+    assert.deepEqual(first.tickets.map(ticket => ticket.assigneeId), ['alice', 'bob', null]);
+    await new JiraService('board-access').boardTickets(selection); assert.equal(issueReads, 2); assert.equal(boardReads, 3);
+    await new JiraService('other-board-access').boardTickets(selection); assert.equal(issueReads, 4);
+    forbidden = true;
+    await assert.rejects(new JiraService('board-access').boardTickets(selection), { status: 403 });
+    assert.equal(issueReads, 4);
+    forbidden = false; looping = true;
+    await assert.rejects(new JiraService('board-access').boardTickets(selection, true), /incomplets/);
+    looping = false;
+    await new JiraService('board-access').boardTickets(selection); assert.equal(issueReads, 8);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test('Jira ticket presentation retains real issue types and categories without guessing custom statuses', () => {
   const issue = (category: string) => ({ id: '1', key: 'DEV-1', fields: { summary: 'Résumé', status: { name: 'Validation personnalisée', statusCategory: { key: category } }, issuetype: { name: 'Story' }, priority: null, assignee: null } });
   const [ticket] = jiraTickets([issue('done')], 'https://example.atlassian.net');

@@ -1,13 +1,20 @@
-import { parseMoodMeterCatalog, type MoodMeterDeck } from './mood-meter';
-import { fetchMoodRead } from './mood-retry';
+import { parseMoodMeterCatalog, type MoodMeterDeck } from './mood-meter.ts';
+import { fetchMoodRead } from './mood-retry.ts';
 
-// Browser-memory only, bounded and short lived. Failures/aborted reads never cache.
 let catalogCache: { decks: MoodMeterDeck[]; expires: number } | undefined;
+let catalogPending: Promise<MoodMeterDeck[]> | undefined;
 const deckCache = new Map<string, { deck: MoodMeterDeck; expires: number }>();
+const deckPending = new Map<string, Promise<MoodMeterDeck>>();
 
 export async function loadMoodCatalog(signal: AbortSignal): Promise<MoodMeterDeck[]> {
   signal.throwIfAborted();
   if (catalogCache && catalogCache.expires > Date.now()) return catalogCache.decks;
+  const pending = catalogPending ??= readMoodCatalog(AbortSignal.timeout(45_000));
+  try { const decks = await pending; signal.throwIfAborted(); return decks; }
+  finally { if (catalogPending === pending) catalogPending = undefined; }
+}
+
+async function readMoodCatalog(signal: AbortSignal): Promise<MoodMeterDeck[]> {
   const response = await fetchMoodRead('/mood-meters/catalog.json', signal);
   if (!response.ok) throw new Error('Catalogue indisponible.');
   const value = await response.json();
@@ -32,13 +39,27 @@ export async function loadMoodDeck(deck: MoodMeterDeck, signal: AbortSignal): Pr
   signal.throwIfAborted();
   const cached = deckCache.get(deck.remoteId);
   if (cached && cached.expires > Date.now()) return { ...cached.deck, title: deck.title, remoteId: deck.remoteId, category: deck.category };
-  const response = await fetchMoodRead(`/api/mood-meters/decks/${deck.remoteId}`, signal);
+  let pending = deckPending.get(deck.remoteId);
+  if (!pending) {
+    pending = readMoodDeck(deck.remoteId, AbortSignal.timeout(45_000));
+    if (deckPending.size >= 20) deckPending.delete(deckPending.keys().next().value!);
+    deckPending.set(deck.remoteId, pending);
+  }
+  try {
+    const loaded = await pending;
+    signal.throwIfAborted();
+    return { ...loaded, title: deck.title, remoteId: deck.remoteId, category: deck.category };
+  } finally { if (deckPending.get(deck.remoteId) === pending) deckPending.delete(deck.remoteId); }
+}
+
+async function readMoodDeck(remoteId: string, signal: AbortSignal): Promise<MoodMeterDeck> {
+  const response = await fetchMoodRead(`/api/mood-meters/decks/${remoteId}`, signal);
   if (!response.ok) throw new Error('Présentation Google indisponible.');
   const [loaded] = parseMoodMeterCatalog([await response.json()]);
   if (!loaded?.slides.length) throw new Error('Présentation invalide.');
   signal.throwIfAborted();
   for (const [key, entry] of deckCache) if (entry.expires <= Date.now()) deckCache.delete(key);
   if (deckCache.size >= 20) deckCache.delete(deckCache.keys().next().value!);
-  deckCache.set(deck.remoteId, { deck: loaded, expires: Date.now() + 300_000 });
-  return { ...loaded, title: deck.title, remoteId: deck.remoteId, category: deck.category };
+  deckCache.set(remoteId, { deck: loaded, expires: Date.now() + 300_000 });
+  return loaded;
 }

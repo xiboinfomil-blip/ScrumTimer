@@ -5,6 +5,42 @@ import { PGlite } from '@electric-sql/pglite';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import { loadCachedMoodPages, MOOD_CACHE_WEEK_MS, readMoodFetchCache } from '../src/lib/mood-fetch-cache.ts';
+import { loadMoodCatalog, loadMoodDeck } from '../src/lib/mood-catalog-client.ts';
+
+test('browser mood reads share pending metadata without one aborted consumer cancelling others', async () => {
+  const originalFetch = globalThis.fetch;
+  let catalogReads = 0; let deckReads = 0; let failDeck = true;
+  let finishCatalog!: (response: Response) => void;
+  let finishDeck!: (response: Response) => void;
+  const remoteId = `deck-${'9'.repeat(20)}`;
+  globalThis.fetch = async input => {
+    if (String(input) === '/mood-meters/catalog.json') { catalogReads++; return new Promise<Response>(resolve => { finishCatalog = resolve; }); }
+    assert.equal(String(input), `/api/mood-meters/decks/${remoteId}`);
+    deckReads++;
+    if (failDeck) return Response.json({ error: 'Introuvable' }, { status: 404 });
+    return new Promise<Response>(resolve => { finishDeck = resolve; });
+  };
+  try {
+    const first = new AbortController(); const second = new AbortController();
+    const cancelled = loadMoodCatalog(first.signal); const shared = loadMoodCatalog(second.signal);
+    first.abort();
+    finishCatalog(Response.json([{ title: 'Baromètre', remoteId, slides: [] }]));
+    await assert.rejects(cancelled, { name: 'AbortError' });
+    const [deck] = await shared;
+    await loadMoodCatalog(second.signal); assert.equal(catalogReads, 1);
+    await assert.rejects(loadMoodDeck(deck, second.signal));
+    failDeck = false;
+    const third = new AbortController();
+    const cancelledDeck = loadMoodDeck(deck, third.signal);
+    const sharedDeck = loadMoodDeck({ ...deck, title: 'Titre courant' }, second.signal);
+    third.abort();
+    finishDeck(Response.json({ title: 'Ancien titre', slides: [`mood-meters/slides/${remoteId}/page-1.svg`] }));
+    await assert.rejects(cancelledDeck, { name: 'AbortError' });
+    assert.equal((await sharedDeck).title, 'Titre courant');
+    assert.equal((await loadMoodDeck(deck, second.signal)).slides.length, 1);
+    assert.equal(deckReads, 2);
+  } finally { globalThis.fetch = originalFetch; }
+});
 
 test('PostgreSQL cache: shared hits, seven-day purge, failures, concurrent fills and domain isolation', async () => {
   const engine = new PGlite();
