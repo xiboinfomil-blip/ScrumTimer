@@ -9,7 +9,7 @@ import type { Mood } from '@/types/team';
 import { completedRound } from '@/lib/history';
 import { finishWaitingRound, roundSpeakers } from '@/lib/timer-completion';
 import { createId } from '@/lib/team-storage';
-import { penalizeCurrentTimer, recoverTimer, restartCurrentTimer, type TimerState } from '@/lib/timer-checkpoint';
+import { penalizeCurrentTimer, previousSpeaker, previousTimer, recoverTimer, restartCurrentTimer, type TimerState } from '@/lib/timer-checkpoint';
 
 export function useStandupTimer() {
   const { state: team, activeTeamId, updateTeam, saveRound, getTimerCheckpoint, storeTimerCheckpoint } = useTeam();
@@ -120,6 +120,13 @@ export function useStandupTimer() {
     commit({ ...prepared, focusMode: Boolean(person), running: Boolean(person), turnStarted: Boolean(person), deadline: person ? Date.now() + prepared.remaining * 1000 : 0 });
     notify(person ? `${person.name}, à vous la parole !` : people.some(p => p.postponed) ? 'Les passages disponibles sont terminés. Faites rejoindre les personnes reportées ou terminez sans elles.' : 'Point quotidien terminé. Bonne journée à toute l’équipe !');
   }, [cleared, commit, notify, tick, saveRound]);
+  const previous = useCallback(() => {
+    if (!previousSpeaker(latest.current)) return;
+    const current = tick();
+    const prepared = previousTimer(current, preferences.current.duration);
+    commit(prepared);
+    notify(`Retour à ${prepared.people.find(person => person.id === prepared.activeId)?.name}. Minuteur en pause ; temps de parole et pénalités conservés.`);
+  }, [tick, commit, notify]);
   const finishWithoutPostponed = useCallback(() => {
     const finished = finishWaitingRound(latest.current);
     if (!finished) return;
@@ -216,5 +223,5 @@ export function useStandupTimer() {
     return () => document.removeEventListener('keydown', onKey);
   }, [toggle, next, reset]);
 
-  return { ...timer, lateChecking, closeLateCheckin, person: timer.people.find(p => p.id === timer.activeId), duration: team.duration, warning: team.warning, toggle, reset, penalize, restartCurrent, next, select, newRound, addTime, setDuration, setWarning, manage, closeManage, postpone, rejoin, finishWithoutPostponed, openLateCheckin };
+  return { ...timer, lateChecking, closeLateCheckin, person: timer.people.find(p => p.id === timer.activeId), canPrevious: Boolean(previousSpeaker(timer)), duration: team.duration, warning: team.warning, toggle, reset, penalize, restartCurrent, previous, next, select, newRound, addTime, setDuration, setWarning, manage, closeManage, postpone, rejoin, finishWithoutPostponed, openLateCheckin };
 }

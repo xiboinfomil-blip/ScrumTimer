@@ -61,8 +61,8 @@ export function TeamsPage() {
     setDirection(next > currentPage ? 1 : -1); setPage(next); listHeading.current?.focus();
   }
   function revealCreate() {
+    setCreateError('');
     setShowCreate(true);
-    requestAnimationFrame(() => { nameInput.current?.scrollIntoView({ block: 'nearest' }); nameInput.current?.focus(); });
   }
   async function choose(id: string, manage: boolean) {
     if (disabled) return;
@@ -96,7 +96,6 @@ export function TeamsPage() {
             <p className="mt-1 text-xs text-muted">{ready ? totalMembers : '—'} collaborateurs</p>
           </div>
           <dl className="ml-auto hidden shrink-0 items-center gap-7 text-right sm:flex" aria-label="Résumé des équipes"><div><dt className="text-[10px] text-muted uppercase">Équipes</dt><dd className="mt-1 text-xl font-bold tabular-nums text-ink">{ready ? teams.length : '—'}</dd></div><div className="border-l border-line pl-7"><dt className="text-[10px] text-muted uppercase">Membres</dt><dd className="mt-1 text-xl font-bold tabular-nums text-ink">{ready ? totalMembers : '—'}</dd></div></dl>
-          <button type="button" onClick={revealCreate} aria-expanded={showCreate} aria-controls="create-team-panel" className={`${primaryButton} lg:hidden`}><NavIcon name="plus" width="16" height="16" />Nouvelle</button>
         </header>
       {loginFailure && <Alert severity="error" className="mb-4">Connexion Jira refusée ou expirée. Réessayez la connexion.</Alert>}
       <Dialog open={loginTeamId !== null} onClose={() => setLoginTeamId(null)} fullWidth maxWidth="xs" aria-labelledby="jira-team-login-title">
@@ -104,10 +103,10 @@ export function TeamsPage() {
         <DialogContent><p className="mb-4 break-words text-sm text-ink">{teams.find(team => team.id === loginTeamId)?.name}</p><JiraAccount connection={connection.data} loading={connection.loading} error={connection.error} onRetry={connection.retry} /></DialogContent>
         <DialogActions><button type="button" onClick={() => setLoginTeamId(null)} className={secondaryButton}>Annuler</button></DialogActions>
       </Dialog>
-    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2.1fr)_minmax(280px,1fr)] lg:gap-7">
+    <div className="min-w-0">
       <section className="min-w-0" aria-labelledby="team-list-heading">
         <div className="min-w-0">
-        <div className="mb-4 flex items-center justify-between gap-3 sm:border-b sm:border-slate-100 sm:pb-3"><h2 ref={listHeading} tabIndex={-1} id="team-list-heading" className="text-[10px] font-medium tracking-wide text-muted uppercase sm:text-xs sm:font-semibold sm:tracking-normal sm:text-ink sm:normal-case"><span className="sm:hidden">Équipes</span><span className="hidden sm:inline">Choisir une équipe</span></h2><span role="status" aria-live="polite" aria-atomic="true" className="text-[10px] text-muted">{!ready ? 'Chargement…' : `${results.length} résultat${results.length === 1 ? '' : 's'}`}</span></div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 sm:border-b sm:border-slate-100 sm:pb-3"><h2 ref={listHeading} tabIndex={-1} id="team-list-heading" className="text-[10px] font-medium tracking-wide text-muted uppercase sm:text-xs sm:font-semibold sm:tracking-normal sm:text-ink sm:normal-case"><span className="sm:hidden">Équipes</span><span className="hidden sm:inline">Choisir une équipe</span></h2><span role="status" aria-live="polite" aria-atomic="true" className="text-[10px] text-muted">{!ready ? 'Chargement…' : `${results.length} résultat${results.length === 1 ? '' : 's'}`}</span><button type="button" onClick={revealCreate} disabled={disabled} aria-haspopup="dialog" className={`${primaryButton} max-sm:w-full`}><NavIcon name="plus" width="16" height="16" />Ajouter une nouvelle équipe</button></div>
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <div className="flex min-h-11 min-w-0 basis-full items-center gap-2 rounded-lg border border-line bg-slate-50/70 px-3 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
             <NavIcon name="search" className="shrink-0 text-muted" width="16" height="16" />
@@ -165,25 +164,25 @@ export function TeamsPage() {
         <div className="mt-7 text-center text-[10px] leading-5 text-muted sm:hidden"><p><AutoAwesomeIcon aria-hidden="true" className="mr-1 text-accent" sx={{ fontSize: 12 }} />Moins de réunions. Plus de sens.</p><p className="text-[9px]">Infomil Mauritius · Persistance Neon DB</p></div>
       </section>
 
-      <aside id="create-team-panel" className={`min-w-0 ${showCreate ? '' : 'max-lg:hidden'}`} aria-labelledby="create-team-heading">
-        <div className="min-w-0 border-t border-line pt-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-7">
-          <h2 id="create-team-heading" className="flex items-center gap-2 text-base font-bold text-ink"><NavIcon name="plus" className="text-brand" />Une nouvelle équipe ?</h2>
-          <p className="mt-1.5 mb-5 text-xs leading-relaxed text-muted">{kind === 'sprint' ? 'Jira · Sprint actif' : 'Équipe ordinaire · Sans connexion Jira'}</p>
+      <Dialog open={showCreate} onClose={() => { if (!pending) setShowCreate(false); }} fullWidth maxWidth="sm" aria-labelledby="create-team-heading" slotProps={{ transition: { onEntered: () => nameInput.current?.focus() } }}>
+        <DialogTitle id="create-team-heading">Ajouter une nouvelle équipe</DialogTitle>
+        <DialogContent dividers>
           <fieldset className="my-2"><legend className="mb-1 text-xs font-medium text-ink">Type d’équipe</legend><div className="flex gap-1" role="group" aria-label="Type d’équipe">{(['ordinary', 'sprint'] as const).map(value => <button key={value} type="button" disabled={pending} aria-pressed={kind === value} onClick={() => { setKind(value); setCreateError(''); }} className={`min-h-11 min-w-0 flex-1 rounded-lg px-2 text-xs ${kind === value ? 'bg-brand text-white' : 'bg-slate-100 text-muted'}`}>{value === 'ordinary' ? 'Ordinaire' : 'Sprint Jira'}</button>)}</div></fieldset>
           {kind === 'sprint' && <JiraAccount connection={connection.data} loading={connection.loading} error={connection.error} onRetry={connection.retry} />}
-          <form onSubmit={event => void create(event)} className="flex flex-col gap-2" noValidate aria-busy={pending && !openingId}>
+          <form id="create-team-form" onSubmit={event => void create(event)} className="flex flex-col gap-2" noValidate aria-busy={pending && !openingId}>
             <label htmlFor="new-team-name" className="text-xs font-medium text-ink">Nom de l’équipe</label>
-            <input ref={nameInput} id="new-team-name" value={name} onChange={event => { setName(event.target.value); setCreateError(''); }} placeholder="Ex. Squad Produit, Agilité…" aria-invalid={!!createError} aria-describedby={createError ? 'team-name-hint team-create-error' : 'team-name-hint'} required maxLength={60} className={`${field} w-full`} />
+            <input ref={nameInput} autoFocus id="new-team-name" value={name} onChange={event => { setName(event.target.value); setCreateError(''); }} placeholder="Ex. Squad Produit, Agilité…" aria-invalid={!!createError} aria-describedby={createError ? 'team-name-hint team-create-error' : 'team-name-hint'} required maxLength={60} className={`${field} w-full`} />
             <p id="team-name-hint" className="flex flex-wrap justify-between gap-1 text-[10px] text-muted"><span>Un nom reconnaissable.</span><span>60 caractères max.</span></p>
             <fieldset className="mt-2"><legend className="mb-1 text-xs font-medium text-ink">Catégorie</legend><div className="flex flex-wrap gap-1">{teamCategories.map(item => <button key={item} type="button" aria-pressed={category === item} onClick={() => setCategory(category === item ? null : item)} className={`min-h-11 rounded-lg px-3 text-xs ${category === item ? 'bg-ink text-white' : 'bg-slate-100 text-muted hover:bg-slate-200'}`}>{item}</button>)}</div></fieldset>
             {kind === 'sprint' && <SprintPicker value={sprint} onChange={setSprint} disabled={pending} connected={!!connection.data?.connected} />}
             {createError && <p id="team-create-error" role="alert" className="text-sm text-danger">{createError}</p>}
-            <button type="submit" disabled={disabled || (kind === 'sprint' && (!connection.data?.connected || !sprint.sprintId))} className={`${primaryButton} mt-2 w-full`}><NavIcon name="plus" width="17" height="17" />{pending && !openingId ? 'Création…' : 'Créer l’équipe'}</button>
-            <p className="mt-2 text-center text-[10px] text-muted">{kind === 'sprint' ? 'Participants · Responsables des tickets du sprint' : 'Membres · Saisie manuelle'}</p>
           </form>
-          <div className="mt-5 flex items-start gap-2 border-t border-slate-100 pt-4 text-[10px] leading-relaxed text-muted"><NavIcon name="people" width="16" height="16" className="mt-0.5 shrink-0" /><p>Les équipes sont partagées sur ce site. Présences, humeurs et bilans restent propres à chacune. Catégories et favoris sont enregistrés dans Neon.</p></div>
-        </div>
-      </aside>
+        </DialogContent>
+        <DialogActions className="flex-wrap gap-2">
+          <button type="button" disabled={pending} onClick={() => setShowCreate(false)} className={secondaryButton}>Annuler</button>
+          <button type="submit" form="create-team-form" disabled={disabled || (kind === 'sprint' && (!connection.data?.connected || !sprint.sprintId))} className={primaryButton}><NavIcon name="plus" width="17" height="17" />{pending && !openingId ? 'Création…' : 'Créer l’équipe'}</button>
+        </DialogActions>
+      </Dialog>
     </div>
   </div>;
 }

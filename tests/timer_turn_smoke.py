@@ -95,14 +95,16 @@ with sync_playwright() as p:
         expect(page.get_by_role('button', name='Continuer vers le minuteur', exact=False)).to_be_enabled()
         page.get_by_role('button', name='Continuer vers le minuteur', exact=False).click()
         expect(page.locator('#speaker-turn-cue')).to_have_count(0)
+        expect(page.locator('#previous-button')).to_be_disabled()
         for width, height in SIZES:
             page.set_viewport_size({'width': width, 'height': height})
             page.wait_for_function("document.documentElement.scrollWidth <= innerWidth")
             ring = page.locator('#timer-ring').bounding_box()
             assert ring and ring['width'] >= 90, ('setup', motion, width, ring)
-            for selector in ['#start-button', '#next-button', '#manage-timer-button']:
+            for selector in ['#previous-button', '#start-button', '#next-button', '#manage-timer-button']:
                 button = page.locator(selector).bounding_box()
                 assert button and button['height'] >= 43.99 and button['y'] + button['height'] <= height + 1, ('setup', motion, width, selector, button)
+                assert button['x'] >= 0 and button['x'] + button['width'] <= width + 1, ('setup', motion, width, selector, button)
         page.set_viewport_size({'width': 1366, 'height': 768})
         # Setup keeps the speaking stage clean; queue and settings have their own context.
         expect(page.locator('.timer-panel .timer-settings')).to_have_count(0)
@@ -160,9 +162,10 @@ with sync_playwright() as p:
             assert box and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (motion, width, box)
             ring = page.locator('#timer-ring').bounding_box()
             assert ring and ring['width'] >= 90, (motion, width, ring)
-            for selector in ['#start-button', '#next-button', '#manage-timer-button']:
+            for selector in ['#previous-button', '#start-button', '#next-button', '#manage-timer-button']:
                 button = page.locator(selector).bounding_box()
                 assert button and button['height'] >= 44 and button['y'] + button['height'] <= height + 1, (motion, width, selector, button)
+                assert button['x'] >= 0 and button['x'] + button['width'] <= width + 1, (motion, width, selector, button)
             if width <= 800:
                 page.get_by_role('button', name='Pense-bête', exact=True).click()
                 expect(page.locator('[data-speaker-sidebar]')).to_be_visible()
@@ -194,6 +197,29 @@ with sync_playwright() as p:
         next_name = page.locator('#speaker-name').inner_text()
         expect(page.locator('[data-speaker-hint] strong')).to_have_text('Avancement')
         expect(cue).to_contain_text('À TOI DE PARLER !')
+        expect(page.locator('#start-button')).to_contain_text('Pause')
+        expect(page.locator('#previous-button')).to_be_enabled()
+        saved = page.evaluate("JSON.parse(sessionStorage.getItem('standup.timer.tab.v1:' + 'a'.repeat(64))).timer")
+        first_metrics = next(person for person in saved['people'] if person['name'] == first)
+        page.locator('#previous-button').click()
+        expect(page.locator('#speaker-name')).to_have_text(first)
+        expect(page.locator('#previous-button')).to_be_disabled()
+        expect(page.locator('#start-button')).to_contain_text('Démarrer')
+        expect(page.locator('#timer-display')).to_have_text('02:00')
+        returned = page.evaluate("JSON.parse(sessionStorage.getItem('standup.timer.tab.v1:' + 'a'.repeat(64))).timer")
+        assert returned['running'] is False
+        assert next(person for person in returned['people'] if person['name'] == first) == {**first_metrics, 'done': False}
+        assert next(person for person in returned['people'] if person['name'] == next_name)['done'] is False
+        page.locator('#start-button').click()
+        page.locator('#next-button').click()
+        expect(page.locator('#speaker-name')).to_have_text(next_name)
+        page.locator('#start-button').click()
+        expect(page.locator('#start-button')).to_contain_text('Reprendre')
+        page.locator('#previous-button').click()
+        expect(page.locator('#speaker-name')).to_have_text(first)
+        expect(page.locator('#start-button')).to_contain_text('Démarrer')
+        page.locator('#next-button').click()
+        expect(page.locator('#speaker-name')).to_have_text(next_name)
         expect(page.locator('#start-button')).to_contain_text('Pause')
         # Next speaker without a note restores questions, with slide-only motion.
         hints.clear()

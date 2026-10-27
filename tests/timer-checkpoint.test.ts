@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkpointContext, checkpointDay, parseCheckpoint, penalizeCurrentTimer, recoverTimer, restartCurrentTimer, type TimerCheckpoint } from '../src/lib/timer-checkpoint.ts';
+import { checkpointContext, checkpointDay, parseCheckpoint, penalizeCurrentTimer, previousSpeaker, previousTimer, recoverTimer, restartCurrentTimer, type TimerCheckpoint } from '../src/lib/timer-checkpoint.ts';
 import { MAX_MANUAL_PENALTY, scoreSpeaker, speakerScoreProgress } from '../src/lib/session-results.ts';
 import type { TeamState } from '../src/types/team.ts';
 
@@ -59,6 +59,44 @@ test('completed checkpoint preserves idempotent archive identity and speaker met
   saved.timer.activeId = null;
   saved.timer.people = saved.timer.people.map(person => ({ ...person, done: true, postponed: false }));
   assert.equal(parseCheckpoint(JSON.stringify(saved), team, now)?.roundId, 'round-stable');
+});
+
+test('previous speaker reopens the prior eligible turn paused without discarding either speaker metrics', () => {
+  const timer = checkpoint().timer;
+  timer.people = timer.people.map(person => ({ ...person, postponed: false, mood: 2, done: person.id === 'alice', manualPenalty: 50 }));
+  timer.activeId = 'bob';
+  timer.people[1] = { ...timer.people[1], started: true, attempts: 1, budgetSeconds: 120 };
+  const current = recoverTimer(timer, now.getTime() + 130000);
+  const previous = previousTimer(current);
+  assert.equal(previous.activeId, 'alice');
+  assert.equal(previous.previousId, 'bob');
+  assert.equal(previous.people[0].done, false);
+  assert.deepEqual(previous.people[0], { ...current.people[0], done: false });
+  assert.equal(previous.people[1], current.people[1]);
+  assert.equal(previous.people[1].speakingSeconds, 130);
+  assert.equal(previous.people[1].done, false);
+  assert.equal(previous.remaining, 120);
+  assert.equal(previous.turnTotal, 120);
+  assert.equal(previous.running, false);
+  assert.equal(previous.turnStarted, false);
+  assert.equal(previous.focusMode, true);
+  assert.equal(previous.ended, false);
+  assert.equal(previous.warned, false);
+  assert.equal(previous.deadline, 0);
+  assert.equal(previousTimer(previous), previous);
+  assert.equal(previousSpeaker(previous), undefined);
+});
+
+test('previous speaker skips postponed turns and never wraps or reopens a completed meeting', () => {
+  const timer = checkpoint().timer;
+  timer.people.push({ ...timer.people[0], id: 'charlie', name: 'Charlie', done: false });
+  timer.activeId = 'charlie';
+  assert.equal(previousSpeaker(timer)?.id, 'alice');
+  assert.equal(previousTimer(timer, 60).remaining, 60);
+  for (const blocked of [{ ...timer, activeId: null }, { ...timer, activeId: 'missing' }, { ...timer, activeId: 'alice' }, { ...timer, managing: true }, { ...timer, people: timer.people.map(person => ({ ...person, postponed: true })) }]) {
+    assert.equal(previousSpeaker(blocked), undefined);
+    assert.equal(previousTimer(blocked), blocked);
+  }
 });
 
 test('manual penalty targets only the current speaker, repeats by 50 and retains countdown/focus/metrics', () => {

@@ -121,6 +121,9 @@ def geometry(page):
     # Let finite list/press transitions settle, without freezing motion or requiring
     # controls to fit in the viewport: the directory is intentionally scrollable.
     root = page.locator('[aria-labelledby="teams-heading"]:visible')
+    dialog = page.get_by_role('dialog', name='Ajouter une nouvelle équipe', exact=True)
+    if dialog.is_visible():
+        root = dialog
     expect(root).to_have_count(1)  # App Router may briefly retain a hidden previous tree.
     root.evaluate('''async root => {
         await Promise.all(root.getAnimations({subtree: true})
@@ -132,8 +135,22 @@ def geometry(page):
     failures = root.evaluate('''root => {
         // Native labels wrap their select/input by design; they are not controls.
         const selector = 'button, input:not([type="hidden"]), select, textarea, a[href]';
+        const visibleBounds = el => {
+            const rect = el.getBoundingClientRect();
+            let left = rect.left, right = rect.right, top = rect.top, bottom = rect.bottom;
+            for (let parent = el.parentElement; parent; parent = parent.parentElement) {
+                const style = getComputedStyle(parent), bounds = parent.getBoundingClientRect();
+                if (/auto|scroll|hidden|clip/.test(style.overflowX)) {
+                    left = Math.max(left, bounds.left); right = Math.min(right, bounds.right);
+                }
+                if (/auto|scroll|hidden|clip/.test(style.overflowY)) {
+                    top = Math.max(top, bounds.top); bottom = Math.min(bottom, bounds.bottom);
+                }
+            }
+            return {left, right, top, bottom, width: right - left, height: bottom - top};
+        };
         const visible = el => {
-            const style = getComputedStyle(el), r = el.getBoundingClientRect();
+            const style = getComputedStyle(el), r = visibleBounds(el);
             return r.width > 0 && r.height > 0 && style.visibility !== 'hidden'
                 && style.visibility !== 'collapse' && el.checkVisibility();
         };
@@ -146,9 +163,9 @@ def geometry(page):
                 failures.small.push({name: describe(el), width: r.width, height: r.height});
             for (const other of controls.slice(index + 1)) {
                 if (el.contains(other) || other.contains(el)) continue;
-                const s = other.getBoundingClientRect();
-                const width = Math.min(r.right, s.right) - Math.max(r.left, s.left);
-                const height = Math.min(r.bottom, s.bottom) - Math.max(r.top, s.top);
+                const visibleRect = visibleBounds(el), s = visibleBounds(other);
+                const width = Math.min(visibleRect.right, s.right) - Math.max(visibleRect.left, s.left);
+                const height = Math.min(visibleRect.bottom, s.bottom) - Math.max(visibleRect.top, s.top);
                 if (width > .01 && height > .01)
                     failures.intersections.push({first: describe(el), second: describe(other), width, height});
             }
@@ -172,15 +189,15 @@ def screenshot(page, screenshots, name):
 
 
 def creation_panel(page, width):
-    if width < 1024:
-        button = page.get_by_role('button', name='Nouvelle', exact=True)
-        button.scroll_into_view_if_needed()
-        expect(button).to_be_in_viewport()
-        button.click()
-    panel = page.locator('#create-team-panel')
+    button = page.get_by_role('button', name='Ajouter une nouvelle équipe', exact=True)
+    button.scroll_into_view_if_needed()
+    expect(button).to_be_in_viewport()
+    button.click()
+    panel = page.get_by_role('dialog', name='Ajouter une nouvelle équipe', exact=True)
     field = panel.get_by_role('textbox', name='Nom de l’équipe', exact=True)
     field.scroll_into_view_if_needed()
     expect(field).to_be_in_viewport()
+    expect(field).to_be_focused()
     return panel, field
 
 
@@ -198,6 +215,23 @@ def run_case(browser, width, height, motion, screenshots):
         expect(listing(page).get_by_role('listitem')).to_have_count(3)
         expect(favorite(page, 'Équipe Atlas', False)).to_be_enabled()
         geometry(page)
+        expect(page.get_by_role('textbox', name='Nom de l’équipe', exact=True)).to_have_count(0)
+        panel, field = creation_panel(page, width)
+        field.fill('Brouillon annulé')
+        geometry(page)
+        panel.get_by_role('button', name='Annuler', exact=True).click()
+        expect(panel).not_to_be_visible()
+        opener = page.get_by_role('button', name='Ajouter une nouvelle équipe', exact=True)
+        expect(opener).to_be_focused()
+        panel, field = creation_panel(page, width)
+        field.fill('')
+        panel.get_by_role('button', name='Créer l’équipe', exact=True).click()
+        expect(panel.get_by_role('alert')).to_contain_text('Choisissez un nom')
+        expect(field).to_be_focused()
+        page.keyboard.press('Escape')
+        expect(panel).not_to_be_visible()
+        expect(opener).to_be_focused()
+        assert not db.creations
         if motion == 'reduce':
             screenshot(page, screenshots, f'team-directory-{width}x{height}')
 
@@ -391,7 +425,7 @@ def run_stress_case(browser, width, height, screenshots):
         expect(pagination).to_have_count(0)
         geometry(page)
         page.get_by_role('button', name='Nommer mon équipe', exact=True).click()
-        panel = page.locator('#create-team-panel')
+        panel = page.get_by_role('dialog', name='Ajouter une nouvelle équipe', exact=True)
         field = panel.get_by_role('textbox', name='Nom de l’équipe', exact=True)
         expect(field).to_be_focused()
         expect(field).to_have_attribute('maxlength', '60')

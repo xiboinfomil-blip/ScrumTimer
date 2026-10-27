@@ -42,6 +42,21 @@ export function restartCurrentTimer(timer: TimerState, duration = timer.turnTota
   return { ...timer, remaining: duration, turnTotal: duration, running: false, turnStarted: false, ended: false, warned: false, deadline: 0 };
 }
 
+export function previousSpeaker(timer: TimerState) {
+  if (timer.managing || !timer.activeId) return undefined;
+  const index = timer.people.findIndex(person => person.id === timer.activeId);
+  return index > 0 ? timer.people.slice(0, index).findLast(person => !person.postponed) : undefined;
+}
+
+export function previousTimer(timer: TimerState, duration = timer.turnTotal): TimerState {
+  const person = previousSpeaker(timer);
+  if (!person) return timer;
+  return { ...timer, activeId: person.id, previousId: timer.activeId,
+    people: timer.people.map(candidate => candidate === person ? { ...candidate, done: false } : candidate),
+    remaining: duration, turnTotal: duration, running: false, turnStarted: false,
+    focusMode: true, ended: false, warned: false, deadline: 0 };
+}
+
 export const checkpointKey = (teamId: string) => `standup.timer.tab.v1:${teamId}`;
 export const checkpointDay = (now = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(now);
 // Session order and postponements are transient. All authoritative roster/check-in
