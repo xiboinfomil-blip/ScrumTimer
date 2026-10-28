@@ -49,6 +49,5 @@ export function SpeakerMoodPicture({ context, mood }: { context: MoodSlideContex
   if (!src || failed) return null;
   return <div className="pointer-events-none absolute inset-[6%] overflow-hidden rounded-full bg-white" data-mood-picture={mood} aria-hidden="true">
     <AnimatedImage src={src} alt="" animated={/^data:image\/gif;/i.test(src) || /\.gif$/i.test(src)} paused={Boolean(reduced)} className="absolute inset-0 size-full object-cover" onError={() => setFailed(true)} />
-    <span className="absolute inset-0 bg-black/65" />
   </div>;
 }

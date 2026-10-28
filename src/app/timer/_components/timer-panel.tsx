@@ -65,7 +65,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
             <circle className="fill-none stroke-current stroke-[5] [stroke-linecap:round] transition-[stroke-dashoffset,stroke] duration-150 ease-linear motion-reduce:transition-none" id="ring-progress" cx="150" cy="150" r="136" style={{ strokeDasharray: circumference, strokeDashoffset: circumference * (1 - ratio) }} />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center p-[12%]">
-            <div className="flex w-full min-w-0 flex-col items-center gap-1 px-[3%] py-[5%] text-white">
+            <div className="flex w-full min-w-0 flex-col items-center gap-1 px-[3%] py-[5%] text-white [text-shadow:0_1px_2px_#000,0_0_4px_#000,1px_0_1px_#000,-1px_0_1px_#000,0_-1px_1px_#000]">
             <div id={timer.focusMode ? 'speaker-turn-cue' : undefined} role="status" aria-live="polite" aria-atomic="true" className="w-full min-w-0">
               <span className="block text-[clamp(7px,3cqw,11px)] font-semibold text-white">{timer.ended ? 'Merci de passer la parole' : timer.running ? 'À TOI DE PARLER !' : timer.turnStarted ? 'TON TOUR EST EN PAUSE' : 'La parole est à'}</span>
               <h2 id="speaker-name" className="line-clamp-2 text-[clamp(12px,7cqw,27px)] font-bold leading-tight [overflow-wrap:anywhere]" title={speakerName}>{speakerName}</h2>

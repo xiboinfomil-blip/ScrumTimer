@@ -147,6 +147,9 @@ with sync_playwright() as p:
         chosen = next(person['mood'] for person in team['roster'] if person['name'] == first)
         expect(page.locator('#timer-ring [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
         expect(page.locator('#timer-ring #speaker-name')).to_have_text(first)
+        expect(page.locator('#timer-ring [data-mood-picture] span')).to_have_count(0)
+        assert page.locator('#timer-display').evaluate('el => getComputedStyle(el).textShadow') != 'none'
+        assert page.locator('#timer-display').evaluate('el => getComputedStyle(el.parentElement).backgroundColor') == 'rgba(0, 0, 0, 0)'
         note = page.locator('[data-speaker-hint]')
         expect(note.locator('strong')).to_have_text('Avancement')
         expect(note.locator('em')).to_have_text('Tests')
