@@ -149,6 +149,9 @@ with sync_playwright() as p:
         expect(page.locator('#timer-ring #speaker-name')).to_have_text(first)
         expect(page.locator('#timer-ring [data-mood-picture] span')).to_have_count(0)
         assert page.locator('#timer-display').evaluate('el => getComputedStyle(el).textShadow') != 'none'
+        assert page.locator('#timer-display').evaluate('el => Number(getComputedStyle(el).fontWeight)') >= 800
+        assert page.locator('#timer-display').evaluate('el => parseFloat(getComputedStyle(el).webkitTextStrokeWidth)') >= 2
+        assert page.locator('#timer-display').evaluate('el => getComputedStyle(el).webkitTextStrokeColor') == 'rgb(0, 0, 0)'
         assert page.locator('#timer-display').evaluate('el => getComputedStyle(el.parentElement).backgroundColor') == 'rgba(0, 0, 0, 0)'
         note = page.locator('[data-speaker-hint]')
         expect(note.locator('strong')).to_have_text('Avancement')

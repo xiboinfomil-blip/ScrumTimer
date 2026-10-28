@@ -71,7 +71,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
               <h2 id="speaker-name" className="line-clamp-2 text-[clamp(12px,7cqw,27px)] font-bold leading-tight [overflow-wrap:anywhere]" title={speakerName}>{speakerName}</h2>
             </div>
             <span className="text-[clamp(5px,3cqw,8px)] font-bold leading-relaxed text-white" id="timer-label">{ended ? 'DÉPASSEMENT · PASSEZ LA PAROLE' : critical ? 'CONCLUEZ MAINTENANT' : nearly ? 'PRÉPAREZ LA CONCLUSION' : running ? 'TEMPS RESTANT' : 'TEMPS PAR PERSONNE'}</span>
-            <div id="timer-display" className="text-[clamp(24px,23cqw,88px)] leading-none font-semibold tabular-nums text-white" role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
+            <div id="timer-display" className="text-[clamp(24px,23cqw,88px)] leading-none font-extrabold tabular-nums text-white [-webkit-text-stroke:clamp(2px,0.9cqw,3px)_#000] [paint-order:stroke_fill] [text-shadow:0_2px_4px_#000,0_0_8px_#000]" role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
               {ended ? '+' : ''}{String(minutes).padStart(2, '0')}<span>:</span>{String(secs).padStart(2, '0')}
             </div>
             {person && <span className="text-[clamp(7px,3cqw,10px)] font-medium text-white">Humeur {person.mood} / 4</span>}
