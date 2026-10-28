@@ -247,7 +247,7 @@ def run_case(browser, width, height, motion, screenshots):
         expect(favorite(page, 'Équipe Atlas', True)).to_be_enabled()
         assert db.patches[-1] == {'teamId': ACTIVE, 'favorite': True}
         views = page.get_by_role('group', name='Afficher les équipes', exact=True)
-        views.get_by_role('button', name='Favorites', exact=True).click()
+        views.get_by_role('button', name='Favoris', exact=True).click()
         expect(listing(page).get_by_role('listitem')).to_have_count(2)
         favorite(page, 'Équipe Boréal', True).click()
         expect(listing(page).get_by_role('listitem')).to_have_count(1)
