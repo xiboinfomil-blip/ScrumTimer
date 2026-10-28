@@ -8,6 +8,42 @@ export interface MoodPicture {
   height: number;
 }
 
+export function slowMoodGif(source: Uint8Array): Uint8Array {
+  if (source.length < 14 || !['GIF87a', 'GIF89a'].includes(String.fromCharCode(...source.subarray(0, 6)))) return source;
+  const result = source.slice();
+  let offset = 13 + (source[10] & 0x80 ? 3 * (2 << (source[10] & 7)) : 0);
+  const skipBlocks = () => {
+    while (offset < source.length) {
+      const size = source[offset++];
+      if (!size) return true;
+      offset += size;
+    }
+    return false;
+  };
+  while (offset < source.length) {
+    const block = source[offset++];
+    if (block === 0x3b) return result;
+    if (block === 0x21) {
+      const label = source[offset++];
+      if (label === 0xf9) {
+        if (offset + 6 > source.length || source[offset] !== 4 || source[offset + 5] !== 0) return source;
+        const delay = source[offset + 2] | source[offset + 3] << 8;
+        const slower = Math.min(65535, Math.max(12, delay * 3));
+        result[offset + 2] = slower & 255;
+        result[offset + 3] = slower >> 8;
+        offset += 6;
+      } else if (!skipBlocks()) return source;
+    } else if (block === 0x2c) {
+      if (offset + 9 > source.length) return source;
+      const packed = source[offset + 8];
+      offset += 9 + (packed & 0x80 ? 3 * (2 << (packed & 7)) : 0);
+      offset++;
+      if (!skipBlocks()) return source;
+    } else return source;
+  }
+  return source;
+}
+
 export function selectMoodPicture(pictures: MoodPicture[], mood: Mood): string | null {
   const right = mood === 3 || mood === 4;
   const bottom = mood === 2 || mood === 3;

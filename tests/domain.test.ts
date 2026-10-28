@@ -6,7 +6,29 @@ import { secondsUntil, timerFrame, formatTime, shuffleEligible, timerUrgency } f
 import { parseMoodMeterCatalog } from '../src/lib/mood/mood-meter.ts';
 import { timeScore, scoreSpeaker, speakerScoreProgress, explainScore, sessionLeaderboard, sessionStatistics, type SessionSpeaker } from '../src/lib/history/session-results.ts';
 import { validateTeamInput } from '../src/lib/team/team-validation.ts';
-import { selectMoodPicture } from '../src/lib/mood/mood-picture.ts';
+import { selectMoodPicture, slowMoodGif } from '../src/lib/mood/mood-picture.ts';
+
+test('timer GIFs keep their frames and loop metadata but use slower bounded frame delays', () => {
+  const header = [...Buffer.from('GIF89a'), 1, 0, 1, 0, 0x80, 0, 0, 0, 0, 0, 255, 255, 255];
+  const loop = [0x21, 0xff, 11, ...Buffer.from('NETSCAPE2.0'), 3, 1, 0, 0, 0];
+  const image = [0x2c, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 6, 0x21, 0xf9, 4, 9, 2, 0, 0];
+  for (const [delay, expected] of [[0, 12], [2, 12], [10, 30], [100, 300], [65535, 65535]]) {
+    const control = header.length + loop.length;
+    const source = new Uint8Array([...header, ...loop, 0x21, 0xf9, 4, 9, delay & 255, delay >> 8, 0, 0, ...image, 0x3b]);
+    const original = source.slice();
+    const slowed = slowMoodGif(source);
+    assert.equal(slowed[control + 4] | slowed[control + 5] << 8, expected);
+    const expectedBytes = source.slice();
+    expectedBytes[control + 4] = expected & 255;
+    expectedBytes[control + 5] = expected >> 8;
+    assert.deepEqual(slowed, expectedBytes);
+    assert.deepEqual(source, original);
+    const truncated = source.subarray(0, source.length - 1);
+    assert.equal(slowMoodGif(truncated), truncated);
+  }
+  const invalid = new Uint8Array([0x21, 0xf9, 4, 0, 1, 0, 0, 0]);
+  assert.equal(slowMoodGif(invalid), invalid);
+});
 
 test('mood pictures follow numbered quadrants, not SVG element order, and ignore decorative images', () => {
   const pictures = [
