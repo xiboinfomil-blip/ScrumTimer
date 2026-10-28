@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
+import { Loader } from '@infomil/scrum-shared/ui';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { useJiraResource } from '@/hooks/use-jira-resource';
-import type { JiraOption, JiraSprintSelection } from '@/lib/jira';
+import { useJiraResource } from '@/hooks/jira/use-jira-resource';
+import type { JiraOption, JiraSprintSelection } from '@/lib/jira/jira';
 import { field, secondaryButton } from '@/components/ui/styles';
 
 export function SprintPicker({ value, onChange, disabled = false, connected = true, fixedBoard = false }: { value: JiraSprintSelection; onChange: (selection: JiraSprintSelection) => void; disabled?: boolean; connected?: boolean; fixedBoard?: boolean }) {
@@ -19,7 +20,7 @@ export function SprintPicker({ value, onChange, disabled = false, connected = tr
   const values = [String(value.boardId || ''), String(value.sprintId || '')];
   const change = (index: number, selected: string) => onChange(index === 0 ? { cloudId, boardId: Number(selected), sprintId: 0 } : { ...value, sprintId: Number(selected) });
   return <fieldset disabled={disabled || !connected} className="flex min-w-0 flex-col gap-3" aria-label="Sprint Jira">
-    {!fixedBoard && sites.loading && <p role="status" className="text-xs text-muted">Chargement du site Jira…</p>}
+    {!fixedBoard && sites.loading && <Loader size="text" label="Chargement du site Jira…" className="self-start" />}
     {!fixedBoard && !sites.loading && sites.data?.options.length === 0 && <p role="status" className="text-xs text-muted">Aucun site Jira accessible.</p>}
     {!fixedBoard && sites.error && <div role="alert" className="text-xs text-danger">{sites.error}<button type="button" onClick={sites.retry} className={`${secondaryButton} mt-1 w-full`}><RefreshIcon fontSize="small" />Réessayer</button></div>}
     {resources.map((resource, index) => fixedBoard && index === 0 ? null : <div key={labels[index]} className="flex min-w-0 flex-col gap-1">

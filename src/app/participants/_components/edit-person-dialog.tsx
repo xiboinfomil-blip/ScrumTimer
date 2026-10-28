@@ -3,7 +3,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { Button, Dialog, InputBase } from '@mui/material';
 import type { Person } from '@/types/team';
-import { validatePersonName } from '@/lib/action-validation';
+import { validatePersonName } from '@/lib/team/action-validation';
 import { field, primaryButton, secondaryButton } from '@/components/ui/styles';
 
 export function EditPersonDialog({ person, onSave, onClose }: { person: Person; onSave: (id: string, name: string) => string | null; onClose: () => void }) {

@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import expect, sync_playwright
 from fullscreen_helpers import emulate_fullscreen
+from loader_smoke import assert_loader
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000').rstrip('/')
 TEAM_ID = 'a' * 64
@@ -20,15 +21,15 @@ SLIDES = [f'/mood-meters/slides/{DECK_ID}/page-{i}.svg' for i in (1, 2)]
 SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="blue"/></svg>'
 
 
-def run_case(browser, case):
+def run_case(browser, case, width=1366, height=768):
     # Fresh contexts also isolate the client-side catalogue/deck caches.
-    context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion='reduce', service_workers='block')
+    context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce', service_workers='block')
     emulate_fullscreen(context)
     try:
         day = (datetime.now(timezone.utc) + timedelta(hours=4)).date().isoformat()
         team = {'roster': [{'id': 'alice', 'name': 'Alice', 'present': True, 'mood': None, 'moodUpdatedAt': None}], 'session': [], 'duration': 120, 'warning': 30, 'sound': False, 'usedMoodMeters': [], 'currentMoodSlide': None}
         db = {'revision': 1, 'meter': None}
-        metadata, images, held, errors = [], [], [], []
+        metadata, images, held, held_second, errors = [], [], [], [], []
 
         def api(route):
             req = route.request
@@ -74,6 +75,8 @@ def run_case(browser, case):
                     # Return without fulfilling: the test explicitly releases
                     # the first successful SVG, including its retry response.
                     held.append(route)
+            elif case == 'parallel':
+                held_second.append(route)
             else:
                 route.fulfill(content_type='image/svg+xml', body=SVG)
 
@@ -91,6 +94,16 @@ def run_case(browser, case):
             # Waiting for window.load would deadlock on the deliberately held SVG.
             page.goto(BASE + '/mood?team=' + TEAM_ID, wait_until='domcontentloaded')
         expect(page.locator('#meter-page-1-slide')).to_be_attached()
+        if case == 'parallel':
+            loaders = page.locator('#meter-slide-stack [data-loader]')
+            expect(loaders).to_have_count(2)
+            for loader in loaders.all():
+                loader.scroll_into_view_if_needed()
+                assert_loader(page, loader, 'reduce')
+            ids = loaders.locator('defs > [id]').evaluate_all('elements => elements.map(element => element.id)')
+            assert len(ids) == len(set(ids)) == 6, ids
+            assert len(held_second) == 1, len(held_second)
+            held_second.pop().fulfill(content_type='image/svg+xml', body=SVG)
         page.wait_for_function("document.querySelector('#meter-page-2-slide')?.naturalWidth > 0")
         assert len(held) == 1, f'{case}: expected one pending first-slide response'
         first_images = [image for image in images if image[0] == SLIDES[0]]
@@ -120,7 +133,7 @@ def run_case(browser, case):
         expect(page.locator('#meter-slide-stack img')).to_have_count(2)
         expect(page.locator('#default-mood-meter')).to_have_count(0)
         assert not errors, errors
-        print(f'PASS remote stacked mood loading: {case}')
+        print(f'PASS remote stacked mood loading: {case} {width}x{height}', flush=True)
     finally:
         context.close()
 
@@ -131,6 +144,8 @@ def main():
         try:
             for case in ('parallel', 'image_retry', 'metadata_retry'):
                 run_case(browser, case)
+            for width, height in ((320, 568), (1024, 576)):
+                run_case(browser, 'parallel', width, height)
         finally:
             browser.close()
 

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { finishWaitingRound, roundSpeakers, rejoinCheckpoint } from '../src/lib/timer-completion.ts';
-import { checkpointContext, checkpointDay, parseCheckpoint, type TimerState } from '../src/lib/timer-checkpoint.ts';
-import { completedRound } from '../src/lib/history.ts';
+import { finishWaitingRound, roundSpeakers, rejoinCheckpoint } from '../src/lib/timer/timer-completion.ts';
+import { checkpointContext, checkpointDay, parseCheckpoint, type TimerState } from '../src/lib/timer/timer-checkpoint.ts';
+import { completedRound } from '../src/lib/history/history.ts';
 import type { TeamState } from '../src/types/team.ts';
 
 const team: TeamState = { roster: [

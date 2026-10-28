@@ -1,13 +1,13 @@
 import { sql } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { database, databaseFailure, readJson } from '@/lib/database';
-import { readDailyHints, saveDailyHint } from '@/lib/daily-hints-store';
-import { validateDailyHint } from '@/lib/daily-hints';
-import { equalPortalSecret, readParticipantLinkToken, validPortalSecret } from '@/lib/participant-access';
-import { readHistory } from '@/lib/relational-store';
-import { teamReadCache } from '@/lib/shared-read-cache';
-import { WorkspaceError } from '@/lib/workspace-store';
-import { jiraTeamSprint } from '@/lib/jira-store';
+import { database, databaseFailure, readJson } from '@/lib/persistence/database';
+import { readDailyHints, saveDailyHint } from '@/lib/meeting/daily-hints-store';
+import { validateDailyHint } from '@/lib/meeting/daily-hints';
+import { equalPortalSecret, readParticipantLinkToken, validPortalSecret } from '@/lib/participants/participant-access';
+import { readHistory } from '@/lib/persistence/relational-store';
+import { teamReadCache } from '@/lib/persistence/shared-read-cache';
+import { WorkspaceError } from '@/lib/team/workspace-store';
+import { jiraTeamSprint } from '@/lib/jira/jira-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

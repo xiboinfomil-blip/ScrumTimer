@@ -13,10 +13,10 @@ import RestartAltRounded from '@mui/icons-material/RestartAltRounded';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import DesktopWindowsRounded from '@mui/icons-material/DesktopWindowsRounded';
 import { Button, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
-import { type RemoteCommand } from '@/lib/timer-remote';
-import { type RemoteSnapshot, type RemoteStatus, type RemoteTransport } from '@/lib/timer-remote';
+import { type RemoteCommand } from '@/lib/remote/timer-remote';
+import { type RemoteSnapshot, type RemoteStatus, type RemoteTransport } from '@/lib/remote/timer-remote';
 import { CompanionInstall } from '@/components/remote/companion-install';
-import { COMPANION_PAIRING_KEY, resolveCompanionPairing } from '@/lib/companion-pairing';
+import { COMPANION_PAIRING_KEY, resolveCompanionPairing } from '@/lib/remote/companion-pairing';
 
 interface Connection { snapshot: RemoteSnapshot | null; status: RemoteStatus; transport: RemoteTransport; serverNow: number; receivedMono: number; roundTripMs: number }
 interface Credentials { id: string; token: string }

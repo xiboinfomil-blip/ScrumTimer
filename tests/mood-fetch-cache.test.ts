@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
-import { loadCachedMoodPages, MOOD_CACHE_WEEK_MS, readMoodFetchCache } from '../src/lib/mood-fetch-cache.ts';
-import { loadMoodCatalog, loadMoodDeck } from '../src/lib/mood-catalog-client.ts';
+import { loadCachedMoodPages, MOOD_CACHE_WEEK_MS, readMoodFetchCache } from '../src/lib/mood/mood-fetch-cache.ts';
+import { loadMoodCatalog, loadMoodDeck } from '../src/lib/mood/mood-catalog-client.ts';
 
 test('browser mood reads share pending metadata without one aborted consumer cancelling others', async () => {
   const originalFetch = globalThis.fetch;

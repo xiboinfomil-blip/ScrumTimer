@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 
-const adapterUrl = new URL('../src/lib/remote-redis.ts', import.meta.url).href;
-const storeUrl = new URL('../src/lib/timer-remote-store.ts', import.meta.url).href;
-const domainUrl = new URL('../src/lib/timer-remote.ts', import.meta.url).href;
+const adapterUrl = new URL('../src/lib/remote/remote-redis.ts', import.meta.url).href;
+const storeUrl = new URL('../src/lib/remote/timer-remote-store.ts', import.meta.url).href;
+const domainUrl = new URL('../src/lib/remote/timer-remote.ts', import.meta.url).href;
 
 // Each child owns its environment, global singleton and event loop. The TCP
 // server MUST live in the child too: spawnSync blocks the parent's event loop.

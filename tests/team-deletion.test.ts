@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import { PGlite } from '@electric-sql/pglite';
-import { createTeam, deleteTeam, listTeams, WorkspaceError } from '../src/lib/workspace-store.ts';
+import { createTeam, deleteTeam, listTeams, WorkspaceError } from '../src/lib/team/workspace-store.ts';
 import * as schema from '../src/db/schema.ts';
 
 const sharedWorkspace = '0'.repeat(64);

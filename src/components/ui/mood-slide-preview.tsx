@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@mui/material';
 import { useReducedMotion } from 'framer-motion';
-import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood-catalog-client';
-import type { MoodMeterSlide } from '@/lib/mood-meter';
+import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood/mood-catalog-client';
+import type { MoodMeterSlide } from '@/lib/mood/mood-meter';
 import type { MoodSlideContext } from '@/types/team';
 import { MeterSlide } from '@/app/mood/_components/mood-meter';
 

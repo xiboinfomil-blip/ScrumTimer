@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { database, databaseFailure, readJson, sameOrigin } from '@/lib/database';
-import { capabilityId, createTeam, deleteTeam, listTeams, selectTeam, strictObject, updateTeamDirectory, validateTeamName, WorkspaceError } from '@/lib/workspace-store';
-import { validateTeamCreation, validateTeamDirectoryPatch, type TeamCategory, type TeamDirectoryPatch } from '@/lib/team-directory';
-import type { JiraSprintSelection } from '@/lib/jira';
-import { authorizeJiraTeam, jiraService, visibleJiraTeams } from '@/lib/jira-store';
-import { teamReadCache, teamReadKey } from '@/lib/shared-read-cache';
+import { database, databaseFailure, readJson, sameOrigin } from '@/lib/persistence/database';
+import { capabilityId, createTeam, deleteTeam, listTeams, selectTeam, strictObject, updateTeamDirectory, validateTeamName, WorkspaceError } from '@/lib/team/workspace-store';
+import { validateTeamCreation, validateTeamDirectoryPatch, type TeamCategory, type TeamDirectoryPatch } from '@/lib/team/team-directory';
+import type { JiraSprintSelection } from '@/lib/jira/jira';
+import { authorizeJiraTeam, jiraService, visibleJiraTeams } from '@/lib/jira/jira-store';
+import { teamReadCache, teamReadKey } from '@/lib/persistence/shared-read-cache';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const response = (value: unknown) => NextResponse.json(value, { headers: { 'Cache-Control': 'no-store' } });

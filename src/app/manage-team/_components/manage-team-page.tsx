@@ -15,7 +15,7 @@ import { NavIcon } from '@/components/layout/nav-icon';
 import { AddPersonForm } from '@/app/participants/_components/add-person-form';
 import { EditPersonDialog } from '@/app/participants/_components/edit-person-dialog';
 import { ParticipantIcon } from '@/app/participants/_components/participant-icon';
-import { validatePersonName } from '@/lib/action-validation';
+import { validatePersonName } from '@/lib/team/action-validation';
 import { SprintManagement } from './sprint-management';
 
 const searchable = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr-FR');

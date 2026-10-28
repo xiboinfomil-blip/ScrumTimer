@@ -13,7 +13,9 @@ test('minuit mauricien et cinq jours calendaires UTC sont distincts', () => {
   assert.equal(new Date(nextMauritiusMidnight(now)).toISOString(), '2026-10-17T20:00:00.000Z');
   assert.equal(new Date(historyCutoff(now)).toISOString(), '2026-10-12T00:00:00.000Z');
   const rounds = [round('old', '2026-10-11T23:59:59.999Z', []), round('edge', '2026-10-12T00:00:00Z', []), round('future', '2026-10-16T21:00:01Z', [])];
-  assert.deepEqual(recentRounds(rounds, now).map(r => r.id), ['edge']);
+  assert.deepEqual(recentRounds(rounds, now).map(r => r.id), ['edge', 'old']);
+  const many = Array.from({ length: 8 }, (_, index) => round(`record-${index}`, `2020-01-0${index + 1}T00:00:00Z`, []));
+  assert.deepEqual(recentRounds([...many, many[7]], now).map(record => record.id), ['record-7', 'record-6', 'record-5', 'record-4', 'record-3']);
 });
 test('aucun bilan périmé à la place de celui du jour', () => {
   const old = round('previous', '2026-10-16T19:59:59Z', []);

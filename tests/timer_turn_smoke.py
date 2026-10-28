@@ -1,10 +1,30 @@
 """Speaking-turn cues with mocked Neon APIs; never writes to the live database."""
 import os
+import base64
+import struct
+import zlib
 from playwright.sync_api import sync_playwright, expect
 from browser_bootstrap import WARNING_SECONDS, install_browser_bootstrap, mauritius_day
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]
+
+
+def picture(color):
+    def chunk(kind, data):
+        return struct.pack('!I', len(data)) + kind + data + struct.pack('!I', zlib.crc32(kind + data))
+    png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('!IIBBBBB', 32, 32, 8, 2, 0, 0, 0))
+    png += chunk(b'IDAT', zlib.compress((b'\x00' + bytes(color) * 32) * 32)) + chunk(b'IEND', b'')
+    return 'data:image/png;base64,' + base64.b64encode(png).decode()
+
+
+PICTURES = [picture(color) for color in [(220, 40, 40), (30, 160, 80), (30, 90, 210), (240, 190, 30)]]
+DECK_ID = 'deck-1234567890abcdef1234'
+SLIDE_ROOT = f'/mood-meters/slides/{DECK_ID}'
+SVG = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 960 540">' + ''.join(
+    f'<g transform="matrix(2.4 0 0 2.4 {left} {top})"><image width="100" height="100" xlink:href="{PICTURES[index]}"/></g>'
+    for index, left, top in [(3, 620, 10), (1, 80, 285), (2, 620, 285), (0, 80, 10)]
+) + f'<image x="410" y="200" width="40" height="40" href="{PICTURES[3]}"/></svg>'
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
@@ -13,12 +33,13 @@ with sync_playwright() as p:
         bootstrap = install_browser_bootstrap(context)
         team = {
             'roster': [
-                {'id': name.lower(), 'name': name, 'present': True, 'mood': 2, 'moodUpdatedAt': None}
-                for name in ['Alice <safe>', 'Bob', 'Charlie']
+                {'id': name.lower(), 'name': name, 'present': True, 'mood': mood, 'moodUpdatedAt': None,
+                 'moodSlide': {'title': 'Images test', 'image': f'{SLIDE_ROOT}/second.svg', 'slideNumber': 2}}
+                for name, mood in [('Alice <safe>', 1), ('Bob', 2), ('Charlie', 4)]
             ],
             'session': [], 'duration': 120, 'warning': WARNING_SECONDS, 'sound': False, 'usedMoodMeters': [],
         }
-        daily = {'day': mauritius_day(), 'meter': None}
+        daily = {'day': mauritius_day(), 'meter': {'meterId': DECK_ID, 'title': 'Images test'}}
         def daily_api(route):
             assert route.request.headers.get('x-team-id') == 'a' * 64
             if route.request.method == 'POST' and daily['meter'] is None:
@@ -42,7 +63,9 @@ with sync_playwright() as p:
         context.route('**/api/daily-hints', hints_api)
         context.route('**/api/meeting-settings', lambda route: route.fulfill(json={'prompts': ['Qu’avez-vous fait hier ?', 'Sur quoi travaillez-vous ?', 'Que ferez-vous aujourd’hui ?'], 'revision': 0}))
         context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
-        context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=[]))
+        context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=[{'remoteId': DECK_ID, 'title': 'Images test', 'slides': []}]))
+        context.route(f'**/api/mood-meters/decks/{DECK_ID}', lambda route: route.fulfill(json={'title': 'Images test', 'slides': [f'{SLIDE_ROOT[1:]}/first.svg', f'{SLIDE_ROOT[1:]}/second.svg']}))
+        context.route(f'**{SLIDE_ROOT}/*.svg', lambda route: route.fulfill(content_type='image/svg+xml', body=SVG if route.request.url.endswith('first.svg') else '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540"/>'))
         page = context.new_page()
         errors = []
         external_notes = []
@@ -88,7 +111,7 @@ with sync_playwright() as p:
         dialog.get_by_role('button', name='Annuler').click()
         expect(dialog).not_to_be_visible()
         page.goto(BASE + '/mood')
-        expect(page.locator('#meter-catalogue-select')).to_have_value('-2')
+        expect(page.locator('#meter-catalogue-select')).to_have_value('0')
         expect(page.locator('#daily-meter-note')).to_contain_text('Verrouillé après le premier vote')
         expect(page.locator('#meter-catalogue-select')).to_be_disabled()
         expect(page.locator('#random-meter-button')).to_be_disabled()
@@ -121,6 +144,9 @@ with sync_playwright() as p:
         expect(cue).to_contain_text('À TOI DE PARLER !')
         first = page.locator('#speaker-name').inner_text()
         assert first in ['Alice <safe>', 'Bob', 'Charlie']
+        chosen = next(person['mood'] for person in team['roster'] if person['name'] == first)
+        expect(page.locator('#timer-ring [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
+        expect(page.locator('#timer-ring #speaker-name')).to_have_text(first)
         note = page.locator('[data-speaker-hint]')
         expect(note.locator('strong')).to_have_text('Avancement')
         expect(note.locator('em')).to_have_text('Tests')
@@ -162,6 +188,11 @@ with sync_playwright() as p:
             assert box and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (motion, width, box)
             ring = page.locator('#timer-ring').bounding_box()
             assert ring and ring['width'] >= 90, (motion, width, ring)
+            expect(page.locator('#upcoming-speaker')).to_be_visible()
+            for selector in ['#speaker-name', '#timer-display']:
+                text = page.locator(selector).bounding_box()
+                assert text and text['x'] >= ring['x'] and text['x'] + text['width'] <= ring['x'] + ring['width'] + 1, (width, selector, text, ring)
+                assert text['y'] >= ring['y'] and text['y'] + text['height'] <= ring['y'] + ring['height'] + 1, (width, selector, text, ring)
             for selector in ['#previous-button', '#start-button', '#next-button', '#manage-timer-button']:
                 button = page.locator(selector).bounding_box()
                 assert button and button['height'] >= 44 and button['y'] + button['height'] <= height + 1, (motion, width, selector, button)
@@ -195,6 +226,8 @@ with sync_playwright() as p:
         page.locator('#next-button').click()
         expect(page.locator('#speaker-name')).not_to_have_text(first)
         next_name = page.locator('#speaker-name').inner_text()
+        chosen = next(person['mood'] for person in team['roster'] if person['name'] == next_name)
+        expect(page.locator('#timer-ring [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
         expect(page.locator('[data-speaker-hint] strong')).to_have_text('Avancement')
         expect(cue).to_contain_text('À TOI DE PARLER !')
         expect(page.locator('#start-button')).to_contain_text('Pause')
@@ -238,6 +271,14 @@ with sync_playwright() as p:
         }""")
         expect(cue).to_contain_text('Merci de passer la parole')
         expect(page.locator('#speaker-name')).to_have_text(current)
+        context.route(f'**{SLIDE_ROOT}/first.svg', lambda route: route.fulfill(status=502, json={'error': 'SVG unavailable'}))
+        with page.expect_response(f'**{SLIDE_ROOT}/first.svg') as failed_image:
+            page.reload()
+        assert failed_image.value.status == 502
+        expect(page.locator('#speaker-name')).to_have_text(current)
+        expect(page.locator('#timer-ring [data-mood-picture]')).to_have_count(0)
+        expect(page.locator('#timer-ring #speaker-name')).to_have_text(current)
+        expect(page.locator('#timer-display')).to_be_visible()
         assert not errors, errors
         assert not external_notes, external_notes
         bootstrap.assert_no_unexpected_api()

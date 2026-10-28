@@ -5,8 +5,8 @@ import { Button, NativeSelect, InputBase, Dialog, DialogTitle, DialogContent, Di
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useTeam } from '@/providers/team-provider';
-import { groupDailyMoods } from '@/lib/daily-moods';
-import type { HistoryRound } from '@/lib/history';
+import { groupDailyMoods } from '@/lib/mood/daily-moods';
+import type { HistoryRound } from '@/lib/history/history';
 import { MoodSlidePreview } from '@/components/ui/mood-slide-preview';
 
 const moodColors = ['border-blue-200/80 bg-blue-50/70 text-blue-900', 'border-teal-200/80 bg-teal-50/70 text-teal-900', 'border-violet-200/80 bg-violet-50/70 text-violet-900', 'border-orange-200/80 bg-orange-50/70 text-orange-900'];

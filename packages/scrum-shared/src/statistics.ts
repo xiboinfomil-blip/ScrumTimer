@@ -1,4 +1,5 @@
 import type { Person, Round } from './types.ts';
+export const HISTORY_LIMIT = 5;
 export function mauritiusDay(now = new Date()): string {
   return new Date(now.getTime() + 4 * 3600000).toISOString().slice(0, 10);
 }
@@ -9,8 +10,13 @@ export function historyCutoff(now = new Date()): number {
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 4);
 }
 export function recentRounds(rounds: Round[], now = new Date()): Round[] {
-  return rounds.filter(r => Date.parse(r.completedAt) >= historyCutoff(now) && Date.parse(r.completedAt) <= now.getTime())
-    .sort((a, b) => Date.parse(b.completedAt) - Date.parse(a.completedAt));
+  const seen = new Set<string>();
+  return rounds.filter(round => {
+    const timestamp = Date.parse(round.completedAt);
+    if (!Number.isFinite(timestamp) || timestamp > now.getTime() || seen.has(round.id)) return false;
+    seen.add(round.id);
+    return true;
+  }).sort((first, second) => Date.parse(second.completedAt) - Date.parse(first.completedAt) || (first.id < second.id ? -1 : first.id > second.id ? 1 : 0)).slice(0, HISTORY_LIMIT);
 }
 export function todayRound(rounds: Round[], now = new Date()): Round | null {
   return recentRounds(rounds, now).find(r => mauritiusDay(new Date(r.completedAt)) === mauritiusDay(now)) ?? null;

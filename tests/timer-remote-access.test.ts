@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
-import { authorizeTimerRemoteControl, timerRemoteAccess, timerRemoteSecret, timerRemoteTeamId } from '../src/lib/timer-remote-access.ts';
-import { RemoteError } from '../src/lib/timer-remote.ts';
+import { authorizeTimerRemoteControl, timerRemoteAccess, timerRemoteSecret, timerRemoteTeamId } from '../src/lib/remote/timer-remote-access.ts';
+import { RemoteError } from '../src/lib/remote/timer-remote.ts';
 
 const secret = 'timer-remote-test-only-secret-32-bytes-minimum';
 const team = 'ab'.repeat(32);

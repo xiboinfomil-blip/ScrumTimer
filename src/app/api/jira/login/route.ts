@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { database, databaseFailure, sameOrigin } from '@/lib/database';
-import { beginJiraLogin, jiraConfiguration, jiraStateCookie } from '@/lib/jira-auth';
+import { database, databaseFailure, sameOrigin } from '@/lib/persistence/database';
+import { beginJiraLogin, jiraConfiguration, jiraStateCookie } from '@/lib/jira/jira-auth';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {

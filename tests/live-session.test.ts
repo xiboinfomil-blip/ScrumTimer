@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { liveRemaining, validateLiveSnapshot } from '../src/lib/live-session.ts';
+import { liveRemaining, validateLiveSnapshot } from '../src/lib/live/live-session.ts';
 const snapshot = { speaker: '<Alice>', nextSpeaker: 'Bob', teamName: 'Équipe', running: true, remaining: 30, deadline: 40_000, completed: 1, total: 3 };
 test('live snapshots use bounded text and strict finite runtime state, without moods', () => {
   assert.deepEqual(validateLiveSnapshot(snapshot), snapshot);

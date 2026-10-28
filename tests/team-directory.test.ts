@@ -4,10 +4,10 @@ import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
-import { filterTeams, isTeamCategory, teamCategories, validateTeamCategory, validateTeamCreation, validateTeamDirectoryPatch } from '../src/lib/team-directory.ts';
-import { createTeam, deleteTeam, listTeams, selectTeam, updateTeamDirectory, WorkspaceError } from '../src/lib/workspace-store.ts';
-import { readTeam, writeTeam } from '../src/lib/relational-store.ts';
-import { jiraTickets, sprintParticipants, validateJiraSelection } from '../src/lib/jira.ts';
+import { filterTeams, isTeamCategory, teamCategories, validateTeamCategory, validateTeamCreation, validateTeamDirectoryPatch } from '../src/lib/team/team-directory.ts';
+import { createTeam, deleteTeam, listTeams, selectTeam, updateTeamDirectory, WorkspaceError } from '../src/lib/team/workspace-store.ts';
+import { readTeam, writeTeam } from '../src/lib/persistence/relational-store.ts';
+import { jiraTickets, sprintParticipants, validateJiraSelection } from '../src/lib/jira/jira.ts';
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const id = 'a'.repeat(64);

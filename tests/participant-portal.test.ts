@@ -3,9 +3,9 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
-import { readDailyHints, saveDailyHint } from '../src/lib/daily-hints-store.ts';
-import { createParticipantLinkToken, readParticipantLinkToken } from '../src/lib/participant-access.ts';
-import { WorkspaceError } from '../src/lib/workspace-store.ts';
+import { readDailyHints, saveDailyHint } from '../src/lib/meeting/daily-hints-store.ts';
+import { createParticipantLinkToken, readParticipantLinkToken } from '../src/lib/participants/participant-access.ts';
+import { WorkspaceError } from '../src/lib/team/workspace-store.ts';
 import { createElement, type ComponentType } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { tsImport } from 'tsx/esm/api';
@@ -65,7 +65,7 @@ test('participant bridge exposes only GET and strict note PUT, with cache invali
   assert.match(handler, /return response\(await teamReadCache\.mutate\(\(\) => saveDailyHint\(database\(\), id, input\)\)\)/);
   assert.match(handler, /catch \(error\) \{ return databaseFailure\(error\); \}/);
   assert.doesNotMatch(source, /saveTeam|writeTeam|createTeam|deleteTeam|saveHistory|resetDaily|saveMeetingSettings|saveRoundFeedback|changeDailyMeter|\.batch\(|sql`\s*(?:INSERT|UPDATE|DELETE)/i);
-  const failure = read('../src/lib/database.ts');
+  const failure = read('../src/lib/persistence/database.ts');
   assert.match(failure, /error instanceof WorkspaceError\) return NextResponse\.json\(\{ error: error\.message \}, \{ status: error\.status,/);
 });
 

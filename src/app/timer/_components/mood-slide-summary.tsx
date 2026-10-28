@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import { Loader } from '@infomil/scrum-shared/ui';
 import { Button, Paper } from '@mui/material';
-import { type MoodMeterSlide } from '@/lib/mood-meter';
-import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood-catalog-client';
-import type { SessionSpeaker } from '@/lib/session-results';
+import { type MoodMeterSlide } from '@/lib/mood/mood-meter';
+import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood/mood-catalog-client';
+import type { SessionSpeaker } from '@/lib/history/session-results';
 import { MeterSlide } from '../../mood/_components/mood-meter';
 
 export function MoodSlideSummary({ people }: { people: SessionSpeaker[] }) {

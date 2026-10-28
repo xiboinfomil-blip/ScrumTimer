@@ -4,8 +4,8 @@ import { useRef, useState, type FormEvent } from 'react';
 import { Button, InputBase } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
-import { createId } from '@/lib/team-storage';
-import { validatePersonName } from '@/lib/action-validation';
+import { createId } from '@/lib/team/team-storage';
+import { validatePersonName } from '@/lib/team/action-validation';
 import { primaryButton } from '@/components/ui/styles';
 import { ParticipantIcon } from './participant-icon';
 

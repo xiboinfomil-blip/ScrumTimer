@@ -1,4 +1,4 @@
-import { cachedMoodCatalog } from '@/lib/remote-mood-cache';
+import { cachedMoodCatalog } from '@/lib/mood/remote-mood-cache';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60;

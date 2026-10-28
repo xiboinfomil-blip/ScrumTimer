@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type ComponentProps } from 'react';
+import { Loader } from '@infomil/scrum-shared/ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'framer-motion';
@@ -137,7 +138,7 @@ export function TeamSwitcher() {
           </form>}
       </div>
       {error && <Alert id={`${panelId}-error`} severity="error" role="alert" className="mt-1" sx={{ fontSize: 12 }}>{error}</Alert>}
-      {pending && <p role="status" className="px-2 py-1 text-xs text-muted">Chargement de l’équipe…</p>}
+      {pending && <Loader size="text" label="Chargement de l’équipe…" className="px-2 py-1" />}
     </TeamMenu>}</AnimatePresence>
   </div>;
 }

@@ -9,8 +9,8 @@ import {
   pendingRemoteCommand, publicRemoteState, remoteBearer, RemoteError, remoteStatus,
   REMOTE_COMMAND_TTL, REMOTE_HOST_FRESH, REMOTE_HOST_LEASE, REMOTE_PAIR_TTL,
   syncRemoteEntry, validateRemoteCommand, validateRemoteId, validateRemotePost, validateRemoteSnapshot,
-} from '../src/lib/timer-remote.ts';
-import type { RemoteCommandPayload, RemoteEntry, RemoteSnapshot } from '../src/lib/timer-remote.ts';
+} from '../src/lib/remote/timer-remote.ts';
+import type { RemoteCommandPayload, RemoteEntry, RemoteSnapshot } from '../src/lib/remote/timer-remote.ts';
 
 const now = 100_000;
 const requestId = '12345678-1234-4234-8234-123456789abc';
@@ -238,7 +238,7 @@ test('public reads reveal only snapshot, host status and server clock', () => {
 
 test('actual instance store: reusable links, owner leases, races, rotation, downtime and bounded state', () => {
   // server-only's official react-server condition allows Node testing without modifying dependencies.
-  const storeUrl = new URL('../src/lib/timer-remote-store.ts', import.meta.url).href;
+  const storeUrl = new URL('../src/lib/remote/timer-remote-store.ts', import.meta.url).href;
   const script = `
     import assert from 'node:assert/strict';
     delete process.env.VERCEL;
@@ -434,7 +434,7 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
 
 test('remote handlers time every success and failure from entry with only a monotonic duration', async () => {
   const source = readFileSync(new URL('../src/app/api/timer-remote/route.ts', import.meta.url), 'utf8');
-  const remote = await import('../src/lib/timer-remote.ts');
+  const remote = await import('../src/lib/remote/timer-remote.ts');
   let clock = 100;
   let storeError: unknown;
   const storeOperation = async () => {
@@ -444,13 +444,13 @@ test('remote handlers time every success and failure from entry with only a mono
   };
   const modules: Record<string, unknown> = {
     'next/server': { NextResponse: { json: Response.json } },
-    '@/lib/database': {
+    '@/lib/persistence/database': {
       sameOrigin: (request: Request) => { clock += 2; return request.headers.get('origin') === 'https://remote.example'; },
       readJson: async (request: Request) => { clock += 7; return request.json(); },
       selectedTeam: async () => { clock += 5; return 'a'.repeat(64); },
     },
-    '@/lib/timer-remote': remote,
-    '@/lib/timer-remote-store': {
+    '@/lib/remote/timer-remote': remote,
+    '@/lib/remote/timer-remote-store': {
       readTimerRemote: storeOperation, createTimerRemote: storeOperation, syncTimerRemote: storeOperation,
       commandTimerRemote: storeOperation, revokeTimerRemote: storeOperation,
     },
@@ -514,7 +514,7 @@ test('remote handlers time every success and failure from entry with only a mono
 
 test('route/store security invariants: bounded JSON, no-store, selected-team creation only, single-key atomic Redis', () => {
   const route = readFileSync(new URL('../src/app/api/timer-remote/route.ts', import.meta.url), 'utf8');
-  const store = readFileSync(new URL('../src/lib/timer-remote-store.ts', import.meta.url), 'utf8');
+  const store = readFileSync(new URL('../src/lib/remote/timer-remote-store.ts', import.meta.url), 'utf8');
   assert.match(route, /'Cache-Control': 'no-store'/);
   assert.equal((route.match(/if \(!sameOrigin\(request\)\)/g) ?? []).length, 2);
   assert.match(route, /readJson\(new Request/);

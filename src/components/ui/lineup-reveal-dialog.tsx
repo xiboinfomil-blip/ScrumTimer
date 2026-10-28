@@ -5,7 +5,7 @@ import { Button, Dialog } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
 import { motion, useReducedMotion } from 'framer-motion';
-import { shuffle } from '@/lib/shuffle';
+import { shuffle } from '@/lib/team/shuffle';
 
 export interface RevealPerson {
   id: string;

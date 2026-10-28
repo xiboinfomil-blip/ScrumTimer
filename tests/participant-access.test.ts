@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createParticipantLinkToken, readParticipantLinkToken, validPortalSecret, equalPortalSecret } from '../src/lib/participant-access.ts';
+import { createParticipantLinkToken, readParticipantLinkToken, validPortalSecret, equalPortalSecret } from '../src/lib/participants/participant-access.ts';
 
 const secret = 'a-test-secret-with-at-least-32-bytes', team = 'a'.repeat(64);
 test('participant links are signed and scoped to exactly one team', () => {

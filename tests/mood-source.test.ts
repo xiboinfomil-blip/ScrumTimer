@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseMoodSource } from '../src/lib/mood-source.ts';
+import { parseMoodSource } from '../src/lib/mood/mood-source.ts';
 
 test('live catalogue parses all source links and categories with stable published IDs', () => {
   const known = [{ id: 'deck-11111111111111111111', googleId: 'google0', title: 'Existing title', category: 'Old' }, { id: 'deck-22222222222222222222', googleId: 'missing', title: 'Missing', category: 'Movies' }];

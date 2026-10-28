@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { migrate } from 'drizzle-orm/neon-http/migrator';
-import { configureNeonNetwork } from '../src/lib/neon-network';
+import { configureNeonNetwork } from '../src/lib/persistence/neon-network';
 const { loadEnvConfig } = createRequire(import.meta.url)('@next/env') as typeof import('@next/env');
 loadEnvConfig(process.cwd());
 

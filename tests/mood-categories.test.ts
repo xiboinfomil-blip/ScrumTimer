@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import catalog from '../src/lib/remote-mood-catalog.json' with { type: 'json' };
-import { groupMoodMeters, parseMoodMeterCatalog } from '../src/lib/mood-meter.ts';
+import catalog from '../src/lib/mood/remote-mood-catalog.json' with { type: 'json' };
+import { groupMoodMeters, parseMoodMeterCatalog } from '../src/lib/mood/mood-meter.ts';
 
 test('source categories are preserved and grouped without changing deck selection indices', () => {
   const decks = parseMoodMeterCatalog([

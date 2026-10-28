@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { SharedReadCache, teamReadKey } from '../src/lib/shared-read-cache.ts';
+import { SharedReadCache, teamReadKey } from '../src/lib/persistence/shared-read-cache.ts';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -75,7 +75,7 @@ test('every durable mutation route invalidates shared reads; writes keep direct 
     assert.match(source, /teamReadCache\.mutate\(/, route);
     assert.match(source, /teamReadCache\.read\(/, route);
   }
-  const source = readFileSync(new URL('../src/lib/database.ts', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../src/lib/persistence/database.ts', import.meta.url), 'utf8');
   assert.match(source, /request.method === 'GET'/);
   assert.match(source, /: load\(\)/);
 });

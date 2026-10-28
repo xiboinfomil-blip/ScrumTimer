@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { database, databaseFailure, readJson, sameOrigin, selectedTeam } from '@/lib/database';
-import { validateMeetingSettings } from '@/lib/meeting-settings';
-import { readMeetingSettings, saveMeetingSettings } from '@/lib/meeting-store';
-import { WorkspaceError } from '@/lib/workspace-store';
-import { teamReadCache, teamReadKey } from '@/lib/shared-read-cache';
+import { database, databaseFailure, readJson, sameOrigin, selectedTeam } from '@/lib/persistence/database';
+import { validateMeetingSettings } from '@/lib/meeting/meeting-settings';
+import { readMeetingSettings, saveMeetingSettings } from '@/lib/meeting/meeting-store';
+import { WorkspaceError } from '@/lib/team/workspace-store';
+import { teamReadCache, teamReadKey } from '@/lib/persistence/shared-read-cache';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const response = (value: unknown) => NextResponse.json(value, { headers: { 'Cache-Control': 'no-store' } });

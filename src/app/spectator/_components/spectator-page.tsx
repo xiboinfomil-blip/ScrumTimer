@@ -2,8 +2,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
-import { liveRemaining, validateLiveSnapshot, type LiveSnapshot } from '@/lib/live-session';
-import { usePresentation } from '@/hooks/use-presentation';
+import { liveRemaining, validateLiveSnapshot, type LiveSnapshot } from '@/lib/live/live-session';
+import { usePresentation } from '@/hooks/timer/use-presentation';
 
 export function SpectatorPage() {
   const { activeTeamId, activeTeamName } = useTeam();

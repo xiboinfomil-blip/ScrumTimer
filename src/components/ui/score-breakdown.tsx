@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material';
-import { explainScore } from '@/lib/session-results';
+import { explainScore } from '@/lib/history/session-results';
 
 export function ScoreBreakdown({ person }: { person: { name: string; speakingSeconds: number; budgetSeconds: number; score: number | null; attempts?: number; manualPenalty?: number } }) {
   const [open, setOpen] = useState(false);

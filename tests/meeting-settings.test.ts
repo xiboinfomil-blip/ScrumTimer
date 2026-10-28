@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { DEFAULT_DISCUSSION_PROMPTS, validateDiscussionPrompts, validateMeetingSettings } from '../src/lib/meeting-settings.ts';
+import { DEFAULT_DISCUSSION_PROMPTS, validateDiscussionPrompts, validateMeetingSettings } from '../src/lib/meeting/meeting-settings.ts';
 
 test('discussion prompts validate exact bounded text and independent revisions', () => {
   assert.deepEqual(validateDiscussionPrompts([...DEFAULT_DISCUSSION_PROMPTS]), DEFAULT_DISCUSSION_PROMPTS);

@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { database, selectedTeam, readJson, sameOrigin, databaseFailure } from '@/lib/database';
-import { validateTeamRequest } from '@/lib/team-validation';
-import { readTeam, writeTeam } from '@/lib/relational-store';
-import { readDailyMeter, validateDailyCheckIns } from '@/lib/workspace-store';
-import { teamReadCache, teamReadKey } from '@/lib/shared-read-cache';
-import { assertJiraRoster } from '@/lib/jira-store';
+import { database, selectedTeam, readJson, sameOrigin, databaseFailure } from '@/lib/persistence/database';
+import { validateTeamRequest } from '@/lib/team/team-validation';
+import { readTeam, writeTeam } from '@/lib/persistence/relational-store';
+import { readDailyMeter, validateDailyCheckIns } from '@/lib/team/workspace-store';
+import { teamReadCache, teamReadKey } from '@/lib/persistence/shared-read-cache';
+import { assertJiraRoster } from '@/lib/jira/jira-store';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { validatePersonName } from '../src/lib/action-validation.ts';
+import { validatePersonName } from '../src/lib/team/action-validation.ts';
 
 test('person names require a primitive string and a nonempty trimmed value', () => {
   for (const value of [null, undefined, 42, true, {}, [], new String('Alice'), '', '   ', '\u00a0']) {

@@ -1,15 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { Loader } from '@infomil/scrum-shared/ui';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import LoginIcon from '@mui/icons-material/Login';
 import { useTeam } from '@/providers/team-provider';
-import { useJiraResource } from '@/hooks/use-jira-resource';
+import { useJiraResource } from '@/hooks/jira/use-jira-resource';
 import { SprintPicker } from '@/components/jira/sprint-picker';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { primaryButton, secondaryButton } from '@/components/ui/styles';
-import type { JiraSprintSelection } from '@/lib/jira';
-import { jiraResourceCache } from '@/lib/jira-resource-cache';
+import type { JiraSprintSelection } from '@/lib/jira/jira';
+import { jiraResourceCache } from '@/lib/jira/jira-resource-cache';
 
 type Sprint = JiraSprintSelection & { name: string };
 export function SprintManagement() {
@@ -17,7 +18,7 @@ export function SprintManagement() {
   const resource = useJiraResource<{ sprint: Sprint | null }>(activeTeamId ? '/api/jira?action=team' : null, activeTeamId);
   return <section className="flex min-w-0 flex-col gap-3 border-b border-line pb-4" aria-labelledby="jira-sprint-heading">
     <h2 id="jira-sprint-heading" className="text-sm font-semibold text-ink">Sprint Jira</h2>
-    {resource.loading && <p role="status" className="text-xs text-muted">Chargement du sprint…</p>}
+    {resource.loading && <Loader size="sm" label="Chargement du sprint…" className="self-center" />}
     {resource.error && <div role="alert" className="text-xs text-danger">{resource.error}<button type="button" className={`${secondaryButton} mt-2`} onClick={resource.retry}><RefreshIcon fontSize="small" />Réessayer</button></div>}
     {resource.data?.sprint && <SprintForm key={activeTeamId} sprint={resource.data.sprint} onSaved={resource.retry} />}
     <form method="post" action="/api/jira/login"><button type="submit" className={secondaryButton}><LoginIcon fontSize="small" />Reconnecter Jira</button></form>

@@ -6,7 +6,7 @@ import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/
 import QrCodeScannerRounded from '@mui/icons-material/QrCodeScannerRounded';
 import SmartphoneRounded from '@mui/icons-material/SmartphoneRounded';
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
-import type { useTimerRemote } from '@/hooks/use-timer-remote';
+import type { useTimerRemote } from '@/hooks/remote/use-timer-remote';
 
 export function RemotePairingDialog({ open, onClose, remote }: { open: boolean; onClose: () => void; remote: ReturnType<typeof useTimerRemote> }) {
   const [copied, setCopied] = useState(false);

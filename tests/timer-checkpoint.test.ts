@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkpointContext, checkpointDay, parseCheckpoint, penalizeCurrentTimer, previousSpeaker, previousTimer, recoverTimer, restartCurrentTimer, type TimerCheckpoint } from '../src/lib/timer-checkpoint.ts';
-import { MAX_MANUAL_PENALTY, scoreSpeaker, speakerScoreProgress } from '../src/lib/session-results.ts';
+import { checkpointContext, checkpointDay, parseCheckpoint, penalizeCurrentTimer, previousSpeaker, previousTimer, recoverTimer, restartCurrentTimer, type TimerCheckpoint } from '../src/lib/timer/timer-checkpoint.ts';
+import { MAX_MANUAL_PENALTY, scoreSpeaker, speakerScoreProgress } from '../src/lib/history/session-results.ts';
 import type { TeamState } from '../src/types/team.ts';
 
 const now = new Date('2026-10-19T09:00:00Z');

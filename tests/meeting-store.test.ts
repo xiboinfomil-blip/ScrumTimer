@@ -3,8 +3,8 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
-import { DEFAULT_DISCUSSION_PROMPTS } from '../src/lib/meeting-settings.ts';
-import { readMeetingSettings, saveMeetingSettings } from '../src/lib/meeting-store.ts';
+import { DEFAULT_DISCUSSION_PROMPTS } from '../src/lib/meeting/meeting-settings.ts';
+import { readMeetingSettings, saveMeetingSettings } from '../src/lib/meeting/meeting-store.ts';
 import { teamDiscussionPrompts, teamMeetingSettings } from '../src/db/schema.ts';
 
 test('meeting settings tables use normalized scoped keys and cascading team FKs', () => {

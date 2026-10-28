@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { selectedTeam, sameOrigin, readJson, databaseFailure } from '@/lib/database';
-import { validateLiveSnapshot } from '@/lib/live-session';
-import { liveTransport, publishLive, readLive, stopLive } from '@/lib/live-session-store';
+import { selectedTeam, sameOrigin, readJson, databaseFailure } from '@/lib/persistence/database';
+import { validateLiveSnapshot } from '@/lib/live/live-session';
+import { liveTransport, publishLive, readLive, stopLive } from '@/lib/live/live-session-store';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const headers = { 'Cache-Control': 'no-store' };

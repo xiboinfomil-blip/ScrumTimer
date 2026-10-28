@@ -13,8 +13,8 @@ import BugReportIcon from '@mui/icons-material/BugReport';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import KeyboardDoubleArrowUpIcon from '@mui/icons-material/KeyboardDoubleArrowUp';
 import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
-import { useJiraResource } from '@/hooks/use-jira-resource';
-import type { JiraStatusCategory, JiraTicket } from '@/lib/jira';
+import { useJiraResource } from '@/hooks/jira/use-jira-resource';
+import type { JiraStatusCategory, JiraTicket } from '@/lib/jira/jira';
 import { secondaryButton } from '@/components/ui/styles';
 
 type TicketData = { name: string; tickets: JiraTicket[] };

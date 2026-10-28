@@ -5,7 +5,7 @@ import { useRef } from 'react';
 import { PaginatedList } from '@/components/ui/paginated-list';
 import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
-import { canStartSession } from '@/lib/team-storage';
+import { canStartSession } from '@/lib/team/team-storage';
 import type { Mood } from '@/types/team';
 import { MoodIcon } from './mood-icon';
 

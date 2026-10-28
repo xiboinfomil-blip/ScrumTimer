@@ -2,19 +2,19 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { TeamState } from '@/types/team';
-import { defaultTeam, normalizeTeam } from '@/lib/team-storage';
-import { normalizeHistory, type HistoryRound } from '@/lib/history';
-import { validateHistoryInput, validateTeamInput } from '@/lib/team-validation';
+import { defaultTeam, normalizeTeam } from '@/lib/team/team-storage';
+import { normalizeHistory, type HistoryRound } from '@/lib/history/history';
+import { validateHistoryInput, validateTeamInput } from '@/lib/team/team-validation';
 import { useNotify } from '@/providers/notification-provider';
 import { usePathname } from 'next/navigation';
-import { resolveTeamContext, teamContextUrl } from '@/lib/team-context';
-import { clearCheckpoint, readCheckpoint, parseCheckpoint, writeCheckpoint, checkpointContext, checkpointDay, invalidatesCheckpoint, type TimerCheckpoint, type TimerState } from '@/lib/timer-checkpoint';
-import { rejoinCheckpoint } from '@/lib/timer-completion';
+import { resolveTeamContext, teamContextUrl } from '@/lib/team/team-context';
+import { clearCheckpoint, readCheckpoint, parseCheckpoint, writeCheckpoint, checkpointContext, checkpointDay, invalidatesCheckpoint, type TimerCheckpoint, type TimerState } from '@/lib/timer/timer-checkpoint';
+import { rejoinCheckpoint } from '@/lib/timer/timer-completion';
 import type { Mood } from '@/types/team';
-import { CloudRequestError, cloudFetch, cloudRetryDelay, isTransientCloudError, sameCloudTeam } from '@/lib/cloud-retry';
-import { isTeamCategory, type TeamCategory, type TeamSummary, type TeamDirectoryUpdate } from '@/lib/team-directory';
-import type { JiraSprintSelection } from '@/lib/jira';
-export type { TeamSummary } from '@/lib/team-directory';
+import { CloudRequestError, cloudFetch, cloudRetryDelay, isTransientCloudError, sameCloudTeam } from '@/lib/persistence/cloud-retry';
+import { isTeamCategory, type TeamCategory, type TeamSummary, type TeamDirectoryUpdate } from '@/lib/team/team-directory';
+import type { JiraSprintSelection } from '@/lib/jira/jira';
+export type { TeamSummary } from '@/lib/team/team-directory';
 
 interface TeamList {
   teams: TeamSummary[];

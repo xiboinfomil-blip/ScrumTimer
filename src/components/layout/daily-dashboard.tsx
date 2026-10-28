@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
-import { dailyRoundStatistics, type HistoryRound } from '@/lib/history';
-import { formatTime } from '@/lib/timer';
+import { dailyRoundStatistics, type HistoryRound } from '@/lib/history/history';
+import { formatTime } from '@/lib/timer/timer';
 import { ScoreBreakdown } from '@/components/ui/score-breakdown';
 import { PaginatedList } from '@/components/ui/paginated-list';
 import { ScreenTabs } from '@/components/ui/screen-tabs';
@@ -11,7 +11,7 @@ import { segmentedTabs } from '@/components/ui/styles';
 import { motion, useReducedMotion } from 'framer-motion';
 import { DailyMoodPanel } from './daily-mood-panel';
 import { StatisticsIcon } from '@/components/ui/statistics-icon';
-import { useViewMotion } from '@/hooks/use-view-motion';
+import { useViewMotion } from '@/hooks/motion/use-view-motion';
 
 const colors = { short: 'text-amber-800 bg-amber-50', optimal: 'text-success bg-success-soft', closing: 'text-orange-800 bg-orange-50', overtime: 'text-danger bg-danger-soft', unmeasured: 'text-muted bg-slate-100' };
 

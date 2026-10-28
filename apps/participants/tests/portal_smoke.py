@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 import json
 import os
 import re
+from tempfile import gettempdir
 from urllib.parse import urlsplit
 
 from playwright.async_api import Error, async_playwright, expect
@@ -211,10 +212,24 @@ async def compare_and_accept(page, draft, revision, server_text):
 async def main_flow(page, api):
     api.initial_gate = asyncio.Event()
     await page.goto(PORTAL, wait_until="domcontentloaded")
-    await expect(page.get_by_role("status").filter(has_text="Chargement de votre équipe…")).to_be_visible()
+    loader = page.get_by_role("status", name="Chargement de votre équipe…", exact=True)
+    await expect(loader).to_be_visible()
+    await expect(loader.locator("svg circle")).to_have_count(6)
+    assert await loader.evaluate("""element => {
+        const svg = element.querySelector('svg').getBoundingClientRect();
+        const label = element.lastElementChild.getBoundingClientRect();
+        const box = element.getBoundingClientRect();
+        return label.top >= svg.bottom && box.left >= 0 && box.right <= innerWidth && box.bottom <= innerHeight;
+    }""")
+    reduced = await page.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches")
+    animations = await loader.evaluate("element => element.getAnimations({subtree:true}).map(animation => animation.animationName).sort()")
+    assert animations == ([] if reduced else ['cradle-dot', 'cradle-dot', 'cradle-dot', 'cradle-left', 'cradle-right']), animations
+    if not reduced:
+        await page.screenshot(path=os.path.join(gettempdir(), f"scrum-portal-loader-{page.viewport_size['width']}.png"))
     assert not api.puts
     api.initial_gate.set()
     await loaded(page)
+    await expect(loader).to_have_count(0)
     await expect(page.get_by_text(f"40 participants · {api.data['day']} · Maurice", exact=True)).to_be_visible()
     await layout(page)
 
@@ -242,7 +257,7 @@ async def main_flow(page, api):
     await editor(page).get_by_role("textbox").fill(draft)
     await page.get_by_role("button", name="Statistiques", exact=True).click()
     await expect(page.get_by_role("heading", name="Le rythme de l’équipe", exact=True)).to_be_visible()
-    ranking = page.get_by_role("list", name="Classement sur cinq jours", exact=True)
+    ranking = page.get_by_role("list", name="Classement sur cinq bilans", exact=True)
     await expect(ranking.locator("li")).to_have_count(8)
     stats = page.locator("section").filter(has=page.get_by_role("heading", name="Le rythme de l’équipe", exact=True))
     await expect(stats.locator("dl > div").filter(has=page.get_by_text("Dailys terminés", exact=True)).locator("dd")).to_have_text("2")

@@ -4,10 +4,10 @@ import { getTableConfig } from 'drizzle-orm/pg-core';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { readFileSync } from 'node:fs';
 import * as schema from '../src/db/schema.ts';
-import { teamWriteStatements, historyWriteStatements } from '../src/lib/relational-store.ts';
-import { validateTeamInput, validateTeamRequest, validateHistoryInput } from '../src/lib/team-validation.ts';
-import { writeTeam, writeHistory, readTeam, readHistory } from '../src/lib/relational-store.ts';
-import { createTeam, listTeams } from '../src/lib/workspace-store.ts';
+import { teamWriteStatements, historyWriteStatements } from '../src/lib/persistence/relational-store.ts';
+import { validateTeamInput, validateTeamRequest, validateHistoryInput } from '../src/lib/team/team-validation.ts';
+import { writeTeam, writeHistory, readTeam, readHistory } from '../src/lib/persistence/relational-store.ts';
+import { createTeam, listTeams } from '../src/lib/team/workspace-store.ts';
 
 const team = { roster: [{ id: 'person-1', name: "Élodie <script>'", present: true, mood: 2, moodUpdatedAt: '2026-10-14T10:00:00.000Z', moodSlide: { title: 'Meter', image: '/mood-meters/slides/deck/slide.svg', slideNumber: 1, meterId: 'deck' } }], duration: 120, warning: 30, sound: true, session: [], currentMoodSlide: null, usedMoodMeters: ['deck'] };
 const now = new Date('2026-10-14T12:00:00Z');
@@ -55,8 +55,8 @@ test('history writes serialize on the private team and idempotently gate all chi
     assert.ok(s.params.includes('round-1'));
     assert.ok(!s.sql.includes('private-id'));
   }
-  assert.match(statements[5].sql, /WHERE team_id=\$\d+ AND completed_at/);
-  assert.ok(statements[5].params.includes('2026-10-10T00:00:00.000Z'));
+  assert.match(statements[5].sql, /PARTITION BY team_id ORDER BY completed_at DESC,id ASC/);
+  assert.ok(statements[5].params.includes(5));
   assert.match(statements[6].sql, /DELETE FROM participant_daily_hints WHERE team_id=\$\d+ AND EXISTS/);
   assert.match(statements[6].sql, /write_transaction=txid_current\(\)/);
   assert.ok(statements[6].params.includes('round-1'));
@@ -74,7 +74,7 @@ test('strict history validates every field and never clips scores, names, titles
   assert.deepEqual(validateHistoryInput(round, now), round);
   for (const override of [{ score: 1001 }, { score: 0.5 }, { score: -1 }, { name: 'a'.repeat(61) }, { mood: 0 }, { id: '' }, { meterTitle: 'x'.repeat(201) }, { speakingSeconds: Infinity }, { budgetSeconds: -1 }, { timeUp: 0 }, { unknown: 1 }]) assert.throws(() => validateHistoryInput({ ...round, people: [{ ...round.people[0], ...override }] }, now));
   for (const people of [[], Array.from({ length: 101 }, (_, i) => ({ ...round.people[0], id: String(i) })), [round.people[0], round.people[0]]]) assert.throws(() => validateHistoryInput({ ...round, people }, now));
-  assert.throws(() => validateHistoryInput({ ...round, completedAt: '2026-10-04T00:00:00Z' }, now));
+  assert.equal(validateHistoryInput({ ...round, completedAt: '2026-10-04T00:00:00Z' }, now).id, round.id);
   assert.throws(() => validateHistoryInput({ ...round, completedAt: '2026-10-15T00:00:00Z' }, now));
 });
 test('migration verifies all legacy data before dropping tables and never prunes old history', () => {
@@ -148,11 +148,12 @@ test('PostgreSQL: legacy backfill, CAS isolation, atomic rollback, scoped reads 
   await assert.rejects(writeTeam(client, id, 8, invalid));
   assert.deepEqual(await readTeam(client, id, now), before, 'child failure rolls back parent CAS');
   assert.equal(await writeHistory(client, other, { ...round, completedAt: new Date().toISOString() }), false);
+  await assert.rejects(writeHistory(client, id, old), { status: 400 });
   // Use actual current time because writeHistory's retention is a runtime policy.
   const current = { ...round, completedAt: new Date().toISOString() };
   assert.equal(await writeHistory(client, id, validateHistoryInput(current)), true);
   assert.equal(await writeHistory(client, id, validateHistoryInput({ ...current, people: [{ ...current.people[0], name: 'Duplicate must not overwrite' }] })), true);
-  assert.deepEqual(await readHistory(client, id), [current]);
+  assert.deepEqual(await readHistory(client, id), [current, old]);
   assert.deepEqual(await readHistory(client, other), []);
   await listTeams(client);
   other = (await createTeam(client, 'Autre équipe')).activeTeamId!;
@@ -164,12 +165,10 @@ test('PostgreSQL: legacy backfill, CAS isolation, atomic rollback, scoped reads 
   assert.deepEqual(await readTeam(client, other, now), { team: reordered, revision: 3 });
   assert.equal((await engine.query('SELECT count(*)::int AS n FROM mood_meter_slides WHERE team_id=$1', [other])).rows[0].n, 1, 'shared slide metadata stored once');
   assert.equal(await writeTeam(client, id, 8, validateTeamInput({ ...team, roster: [] })), 9);
-  assert.deepEqual(await readHistory(client, id), [current], 'removal preserves historical identity and name');
+  assert.deepEqual(await readHistory(client, id), [current, old], 'removal preserves historical identity and name');
   assert.equal((await engine.query('SELECT count(*)::int AS n FROM participants WHERE team_id=$1 AND id=$2', [id, 'removed'])).rows[0].n, 1);
-  // Five-day retention deletes actual rows and cascades only their speaking
-  // turns. Exact midnight is retained; one millisecond earlier is expired.
   for (const owner of [id, other]) {
-    for (const [session, completedAt] of [['boundary', '2026-10-10T00:00:00Z'], ['expired', '2026-10-09T23:59:59.999Z']]) {
+    for (const [session, completedAt] of [['boundary', '2026-10-10T00:00:00Z'], ['expired', '2026-10-09T23:59:59.999Z'], ['third', '2026-10-11T00:00:00Z'], ['fourth', '2026-10-12T00:00:00Z'], ['fifth', '2026-10-13T00:00:00Z']]) {
       await engine.query('INSERT INTO standup_sessions(team_id,id,completed_at) VALUES($1,$2,$3)', [owner, session, completedAt]);
       await engine.query("INSERT INTO speaking_turns(team_id,session_id,participant_id,position,name_snapshot,mood,speaking_seconds,budget_seconds,time_up,score) VALUES($1,$2,'person-1',0,'Retained identity',2,20,120,false,900)", [owner, session]);
     }
@@ -183,7 +182,7 @@ test('PostgreSQL: legacy backfill, CAS isolation, atomic rollback, scoped reads 
   await client.batch(statements.map(statement => client.execute(statement)) as Parameters<typeof client.batch>[0]);
   assert.equal((await engine.query("SELECT count(*)::int AS n FROM standup_sessions WHERE team_id=$1 AND id='expired'", [other])).rows[0].n, 0, 'saving a result also prunes expired history');
   assert.equal((await engine.query("SELECT count(*)::int AS n FROM speaking_turns WHERE team_id=$1 AND session_id='expired'", [other])).rows[0].n, 0);
-  assert.equal((await engine.query("SELECT count(*)::int AS n FROM standup_sessions WHERE team_id=$1 AND id='boundary'", [other])).rows[0].n, 1);
+  assert.equal((await engine.query('SELECT count(*)::int AS n FROM standup_sessions WHERE team_id=$1', [other])).rows[0].n, 5);
   assert.equal((await engine.query("SELECT count(*)::int AS n FROM participants WHERE id='person-1'")).rows[0].n, 2, 'participant identities survive retention');
   assert.equal((await engine.query('SELECT count(*)::int AS n FROM teams')).rows[0].n, 2);
   await engine.close();

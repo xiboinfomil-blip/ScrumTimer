@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CloudRequestError, cloudFetch, cloudRetryDelay, isTransientCloudError, parseRetryAfter, sameCloudTeam } from '../src/lib/cloud-retry.ts';
-import { defaultTeam } from '../src/lib/team-storage.ts';
+import { CloudRequestError, cloudFetch, cloudRetryDelay, isTransientCloudError, parseRetryAfter, sameCloudTeam } from '../src/lib/persistence/cloud-retry.ts';
+import { defaultTeam } from '../src/lib/team/team-storage.ts';
 
 test('exponential backoff starts at one second and remains capped indefinitely', () => {
   assert.deepEqual(Array.from({ length: 8 }, (_, i) => cloudRetryDelay(i)), [1000, 2000, 4000, 8000, 16000, 30000, 30000, 30000]);
@@ -14,7 +14,7 @@ test('only transient HTTP statuses retry; never blindly retry conflicts or auth/
   for (const status of [408, 425, 429, 500, 502, 503, 504, 599]) {
     assert.equal(isTransientCloudError(new CloudRequestError(new Response(null, { status }))), true, String(status));
   }
-  for (const status of [400, 401, 403, 404, 409, 422]) {
+  for (const status of [400, 401, 403, 404, 409, 422, 507]) {
     assert.equal(isTransientCloudError(new CloudRequestError(new Response(null, { status }))), false, String(status));
   }
   assert.equal(isTransientCloudError(new TypeError('Failed to fetch')), true);

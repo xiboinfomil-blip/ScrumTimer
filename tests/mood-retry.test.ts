@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fetchMoodRead, MOOD_RETRY_DELAYS, retryDelay } from '../src/lib/mood-retry.ts';
+import { fetchMoodRead, MOOD_RETRY_DELAYS, retryDelay } from '../src/lib/mood/mood-retry.ts';
 
 test('mood reads retry three times with Fibonacci 1,1,2 second delays', async t => {
   assert.deepEqual([...MOOD_RETRY_DELAYS], [1000, 1000, 2000]);

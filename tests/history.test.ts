@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { completedRound, dailyRoundStatistics, historyCutoff, historyLeaderboard, normalizeHistory, summarizeDays, type HistoryRound } from '../src/lib/history.ts';
-import { chooseUnusedDeck, moodMeterId, type MoodMeterDeck } from '../src/lib/mood-meter.ts';
-import { normalizeTeam } from '../src/lib/team-storage.ts';
-import { groupDailyMoods } from '../src/lib/daily-moods.ts';
+import { completedRound, dailyRoundStatistics, historyCutoff, historyLeaderboard, normalizeHistory, summarizeDays, type HistoryRound } from '../src/lib/history/history.ts';
+import { chooseUnusedDeck, moodMeterId, type MoodMeterDeck } from '../src/lib/mood/mood-meter.ts';
+import { normalizeTeam } from '../src/lib/team/team-storage.ts';
+import { groupDailyMoods } from '../src/lib/mood/daily-moods.ts';
 
 const now = new Date('2026-10-14T12:00:00Z');
 const round: HistoryRound = { id: 'round-1', completedAt: '2026-10-14T10:00:00Z', people: [{ id: 'alice', name: 'Alice', mood: 2, speakingSeconds: 30, budgetSeconds: 120, timeUp: false, score: 1000, meterTitle: 'Alligators' }] };
@@ -78,14 +78,17 @@ test('historical leaderboard averages measured scores, shares ties and keeps par
   assert.equal(rows[0].scored, 2);
   assert.equal(rows[0].averageSeconds, 30);
   assert.equal(rows[3].turns, 1);
-  assert.equal(historyLeaderboard([{ ...round, completedAt: '2026-09-01T00:00:00Z' }], now).length, 0);
+  assert.equal(historyLeaderboard([{ ...round, completedAt: '2026-09-01T00:00:00Z' }], now).length, 1);
 });
-test('history retains exactly five UTC calendar days including today and excludes future and duplicate results', () => {
+test('history retains five newest records regardless of age and excludes future and duplicate results', () => {
   assert.equal(historyCutoff(now).toISOString(), '2026-10-10T00:00:00.000Z');
   const oldest = { ...round, id: 'oldest', completedAt: '2026-10-10T00:00:00Z' };
   const expired = { ...round, id: 'expired', completedAt: '2026-10-09T23:59:59.999Z' };
   const future = { ...round, id: 'future', completedAt: '2026-10-14T12:01:00Z' };
-  assert.deepEqual(normalizeHistory([round, round, oldest, expired, future, null], now).map(r => r.id), ['round-1', 'oldest']);
+  assert.deepEqual(normalizeHistory([round, round, oldest, expired, future, null], now).map(r => r.id), ['round-1', 'oldest', 'expired']);
+  const many = Array.from({ length: 8 }, (_, index) => ({ ...round, id: `record-${index}`, completedAt: `2020-01-0${index + 1}T00:00:00Z` }));
+  assert.deepEqual(normalizeHistory(many, now).map(record => record.id), ['record-7', 'record-6', 'record-5', 'record-4', 'record-3']);
+  assert.equal(normalizeHistory([{ ...round, id: 'invalid-newest', people: [] }, ...many], now).length, 5);
 });
 test('history rejects malformed or unbounded participant metrics and sanitizes text', () => {
   assert.deepEqual(normalizeHistory([{ ...round, people: [{ ...round.people[0], speakingSeconds: Infinity }] }], now), []);

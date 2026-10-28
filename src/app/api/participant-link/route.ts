@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { database, databaseFailure, sameOrigin, selectedTeam } from '@/lib/database';
-import { jiraTeamSprint } from '@/lib/jira-store';
-import { WorkspaceError } from '@/lib/workspace-store';
-import { createParticipantLinkToken, validPortalSecret } from '@/lib/participant-access';
+import { database, databaseFailure, sameOrigin, selectedTeam } from '@/lib/persistence/database';
+import { jiraTeamSprint } from '@/lib/jira/jira-store';
+import { WorkspaceError } from '@/lib/team/workspace-store';
+import { createParticipantLinkToken, validPortalSecret } from '@/lib/participants/participant-access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

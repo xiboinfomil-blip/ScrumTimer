@@ -4,10 +4,10 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { sql, type SQL } from 'drizzle-orm';
 import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
 import { participantDailyHints, participants } from '../src/db/schema.ts';
-import { validateDailyHint } from '../src/lib/daily-hints.ts';
-import { readDailyHints, saveDailyHint } from '../src/lib/daily-hints-store.ts';
-import { readHistory, writeHistory } from '../src/lib/relational-store.ts';
-import { mauritiusDay } from '../src/lib/workspace-store.ts';
+import { validateDailyHint } from '../src/lib/meeting/daily-hints.ts';
+import { readDailyHints, saveDailyHint } from '../src/lib/meeting/daily-hints-store.ts';
+import { readHistory, writeHistory } from '../src/lib/persistence/relational-store.ts';
+import { mauritiusDay } from '../src/lib/team/workspace-store.ts';
 
 const input = { participantId: 'p1', hint: 'Un indice', day: '2026-10-16', revision: 0 };
 test('daily hint validation: exact payload, trimmed Unicode text, strict LF, dates and CAS bounds', () => {

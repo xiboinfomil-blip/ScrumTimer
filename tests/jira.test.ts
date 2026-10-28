@@ -4,14 +4,14 @@ import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
-import { beginJiraLogin, endJiraLogin, finishJiraLogin, jiraAccessToken, jiraCookie, jiraHash, jiraRequestCookie, jiraSession, jiraStateCookie, openJiraToken, sealJiraToken } from '../src/lib/jira-auth.ts';
-import { JiraService } from '../src/lib/jira-service.ts';
-import { assertJiraRoster, authorizeJiraTeam, jiraTeamSprint, syncJiraRoster, visibleJiraTeams } from '../src/lib/jira-store.ts';
-import { createTeam, deleteTeam, listTeams } from '../src/lib/workspace-store.ts';
-import { readTeam, writeTeam } from '../src/lib/relational-store.ts';
-import { jiraTickets, sprintParticipants } from '../src/lib/jira.ts';
-import { validateTeamCreation } from '../src/lib/team-directory.ts';
-import { JiraResourceCache } from '../src/lib/jira-resource-cache.ts';
+import { beginJiraLogin, endJiraLogin, finishJiraLogin, jiraAccessToken, jiraCookie, jiraHash, jiraRequestCookie, jiraSession, jiraStateCookie, openJiraToken, sealJiraToken } from '../src/lib/jira/jira-auth.ts';
+import { JiraService } from '../src/lib/jira/jira-service.ts';
+import { assertJiraRoster, authorizeJiraTeam, jiraTeamSprint, syncJiraRoster, visibleJiraTeams } from '../src/lib/jira/jira-store.ts';
+import { createTeam, deleteTeam, listTeams } from '../src/lib/team/workspace-store.ts';
+import { readTeam, writeTeam } from '../src/lib/persistence/relational-store.ts';
+import { jiraTickets, sprintParticipants } from '../src/lib/jira/jira.ts';
+import { validateTeamCreation } from '../src/lib/team/team-directory.ts';
+import { JiraResourceCache } from '../src/lib/jira/jira-resource-cache.ts';
 
 test('Jira resource cache coalesces requests, reuses speakers, isolates teams and expires', async () => {
   const cache = new JiraResourceCache();

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { database } from '@/lib/database';
-import { endJiraLogin, finishJiraLogin, jiraConfiguration, jiraCookie, jiraSessionSeconds, jiraStateCookie } from '@/lib/jira-auth';
+import { database } from '@/lib/persistence/database';
+import { endJiraLogin, finishJiraLogin, jiraConfiguration, jiraCookie, jiraSessionSeconds, jiraStateCookie } from '@/lib/jira/jira-auth';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {

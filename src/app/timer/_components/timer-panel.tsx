@@ -8,13 +8,14 @@ import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
 import { useState } from 'react';
 import { Loader } from '@infomil/scrum-shared/ui';
-import type { useDailyHints } from '@/hooks/use-daily-hints';
+import type { useDailyHints } from '@/hooks/meeting/use-daily-hints';
 import { primaryButton, secondaryButton } from '@/components/ui/styles';
 import { ParticipantNote } from '@/components/ui/participant-note';
-import { timerUrgency } from '@/lib/timer';
+import { timerUrgency } from '@/lib/timer/timer';
 import type { StandupTimer } from './timer-page';
 import { SpeakerSlider } from './speaker-slider';
 import { TimerIcon } from './timer-icon';
+import { SpeakerMoodPicture } from './speaker-mood-picture';
 
 const circumference = 2 * Math.PI * 136;
 
@@ -42,28 +43,38 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
   const FeedbackIcon = complete ? CheckIcon : ended ? ErrorOutlineIcon : nearly ? AccessTimeIcon : running ? RadioButtonCheckedIcon : NorthEastIcon;
 
   return (
-    <Paper component="section" elevation={0} className={`timer-panel relative isolate grid min-h-0 min-w-0 grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-2 overflow-hidden rounded-lg border border-line bg-white p-5 text-center max-[650px]:gap-1 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-3 ${panelColor} ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
+    <Paper component="section" elevation={0} className={`timer-panel relative isolate grid min-h-0 min-w-0 grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-2 overflow-hidden rounded-lg border border-line bg-white p-5 text-center max-[650px]:gap-1 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-3 ${timer.focusMode ? '[@media(max-height:650px)]:grid-rows-[auto_auto_minmax(0,1fr)_auto]' : ''} ${panelColor} ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
       <div className="col-span-full flex min-w-0 items-center justify-between gap-2 self-start">
         <span className="text-left text-xs font-semibold tabular-nums text-muted">{person ? `Passage ${people.findIndex(candidate => candidate.id === person.id) + 1} / ${people.length}` : 'Terminé'}</span>
-        {person && <Button onClick={() => setReadingNote(true)} aria-label={`Lire la note de ${person.name}`} sx={{ minHeight: 44, minWidth: 0, px: 1, fontSize: 10 }}><TimerIcon name="edit" className="mr-1 size-3.5" />Pense-bête</Button>}
+        {person && <Button onClick={() => setReadingNote(true)} aria-label={`Lire la note de ${person.name}`} title="Pense-bête" sx={{ minHeight: 44, minWidth: 44, px: 1, fontSize: 10 }}><TimerIcon name="edit" className="size-3.5" /><span className="ml-1 max-[650px]:hidden">Pense-bête</span></Button>}
         <span className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1.5 text-[9px] font-semibold max-[650px]:px-1.5 max-[650px]:py-1 max-[650px]:text-[8px] ${statusColor}`} id="status-pill" data-status={status} role="status"><span className={`size-1.5 shrink-0 rounded-full bg-current ${running ? 'motion-safe:animate-pulse' : ''} motion-reduce:animate-none`} aria-hidden="true" />{status}</span>
+        <IconButton size="small" sx={{ width: 44, height: 44 }} id="manage-timer-button" type="button" aria-label={timer.focusMode ? 'Modifier les réglages' : 'Réglages'} title={timer.focusMode ? 'Modifier les réglages' : 'Réglages'} onClick={timer.manage}><TimerIcon name="edit" /></IconButton>
       </div>
       <div className="min-w-0 overflow-hidden">
-        {timer.focusMode ? <SpeakerSlider timer={timer} /> : <div><p className="mb-1 text-xs font-medium text-muted">La parole est à</p><h2 key={timer.activeId} id="speaker-name" className="truncate text-3xl font-bold leading-tight motion-safe:animate-enter max-[650px]:text-2xl" title={speakerName} aria-live="polite" aria-atomic="true">{speakerName}</h2></div>}
+        <SpeakerSlider timer={timer} />
         {ended ? <p id="time-up-alert" role="alert" className="text-[11px] font-semibold text-danger"><span className="sr-only">{person?.name}, </span>Temps utilisé. Merci de passer la parole.</p> : <span className="sr-only" id="speaker-mood" hidden={!person}>{person ? `Humeur ${person.mood} / 4 · ${running ? 'Parle maintenant' : 'À vous la parole'}` : ''}</span>}
       </div>
       <div className="row-start-3 grid h-full min-h-0 min-w-0 place-items-center [container-type:size]">
         {/* Size against both dimensions of the remaining grid cell, not the viewport. */}
         <div key={`${timer.activeId}-${timer.focusMode}`} className={`timer-ring relative isolate aspect-square w-[min(100cqw,100cqh,380px)] rounded-full bg-slate-50/70 [container-type:inline-size] transition-colors motion-reduce:transition-none ${ringColor} ${pulse}`} id="timer-ring">
           {timer.focusMode && <span className="pointer-events-none absolute inset-0 rounded-full border-2 border-accent opacity-0 motion-safe:animate-turn-halo" aria-hidden="true" />}
-          <svg className="size-full -rotate-90 overflow-visible" viewBox="0 0 300 300" aria-hidden="true">
+          <div className="absolute inset-[6%] rounded-full bg-neutral-900" aria-hidden="true" />
+          {person?.moodSlide && person.mood && <SpeakerMoodPicture key={`${person.moodSlide.image}:${person.mood}`} context={person.moodSlide} mood={person.mood} />}
+          <svg className="relative size-full -rotate-90 overflow-visible" viewBox="0 0 300 300" aria-hidden="true">
             <circle className="fill-none stroke-current stroke-[4] opacity-10" cx="150" cy="150" r="136" />
             <circle className="fill-none stroke-current stroke-[5] [stroke-linecap:round] transition-[stroke-dashoffset,stroke] duration-150 ease-linear motion-reduce:transition-none" id="ring-progress" cx="150" cy="150" r="136" style={{ strokeDasharray: circumference, strokeDashoffset: circumference * (1 - ratio) }} />
           </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-[10%]">
-            <span className="text-[clamp(5px,3cqw,8px)] font-bold leading-relaxed tracking-wide text-muted" id="timer-label">{ended ? 'DÉPASSEMENT · PASSEZ LA PAROLE' : critical ? 'CONCLUEZ MAINTENANT' : nearly ? 'PRÉPAREZ LA CONCLUSION' : running ? 'TEMPS RESTANT' : 'TEMPS PAR PERSONNE'}</span>
-            <div id="timer-display" className={`text-[clamp(24px,23cqw,88px)] leading-none font-semibold tabular-nums ${ended || critical ? 'text-danger' : 'text-ink'}`} role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
-              {ended ? '+' : ''}{String(minutes).padStart(2, '0')}<span className={ringColor}>:</span>{String(secs).padStart(2, '0')}
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-[12%]">
+            <div className="flex w-full min-w-0 flex-col items-center gap-1 px-[3%] py-[5%] text-white">
+            <div id={timer.focusMode ? 'speaker-turn-cue' : undefined} role="status" aria-live="polite" aria-atomic="true" className="w-full min-w-0">
+              <span className="block text-[clamp(7px,3cqw,11px)] font-semibold text-white">{timer.ended ? 'Merci de passer la parole' : timer.running ? 'À TOI DE PARLER !' : timer.turnStarted ? 'TON TOUR EST EN PAUSE' : 'La parole est à'}</span>
+              <h2 id="speaker-name" className="line-clamp-2 text-[clamp(12px,7cqw,27px)] font-bold leading-tight [overflow-wrap:anywhere]" title={speakerName}>{speakerName}</h2>
+            </div>
+            <span className="text-[clamp(5px,3cqw,8px)] font-bold leading-relaxed text-white" id="timer-label">{ended ? 'DÉPASSEMENT · PASSEZ LA PAROLE' : critical ? 'CONCLUEZ MAINTENANT' : nearly ? 'PRÉPAREZ LA CONCLUSION' : running ? 'TEMPS RESTANT' : 'TEMPS PAR PERSONNE'}</span>
+            <div id="timer-display" className="text-[clamp(24px,23cqw,88px)] leading-none font-semibold tabular-nums text-white" role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
+              {ended ? '+' : ''}{String(minutes).padStart(2, '0')}<span>:</span>{String(secs).padStart(2, '0')}
+            </div>
+            {person && <span className="text-[clamp(7px,3cqw,10px)] font-medium text-white">Humeur {person.mood} / 4</span>}
             </div>
           </div>
           <span className="absolute top-[3%] left-1/2 size-[3%] -translate-x-1/2 rounded-full bg-current" aria-hidden="true" />
@@ -81,7 +92,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
         <FeedbackIcon id="feedback-icon" className={`size-4 shrink-0 ${complete ? 'text-success' : ended ? 'text-danger' : nearly ? 'text-amber-700' : 'text-brand'}`} fontSize="inherit" aria-hidden="true" />
         <span id="feedback-text">{feedback}</span>
       </div>
-      <div className="flex min-h-11 min-w-0 items-center justify-between gap-2 border-t border-line text-[11px] text-muted"><span className="flex min-w-0 items-center gap-1.5"><TimerIcon name={timer.focusMode ? 'lock' : 'timer'} className="size-3.5 shrink-0" />{timer.focusMode ? 'Réglages verrouillés' : `${Math.floor(timer.duration / 60)} min ${timer.duration % 60 ? `${timer.duration % 60} s` : ''} par personne`}</span><div className="flex shrink-0 items-center gap-1">{!timer.focusMode && <IconButton size="small" sx={{ width: 44, height: 44 }} type="button" id="reset-button" aria-label="Réinitialiser le minuteur de la personne qui parle" title="Réinitialiser le minuteur (R)" onClick={timer.reset} aria-keyshortcuts="R"><TimerIcon name="reset" /></IconButton>}<Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} id="manage-timer-button" type="button" className="min-h-11 rounded-xl text-brand" onClick={timer.manage}><TimerIcon name="edit" />{timer.focusMode ? 'Modifier' : 'Réglages'}</Button></div></div>
+      <div className={`flex min-h-11 min-w-0 items-center justify-between gap-2 border-t border-line text-[11px] text-muted ${timer.focusMode ? '[@media(max-height:650px)]:hidden' : ''}`}><span className="flex min-w-0 items-center gap-1.5"><TimerIcon name={timer.focusMode ? 'lock' : 'timer'} className="size-3.5 shrink-0" />{timer.focusMode ? 'Réglages verrouillés' : `${Math.floor(timer.duration / 60)} min ${timer.duration % 60 ? `${timer.duration % 60} s` : ''} par personne`}</span>{!timer.focusMode && <IconButton size="small" sx={{ width: 44, height: 44 }} type="button" id="reset-button" aria-label="Réinitialiser le minuteur de la personne qui parle" title="Réinitialiser le minuteur (R)" onClick={timer.reset} aria-keyshortcuts="R"><TimerIcon name="reset" /></IconButton>}</div>
       <Dialog open={readingNote} onClose={() => setReadingNote(false)} aria-labelledby="speaker-note-title" maxWidth="sm" fullWidth>
         <DialogTitle id="speaker-note-title">Le pense-bête de {person?.name ?? 'ce participant'}</DialogTitle>
         <DialogContent dividers>

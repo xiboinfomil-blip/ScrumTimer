@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { validateDailyHint as masterValidate } from '../src/lib/daily-hints.ts';
+import { validateDailyHint as masterValidate } from '../src/lib/meeting/daily-hints.ts';
 import { validateDailyHint } from '@infomil/scrum-shared/daily-hints';
 import { characterCount, parseNotes, parsePortal, validDay, validateNote } from '@infomil/scrum-shared/contracts';
 import { totals } from '@infomil/scrum-shared/statistics';
 import type { Hint, NoteInput, Notes, Person, Round } from '@infomil/scrum-shared/types';
-import type { DailyHint, DailyHintInput, DailyHintsData } from '../src/lib/daily-hints.ts';
-import type { HistoryPerson, HistoryRound } from '../src/lib/history.ts';
+import type { DailyHint, DailyHintInput, DailyHintsData } from '../src/lib/meeting/daily-hints.ts';
+import type { HistoryPerson, HistoryRound } from '../src/lib/history/history.ts';
 import type { Mood } from '../src/types/team.ts';
 
 // Compiled by the root typecheck, even though Node erases these assertions.
@@ -75,10 +75,10 @@ test('package boundaries and both app consumers use shared source, not validator
   assert.ok(rootManifest.workspaces.includes('packages/*'));
   assert.equal(rootManifest.dependencies[manifest.name], '1.0.0');
   assert.ok(JSON.parse(read('../apps/participants/package.json')).dependencies[manifest.name]);
-  assert.match(read('../src/lib/daily-hints.ts'), /export \{ validateDailyHint \} from '@infomil\/scrum-shared\/daily-hints'/);
-  assert.doesNotMatch(read('../src/lib/daily-hints.ts'), /function validateDailyHint/);
-  assert.match(read('../src/lib/history.ts'), /Person as HistoryPerson, Round as HistoryRound/);
-  assert.doesNotMatch(read('../src/lib/history.ts'), /interface History(?:Person|Round)/);
+  assert.match(read('../src/lib/meeting/daily-hints.ts'), /export \{ validateDailyHint \} from '@infomil\/scrum-shared\/daily-hints'/);
+  assert.doesNotMatch(read('../src/lib/meeting/daily-hints.ts'), /function validateDailyHint/);
+  assert.match(read('../src/lib/history/history.ts'), /Person as HistoryPerson, Round as HistoryRound/);
+  assert.doesNotMatch(read('../src/lib/history/history.ts'), /interface History(?:Person|Round)/);
   for (const [path, entry] of [['lib/contracts.ts', 'contracts'], ['lib/statistics.ts', 'statistics'], ['components/ui.tsx', 'ui'], ['types/portal.ts', 'types']]) {
     assert.ok(read(`../apps/participants/src/${path}`).includes(`'@infomil/scrum-shared/${entry}'`));
   }

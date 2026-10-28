@@ -3,9 +3,10 @@ import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
-import { configureNeonNetwork } from '../src/lib/neon-network';
+import { configureNeonNetwork } from '../src/lib/persistence/neon-network';
 import * as schema from '../src/db/schema.ts';
 import { getTableConfig } from 'drizzle-orm/pg-core';
+import { STORAGE_BUDGET_BYTES, STORAGE_WARNING_BYTES, storageUsageStatement } from '../src/lib/persistence/storage-budget.ts';
 const { loadEnvConfig } = createRequire(import.meta.url)('@next/env') as typeof import('@next/env');
 loadEnvConfig(process.cwd());
 
@@ -15,6 +16,12 @@ async function main() {
   const db = drizzle(neon(process.env.DATABASE_URL));
   await db.execute(sql`SELECT 1`);
   console.log('Neon connectivity: OK');
+  const usage = await db.execute(storageUsageStatement());
+  const bytes = Number(usage.rows[0].database_bytes);
+  console.log(`Database storage: ${bytes} bytes (${(bytes / 1_000_000).toFixed(2)} MB decimal)`);
+  console.log(`Application tables and indexes: ${usage.rows[0].application_bytes} bytes`);
+  console.log(`Application write budget: ${STORAGE_BUDGET_BYTES} bytes; warning at ${STORAGE_WARNING_BYTES} bytes`);
+  if (bytes >= STORAGE_WARNING_BYTES) console.warn('Storage warning: review Neon usage and run authorized maintenance before adding data.');
   const configs = Object.values(schema).map(getTableConfig);
   const names = configs.map(config => config.name);
   const tableNames = sql.join(names.map(name => sql`${name}`), sql`, `);
@@ -48,6 +55,15 @@ async function main() {
   const journal = await db.execute(sql`SELECT hash,created_at FROM drizzle.__drizzle_migrations ORDER BY created_at,id`);
   if (journal.rows.length !== migrations.length || migrations.some((migration, position) => journal.rows[position]?.hash !== migration.hash || Number(journal.rows[position]?.created_at) !== migration.folderMillis)) throw new Error('Migration journal differs from local migrations');
   console.log(`Applied Drizzle migrations: ${journal.rows.length} / ${migrations.length}`);
+  const guards = await db.execute(sql`SELECT c.relname AS table_name FROM pg_trigger t
+    JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_proc p ON p.oid=t.tgfoid
+    WHERE n.nspname='public' AND t.tgname='app_storage_budget' AND t.tgenabled='O'
+    AND p.proname='enforce_storage_budget' AND (t.tgtype & 1)=0 AND (t.tgtype & 2)=2 AND (t.tgtype & 4)=4 AND (t.tgtype & 16)=16`);
+  if (guards.rows.length !== names.length || names.some(name => !guards.rows.some(row => row.table_name === name))) throw new Error('Storage guards are missing or disabled');
+  const guardFunction = await db.execute(sql`SELECT pg_get_functiondef('public.enforce_storage_budget()'::regprocedure) AS definition`);
+  const definition = String(guardFunction.rows[0].definition);
+  if (!definition.includes(String(STORAGE_BUDGET_BYTES)) || !definition.includes('pg_advisory_xact_lock') || !definition.includes('P0S01')) throw new Error('Unexpected storage guard policy');
+  console.log(`Storage budget guards verified: ${guards.rows.length} / ${names.length}`);
   // Aggregate-only diagnostics: no names, notes, credentials or team capabilities.
   // Read directly; application read routes may perform retention housekeeping.
   const integrity = await db.execute(sql`

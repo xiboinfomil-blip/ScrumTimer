@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { database, selectedTeam, readJson, sameOrigin, databaseFailure } from '@/lib/database';
-import { validateHistoryInput } from '@/lib/team-validation';
-import { readHistory, resetDailyRound, writeHistory } from '@/lib/relational-store';
-import { mauritiusDay, strictObject } from '@/lib/workspace-store';
-import { teamReadCache, teamReadKey } from '@/lib/shared-read-cache';
+import { database, selectedTeam, readJson, sameOrigin, databaseFailure } from '@/lib/persistence/database';
+import { validateHistoryInput } from '@/lib/team/team-validation';
+import { readHistory, resetDailyRound, writeHistory } from '@/lib/persistence/relational-store';
+import { mauritiusDay, strictObject } from '@/lib/team/workspace-store';
+import { teamReadCache, teamReadKey } from '@/lib/persistence/shared-read-cache';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {

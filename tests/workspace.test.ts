@@ -4,11 +4,11 @@ import { readFileSync } from 'node:fs';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import { PGlite } from '@electric-sql/pglite';
-import { changeDailyMeter, createTeam, listTeams, mauritiusDay, readDailyMeter, resolveSelectedTeam, saveDailyMeter, selectTeam, validateDailyCheckIns, validateDailyMeter, validateTeamName, WorkspaceError } from '../src/lib/workspace-store.ts';
-import { readHistory, readTeam, resetDailyRound, writeHistory, writeTeam } from '../src/lib/relational-store.ts';
-import { validateTeamInput } from '../src/lib/team-validation.ts';
-import catalog from '../src/lib/remote-mood-catalog.json' with { type: 'json' };
-import { readMoodFetchCache } from '../src/lib/mood-fetch-cache.ts';
+import { changeDailyMeter, createTeam, listTeams, mauritiusDay, readDailyMeter, resolveSelectedTeam, saveDailyMeter, selectTeam, validateDailyCheckIns, validateDailyMeter, validateTeamName, WorkspaceError } from '../src/lib/team/workspace-store.ts';
+import { readHistory, readTeam, resetDailyRound, writeHistory, writeTeam } from '../src/lib/persistence/relational-store.ts';
+import { validateTeamInput } from '../src/lib/team/team-validation.ts';
+import catalog from '../src/lib/mood/remote-mood-catalog.json' with { type: 'json' };
+import { readMoodFetchCache } from '../src/lib/mood/mood-fetch-cache.ts';
 
 const workspace = 'a'.repeat(64); const foreignWorkspace = 'b'.repeat(64);
 const original = { meterId: 'original', title: 'Baromètre original' };
@@ -48,15 +48,15 @@ test('migration metadata preserves every unchanged relational table and API owne
     assert.match(source, /await selectedTeam\(request\)/);
     assert.ok(!source.includes('await privateSpace()'));
   }
-  assert.match(read('../src/lib/database.ts'), /request.headers.get\('X-Team-Id'\)/);
+  assert.match(read('../src/lib/persistence/database.ts'), /request.headers.get\('X-Team-Id'\)/);
 });
 
 test('API identity is database-only, with no cookie or browser-storage dependency', () => {
   const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
-  for (const path of ['../src/lib/database.ts', '../src/lib/workspace-store.ts', '../src/app/api/teams/route.ts', '../src/providers/team-provider.tsx']) {
+  for (const path of ['../src/lib/persistence/database.ts', '../src/lib/team/workspace-store.ts', '../src/app/api/teams/route.ts', '../src/providers/team-provider.tsx']) {
     assert.doesNotMatch(read(path), /privateSpace|next\/headers|standup-space|localStorage|sessionStorage|indexedDB|document\.cookie|Set-Cookie/i, path);
   }
-  assert.doesNotMatch(read('../src/lib/workspace-store.ts'), /selected_team_id/, 'selection is never persisted');
+  assert.doesNotMatch(read('../src/lib/team/workspace-store.ts'), /selected_team_id/, 'selection is never persisted');
 });
 
 test('PGlite: shared teams across devices, independent selection, daily singleton and reset', async () => {
@@ -168,7 +168,7 @@ test('PGlite: shared teams across devices, independent selection, daily singleto
     assert.equal(concurrent.filter(Boolean).length, 1, 'exactly one concurrent completion wins');
     await assert.rejects(changeDailyMeter(client, builtInTeam, remote), (error: unknown) => error instanceof WorkspaceError && error.status === 409, 'completed result also locks meter');
     assert.equal(await writeHistory(client, second, { ...round, people: [{ ...round.people[0], name: 'Autre équipe' }] }), true);
-    assert.deepEqual(await readHistory(client, workspace), [round]);
+    assert.deepEqual(await readHistory(client, workspace), [round, ancient]);
     assert.equal((await readHistory(client, second))[0].people[0].name, 'Autre équipe');
     assert.deepEqual(await readHistory(client, foreignWorkspace), []);
     assert.equal(await resetDailyRound(client, workspace, 'wrong-id'), false, 'stale reset cannot delete another result');

@@ -5,7 +5,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { ParticipantNote } from '@/components/ui/participant-note';
 import { useTeam } from '@/providers/team-provider';
-import { DEFAULT_DISCUSSION_PROMPTS, validateDiscussionPrompts, validateMeetingSettings, type MeetingSettings } from '@/lib/meeting-settings';
+import { DEFAULT_DISCUSSION_PROMPTS, validateDiscussionPrompts, validateMeetingSettings, type MeetingSettings } from '@/lib/meeting/meeting-settings';
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, TextField } from '@mui/material';
 import { JiraTickets } from './jira-tickets';
 

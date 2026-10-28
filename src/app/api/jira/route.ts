@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { database, databaseFailure, readJson, sameOrigin, selectedTeam } from '@/lib/database';
-import { endJiraLogin, jiraConfigured, jiraCookie, jiraSession } from '@/lib/jira-auth';
-import { jiraService, jiraTeamSprint, syncJiraRoster } from '@/lib/jira-store';
-import { validateJiraSelection } from '@/lib/jira';
-import { strictObject, WorkspaceError } from '@/lib/workspace-store';
-import { teamReadCache } from '@/lib/shared-read-cache';
+import { database, databaseFailure, readJson, sameOrigin, selectedTeam } from '@/lib/persistence/database';
+import { endJiraLogin, jiraConfigured, jiraCookie, jiraSession } from '@/lib/jira/jira-auth';
+import { jiraService, jiraTeamSprint, syncJiraRoster } from '@/lib/jira/jira-store';
+import { validateJiraSelection } from '@/lib/jira/jira';
+import { strictObject, WorkspaceError } from '@/lib/team/workspace-store';
+import { teamReadCache } from '@/lib/persistence/shared-read-cache';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const response = (body: unknown) => NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie, X-Team-Id' } });

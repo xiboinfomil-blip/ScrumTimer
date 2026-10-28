@@ -1,5 +1,5 @@
-import { fetchGoogleSlide } from '@/lib/google-slides';
-import { cachedMoodDeck } from '@/lib/remote-mood-cache';
+import { fetchGoogleSlide } from '@/lib/mood/google-slides';
+import { cachedMoodDeck } from '@/lib/mood/remote-mood-cache';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 export async function GET(_request: Request, context: { params: Promise<{ deck: string; file: string }> }) {

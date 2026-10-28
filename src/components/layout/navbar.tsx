@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { AppBar, ButtonBase, IconButton, Tooltip } from '@mui/material';
 import { motion, useReducedMotion } from 'framer-motion';
-import { hasValidSession } from '@/lib/team-storage';
+import { hasValidSession } from '@/lib/team/team-storage';
 import { useTeam } from '@/providers/team-provider';
 import { TeamSwitcher } from './team-switcher';
 import { NavIcon } from './nav-icon';

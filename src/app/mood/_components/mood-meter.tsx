@@ -5,14 +5,14 @@ import { Button, Dialog, DialogContent, DialogTitle, IconButton, NativeSelect, P
 import {
   chooseUnusedDeck, displayTitle, groupMoodMeters, moodMeterId, isAnimatedImage, overlayCropStyle,
   overlayMatrix, type MoodMeterDeck, type MoodMeterSlide,
-} from '../../../lib/mood-meter';
-import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood-catalog-client';
+} from '../../../lib/mood/mood-meter';
+import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood/mood-catalog-client';
 import { AnimatedImage } from './animated-image';
 import { useTeam } from '@/providers/team-provider';
 import { DefaultMoodMeter, MoodMeterLoading } from './default-mood-meter';
 import { useNotify } from '@/providers/notification-provider';
 import { MoodIcon } from './mood-icon';
-import { MOOD_RETRY_DELAYS } from '@/lib/mood-retry';
+import { MOOD_RETRY_DELAYS } from '@/lib/mood/mood-retry';
 import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
 import PauseRounded from '@mui/icons-material/PauseRounded';
 

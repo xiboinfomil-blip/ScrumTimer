@@ -1,11 +1,27 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeTeam, canStartSession, hasValidSession } from '../src/lib/team-storage.ts';
-import { shuffle } from '../src/lib/shuffle.ts';
-import { secondsUntil, timerFrame, formatTime, shuffleEligible, timerUrgency } from '../src/lib/timer.ts';
-import { parseMoodMeterCatalog } from '../src/lib/mood-meter.ts';
-import { timeScore, scoreSpeaker, speakerScoreProgress, explainScore, sessionLeaderboard, sessionStatistics, type SessionSpeaker } from '../src/lib/session-results.ts';
-import { validateTeamInput } from '../src/lib/team-validation.ts';
+import { normalizeTeam, canStartSession, hasValidSession } from '../src/lib/team/team-storage.ts';
+import { shuffle } from '../src/lib/team/shuffle.ts';
+import { secondsUntil, timerFrame, formatTime, shuffleEligible, timerUrgency } from '../src/lib/timer/timer.ts';
+import { parseMoodMeterCatalog } from '../src/lib/mood/mood-meter.ts';
+import { timeScore, scoreSpeaker, speakerScoreProgress, explainScore, sessionLeaderboard, sessionStatistics, type SessionSpeaker } from '../src/lib/history/session-results.ts';
+import { validateTeamInput } from '../src/lib/team/team-validation.ts';
+import { selectMoodPicture } from '../src/lib/mood/mood-picture.ts';
+
+test('mood pictures follow numbered quadrants, not SVG element order, and ignore decorative images', () => {
+  const pictures = [
+    { src: 'four', x: .6, y: .02, width: .3, height: .45 },
+    { src: 'two', x: .04, y: .57, width: .35, height: .4 },
+    { src: 'three', x: .6, y: .52, width: .3, height: .45 },
+    { src: 'one', x: .05, y: .02, width: .3, height: .45 },
+    { src: 'decoration', x: .42, y: .37, width: .06, height: .11 },
+    { src: 'background', x: 0, y: 0, width: 1, height: 1 },
+  ];
+  assert.deepEqual(([1, 2, 3, 4] as const).map(mood => selectMoodPicture(pictures, mood)), ['one', 'two', 'three', 'four']);
+  assert.equal(selectMoodPicture([], 1), null);
+  assert.equal(selectMoodPicture([{ src: 'invalid', x: NaN, y: 0, width: .3, height: .3 }], 1), null);
+  assert.equal(selectMoodPicture(pictures.filter(picture => picture.src !== 'one'), 1), null);
+});
 
 test('explicit postponement permits ready teammates without treating waiting members as absent or persisting progress', () => {
   const team = normalizeTeam({ roster: [{ id: 'a', name: 'Alice', mood: 1 }, { id: 'b', name: 'Bob', mood: null }], session: ['a', 'b'], postponed: ['b'] });

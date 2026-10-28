@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { COMPANION_PAIRING_KEY, parseCompanionPairing, resolveCompanionPairing } from '../src/lib/companion-pairing.ts';
+import { COMPANION_PAIRING_KEY, parseCompanionPairing, resolveCompanionPairing } from '../src/lib/remote/companion-pairing.ts';
 
 const a = `${'a'.repeat(43)}.${'b'.repeat(43)}`;
 const b = `${'c'.repeat(43)}.${'d'.repeat(43)}`;

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { freshRound, toggleAttendance } from '../src/lib/attendance.ts';
-import { canStartSession } from '../src/lib/team-storage.ts';
-import { invalidatesCheckpoint } from '../src/lib/timer-checkpoint.ts';
+import { freshRound, toggleAttendance } from '../src/lib/team/attendance.ts';
+import { canStartSession } from '../src/lib/team/team-storage.ts';
+import { invalidatesCheckpoint } from '../src/lib/timer/timer-checkpoint.ts';
 import type { TeamState } from '../src/types/team.ts';
 
 const team: TeamState = {

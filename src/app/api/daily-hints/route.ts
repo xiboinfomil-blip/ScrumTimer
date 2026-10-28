@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { database, databaseFailure, readJson, sameOrigin, selectedTeam } from '@/lib/database';
-import { validateDailyHint } from '@/lib/daily-hints';
-import { readDailyHints, saveDailyHint } from '@/lib/daily-hints-store';
-import { teamReadCache } from '@/lib/shared-read-cache';
-import { WorkspaceError } from '@/lib/workspace-store';
+import { database, databaseFailure, readJson, sameOrigin, selectedTeam } from '@/lib/persistence/database';
+import { validateDailyHint } from '@/lib/meeting/daily-hints';
+import { readDailyHints, saveDailyHint } from '@/lib/meeting/daily-hints-store';
+import { teamReadCache } from '@/lib/persistence/shared-read-cache';
+import { WorkspaceError } from '@/lib/team/workspace-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

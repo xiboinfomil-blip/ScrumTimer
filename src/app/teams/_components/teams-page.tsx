@@ -13,11 +13,11 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { useTeam } from '@/providers/team-provider';
 import { NavIcon } from '@/components/layout/nav-icon';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
-import { filterTeams } from '@/lib/team-directory';
+import { filterTeams } from '@/lib/team/team-directory';
 import { SprintPicker } from '@/components/jira/sprint-picker';
 import { JiraAccount } from '@/components/jira/jira-account';
-import { useJiraResource } from '@/hooks/use-jira-resource';
-import type { JiraConnection, JiraSprintSelection } from '@/lib/jira';
+import { useJiraResource } from '@/hooks/jira/use-jira-resource';
+import type { JiraConnection, JiraSprintSelection } from '@/lib/jira/jira';
 
 const searchable = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr-FR');
 const pageSize = 6;

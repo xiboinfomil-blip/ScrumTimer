@@ -81,7 +81,7 @@ Un éditeur inline garde un seul brouillon dans l’onglet. Les changements d’
 
 ## Statistiques et bilan
 
-- Période : cinq **jours calendaires UTC**, aujourd’hui inclus ; rejet des dates futures. Le bilan du jour est recherché sur la journée **mauricienne**, jamais le dernier résultat arbitraire.
+- Historique : les **cinq derniers bilans par équipe**, quelle que soit leur date ; rejet des dates futures. Le bilan du jour est recherché sur la journée **mauricienne**, jamais le dernier résultat arbitraire. Le maître assure la rétention et le nettoyage quotidien via Vercel Cron ; le portail ne reçoit pas `CRON_SECRET`.
 - Moyenne des scores **stockés**, sans appliquer un nouveau barème. Seuls les passages avec score non null, durée >=1 seconde et budget >0 entrent dans les scores moyens. Moyenne arrondie à l’entier, ex æquo sur cette moyenne avec rangs 1,1,3, comme l’application maître. Les noms utilisent le passage retenu le plus récent par identifiant.
 - Humeurs : contexte déclaré uniquement, aucune influence sur les scores. Ni vote ni note de performance d’humeur. Le bilan affiche les valeurs et titres archivés, sans récupérer d’image distante.
 - Recherche insensible aux accents et pagination de huit résultats/participants pour les grandes équipes. Contrôles natifs >=44px, focus visible, rendu de noms en texte React, contraste bleu/orange et réduction des mouvements. L’accordéon des mesures peut défiler pour les 100 participants ; les listes principales sont paginées.
@@ -99,7 +99,7 @@ Un éditeur inline garde un seul brouillon dans l’onglet. Les changements d’
 
 Tous les chemins portent no-referrer, noindex/nofollow/noarchive/nosnippet, nosniff, DENY frame et une CSP limitée à la même origine ; scripts inline nécessaires au bootstrap Next, unsafe-eval seulement en dev. La CSP ne prétend pas être nonce-based. Robots est disallow-all ; ce n’est **pas** un contrôle d’autorisation. Cache-Control no-store est appliqué au proxy et aux pages dynamiques, aucun CDN cache intentionnel pour les données. Ne pas activer de cache public sur ces routes en aval.
 
-Tests purs fournis : contrats et Unicode, schémas serveur, dates et UTC/Maurice, limites cinq jours, exclusion dates futures, scores archivés/ties/mesures, recherche/pagination 100 personnes, origine et destination fixe, JSON borné. Ils ne requièrent ni réseau ni DB et gardent leurs imports vers les réexports locaux.
+Tests purs fournis : contrats et Unicode, schémas serveur, dates et UTC/Maurice, limite de cinq bilans indépendamment de leur âge, exclusion dates futures, scores archivés/ties/mesures, recherche/pagination 100 personnes, origine et destination fixe, JSON borné. Ils ne requièrent ni réseau ni DB et gardent leurs imports vers les réexports locaux.
 
 ### Résultats historiques du portail source, le 16 octobre 2026
 

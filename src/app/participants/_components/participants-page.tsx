@@ -10,9 +10,9 @@ import { AttendanceList } from './attendance-list';
 import { ParticipantsActions, ParticipantsHeading } from './participants-controls';
 import { ParticipantIcon } from './participant-icon';
 import { LineupRevealDialog, type RevealPerson } from '@/components/ui/lineup-reveal-dialog';
-import { shuffle } from '@/lib/shuffle';
-import { useViewMotion } from '@/hooks/use-view-motion';
-import { freshRound, toggleAttendance as toggleTeamAttendance } from '@/lib/attendance';
+import { shuffle } from '@/lib/team/shuffle';
+import { useViewMotion } from '@/hooks/motion/use-view-motion';
+import { freshRound, toggleAttendance as toggleTeamAttendance } from '@/lib/team/attendance';
 
 export function ParticipantsPage() {
   const { state, activeTeamId, todayRound, updateTeam, participantOrder, setParticipantOrder } = useTeam();

@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { readJson, sameOrigin, selectedTeam } from '@/lib/database';
+import { readJson, sameOrigin, selectedTeam } from '@/lib/persistence/database';
 import {
   RemoteError, REMOTE_MAX_BODY_BYTES, remoteBearer, remoteObject, validateRemoteId, validateRemotePost,
-} from '@/lib/timer-remote';
-import { commandTimerRemote, createTimerRemote, readTimerRemote, revokeTimerRemote, syncTimerRemote } from '@/lib/timer-remote-store';
+} from '@/lib/remote/timer-remote';
+import { commandTimerRemote, createTimerRemote, readTimerRemote, revokeTimerRemote, syncTimerRemote } from '@/lib/remote/timer-remote-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

@@ -5,11 +5,11 @@ import { useState } from 'react';
 import { ScreenTabs } from '@/components/ui/screen-tabs';
 import { segmentedTabs } from '@/components/ui/styles';
 import { useTeam } from '@/providers/team-provider';
-import { useStepGuard } from '@/hooks/use-step-guard';
+import { useStepGuard } from '@/hooks/team/use-step-guard';
 import { MoodMeter } from './mood-meter';
 import { MoodCheckin } from './mood-checkin';
 import { MoodIcon } from './mood-icon';
-import { useViewMotion } from '@/hooks/use-view-motion';
+import { useViewMotion } from '@/hooks/motion/use-view-motion';
 import { WorkflowHeading } from '@/components/ui/workflow-heading';
 
 export function MoodPage() {

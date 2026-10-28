@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSelectedLayoutSegment } from 'next/navigatio
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTeam } from '@/providers/team-provider';
 import { Navbar } from '@/components/layout/navbar';
-import { useActionMotion } from '@/hooks/use-action-motion';
+import { useActionMotion } from '@/hooks/motion/use-action-motion';
 import { motion, MotionConfig, useAnimate, useReducedMotion } from 'framer-motion';
 import { Alert, Button } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';

@@ -2,7 +2,7 @@
 param([switch]$Refresh, [switch]$CategoriesOnly)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot
-$catalogPath = Join-Path $root 'src/lib/remote-mood-catalog.json'
+$catalogPath = Join-Path $root 'src/lib/mood/remote-mood-catalog.json'
 if ($CategoriesOnly) {
     $items = @()
 } elseif ($Refresh) {

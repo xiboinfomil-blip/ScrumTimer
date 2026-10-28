@@ -6,12 +6,12 @@ import { WorkflowHeading } from '@/components/ui/workflow-heading';
 import { ScreenTabs } from '@/components/ui/screen-tabs';
 import { PaginatedList } from '@/components/ui/paginated-list';
 import { card, primaryButton, routeStage, segmentedTabs } from '@/components/ui/styles';
-import { formatTime } from '@/lib/timer';
-import { sessionLeaderboard, sessionStatistics } from '@/lib/session-results';
+import { formatTime } from '@/lib/timer/timer';
+import { sessionLeaderboard, sessionStatistics } from '@/lib/history/session-results';
 import type { StandupTimer } from './timer-page';
 import { MoodSlideSummary } from './mood-slide-summary';
 import { ScoreBreakdown } from '@/components/ui/score-breakdown';
-import { useViewMotion } from '@/hooks/use-view-motion';
+import { useViewMotion } from '@/hooks/motion/use-view-motion';
 
 export function SessionResults({ timer }: { timer: StandupTimer }) {
   const [view, setView] = useState<'ranking' | 'stats'>('ranking');
@@ -47,7 +47,7 @@ export function SessionResults({ timer }: { timer: StandupTimer }) {
           <div className="mt-3 space-y-3">{stats.moods.map(({ mood, count }) => <div key={mood} className="grid grid-cols-[60px_minmax(0,1fr)_45px] items-center gap-2 text-[11px]"><span>Humeur {mood}</span><div className="flex h-2 overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`Humeur ${mood} : ${count} personnes`}><div className="h-full rounded-full bg-brand/70" style={{ width: `${timer.people.length ? count / timer.people.length * 100 : 0}%` }} /></div><span className="text-right tabular-nums text-muted">{count} · {Math.round(count / timer.people.length * 100)}%</span></div>)}</div>
         </div>
         <MoodSlideSummary people={timer.people} />
-        <p className="mt-auto shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">Tour terminé envoyé à Neon pour les statistiques des 5 derniers jours. Vérifiez la confirmation « Neon enregistré » avant de quitter ; en cas d’échec, réessayez. Aucune copie locale. Pauses exclues ; le dépassement après le signal est mesuré.</p>
+        <p className="mt-auto shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">Tour terminé envoyé à Neon pour les statistiques des 5 derniers bilans. Vérifiez la confirmation « Neon enregistré » avant de quitter ; en cas d’échec, réessayez. Aucune copie locale. Pauses exclues ; le dépassement après le signal est mesuré.</p>
       </Paper>
     </div>
   </div>;
