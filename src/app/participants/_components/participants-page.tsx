@@ -10,6 +10,7 @@ import { AttendanceList } from './attendance-list';
 import { ParticipantsActions, ParticipantsHeading } from './participants-controls';
 import { ParticipantIcon } from './participant-icon';
 import { LineupRevealDialog, type RevealPerson } from '@/components/ui/lineup-reveal-dialog';
+import { ParticipantLinkButton } from '@/components/ui/participant-link-button';
 import { shuffle } from '@/lib/team/shuffle';
 import { useViewMotion } from '@/hooks/motion/use-view-motion';
 import { freshRound, toggleAttendance as toggleTeamAttendance } from '@/lib/team/attendance';
@@ -39,8 +40,11 @@ export function ParticipantsPage() {
     {todayRound && <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 rounded-xl border border-green-200 bg-success-soft px-3 text-xs text-success"><p>Point quotidien déjà terminé aujourd’hui.</p><Link href={`/timer?team=${activeTeamId}`} className="inline-flex min-h-11 items-center rounded-lg font-semibold hover:underline">Voir le bilan ou réinitialiser</Link></div>}
     <section className="participants-panel flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-lg border border-line bg-white" aria-label="Les participants">
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-2 max-[650px]:px-3">
-        <div className="min-w-0"><h2 className="text-sm font-bold text-ink">Les présences du jour</h2><p className="mt-1 text-xs text-muted max-[650px]:hidden [@media(max-height:650px)]:hidden">Une absence aujourd’hui ne retire personne de l’équipe.</p></div>
-        <Link href={`/manage-team?team=${activeTeamId}`} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-2 text-xs font-semibold text-brand hover:bg-blue-50"><ParticipantIcon name="people" className="size-4 max-[360px]:hidden" />Gérer l’équipe</Link>
+        <div className="min-w-0"><h2 className="text-sm font-bold text-ink">Présences du jour</h2><p className="mt-1 text-xs text-muted max-[650px]:hidden [@media(max-height:650px)]:hidden">Une absence aujourd’hui ne retire personne de l’équipe.</p></div>
+        <div className="flex shrink-0 items-center gap-1">
+          <ParticipantLinkButton key={activeTeamId} compact />
+          <Link href={`/manage-team?team=${activeTeamId}`} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-2 text-xs font-semibold text-brand hover:bg-blue-50"><ParticipantIcon name="people" className="size-4 max-[360px]:hidden" />Gérer l’équipe</Link>
+        </div>
       </div>
       {state.roster.length > 0 && <div className="flex shrink-0 items-center gap-2 border-b border-line px-4 py-1 max-[650px]:px-3">
         <ParticipantIcon name="people" className="size-4 shrink-0 text-muted" />

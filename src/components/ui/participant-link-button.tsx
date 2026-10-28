@@ -3,10 +3,11 @@ import { useState } from 'react';
 import QRCode from 'react-qr-code';
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
 import QrCode2Rounded from '@mui/icons-material/QrCode2Rounded';
+import RestartAltRounded from '@mui/icons-material/RestartAltRounded';
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
 
-export function ParticipantLinkButton() {
+export function ParticipantLinkButton({ compact = false }: { compact?: boolean }) {
   const { activeTeamId, activeTeamName } = useTeam();
   const [open, setOpen] = useState(false), [pending, setPending] = useState(false);
   const [baseUrl, setBaseUrl] = useState(''), [linkName, setLinkName] = useState(activeTeamName), [error, setError] = useState(''), [copied, setCopied] = useState(false);
@@ -27,7 +28,7 @@ export function ParticipantLinkButton() {
     } catch (error) { setError(error instanceof Error ? error.message : 'Lien indisponible.'); }
     finally { setPending(false); }
   }
-  return <><Button onClick={load} sx={{ minHeight: 44, textTransform: 'none', fontSize: 12 }}>Lien participants</Button>
+  return <><Button onClick={load} aria-label="Lien participants" title="Lien participants" variant="outlined" startIcon={<QrCode2Rounded />} className={compact ? 'max-[650px]:!min-w-11 max-[650px]:!px-0 [&_.MuiButton-startIcon]:max-[650px]:!mr-0' : undefined} sx={{ minHeight: 44, textTransform: 'none', fontSize: 12 }}><span className={compact ? 'max-[650px]:sr-only' : undefined}>Lien participants</span></Button>
     <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="md" aria-labelledby="participant-link-title" slotProps={{ paper: { sx: { display: 'flex', flexDirection: 'column', borderRadius: { xs: '14px', sm: '18px' }, m: { xs: 1.5, sm: 3 }, maxHeight: 'calc(100dvh - 24px)' } } }}>
       <DialogTitle id="participant-link-title" className="border-b border-line bg-[linear-gradient(112deg,#f3f8fd_0%,#ffffff_72%,#fff8ef_100%)] px-4 py-4 sm:px-6">
         <span className="flex items-start gap-3"><span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-lg bg-white text-brand shadow-sm"><QrCode2Rounded /></span><span className="min-w-0"><span aria-hidden="true" className="block text-xs font-semibold text-muted">PORTAIL PARTICIPANTS</span><span className="mt-1 block break-words text-base font-bold text-ink">Portail participants · {activeTeamName}</span></span></span>
@@ -38,7 +39,8 @@ export function ParticipantLinkButton() {
         {error && <Alert role="alert" severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Réessayer</Button>}>{error}</Alert>}
         {url && <div className="grid items-start gap-5 md:grid-cols-[minmax(0,1fr)_220px]">
           <div className="min-w-0">
-            <TextField fullWidth size="small" label="Nom de l’équipe dans le lien" value={linkName} onChange={event => { setLinkName(event.target.value); setCopied(false); }} helperText="Modifiez ce nom si besoin. Le lien et le QR code se mettent à jour ensemble." slotProps={{ htmlInput: { maxLength: 80 } }} sx={{ '& .MuiInputBase-root': { minHeight: 44 } }} />
+            <TextField fullWidth size="small" label="Nom d’équipe pour le partage" value={linkName} onChange={event => { setLinkName(event.target.value); setCopied(false); }} helperText="Le lien et le QR code suivent automatiquement vos modifications." slotProps={{ htmlInput: { maxLength: 80, 'aria-describedby': 'participant-share-name-hint' }, formHelperText: { id: 'participant-share-name-hint' } }} sx={{ '& .MuiInputBase-root': { minHeight: 44 } }} />
+            <Button type="button" variant="text" startIcon={<RestartAltRounded />} disabled={linkName === activeTeamName} onClick={() => { setLinkName(activeTeamName); setCopied(false); }} sx={{ mt: 0.5, minHeight: 44, textTransform: 'none', fontSize: 12 }}>Reprendre le nom de l’équipe</Button>
             <label htmlFor="participant-share-url" className="mt-4 block text-xs font-semibold text-ink">Lien à partager</label>
             <input id="participant-share-url" readOnly value={url} onFocus={event => event.currentTarget.select()} aria-describedby="participant-share-hint" className="mt-2 min-h-12 w-full min-w-0 rounded-lg border border-line bg-slate-50 px-3 text-xs text-ink focus-visible:outline-2 focus-visible:outline-brand" />
             <p id="participant-share-hint" className="mt-2 text-xs leading-relaxed text-muted">Le nom est uniquement un repère lisible. L’accès sécurisé reste attaché à l’équipe sélectionnée.</p>

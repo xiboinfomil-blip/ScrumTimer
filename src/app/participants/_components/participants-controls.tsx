@@ -2,10 +2,19 @@
 
 import { Button, Checkbox } from '@mui/material';
 import { ParticipantIcon } from './participant-icon';
-import { WorkflowHeading } from '@/components/ui/workflow-heading';
 
 export function ParticipantsHeading({ total, present, onFresh }: { total: number; present: number; onFresh: () => void }) {
-  return <WorkflowHeading step={1} title="Présences" description={<><span className="font-semibold text-ink">{present} sur {total}</span> membres présents</>} action={<button type="button" onClick={onFresh} aria-label="Nouveau bilan" title="Commencer un nouveau bilan" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 text-xs font-semibold text-muted hover:border-brand/30 hover:bg-blue-50 hover:text-brand"><ParticipantIcon name="reset" /><span className="max-[650px]:hidden">Nouveau bilan</span></button>} />;
+  return <header className="relative flex shrink-0 items-center justify-between gap-3 border-b border-line pb-3 motion-safe:animate-page-reveal max-[650px]:pb-1 [@media(max-height:650px)]:pb-0">
+    <div className="min-w-0 flex-1">
+      <p className="mb-1 hidden items-center gap-2 text-[10px] font-semibold uppercase text-muted min-[651px]:flex"><span aria-hidden="true" className="size-2 rounded-sm bg-accent" />Étape 01 <span aria-hidden="true" className="text-line">/</span> Votre équipe</p>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <h1 tabIndex={-1} className="text-2xl leading-tight font-bold text-ink max-[650px]:text-xl">Présences<span aria-hidden="true" className="text-accent">.</span></h1>
+        <p className="text-xs text-muted"><span className="font-semibold tabular-nums text-ink">{present} sur {total}</span><span className="max-[650px]:hidden"> membres présents</span></p>
+      </div>
+      <div aria-hidden="true" className="mt-2 h-1 max-w-64 overflow-hidden rounded-full bg-slate-100 max-[650px]:hidden"><div className="h-full rounded-full bg-success motion-safe:transition-[width] motion-reduce:transition-none" style={{ width: `${total ? Math.round((present / total) * 100) : 0}%` }} /></div>
+    </div>
+    <button type="button" onClick={onFresh} aria-label="Nouveau bilan" title="Commencer un nouveau bilan" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 text-xs font-semibold text-muted hover:border-brand/30 hover:bg-blue-50 hover:text-brand max-[650px]:size-11 max-[650px]:px-0"><ParticipantIcon name="reset" /><span className="max-[650px]:hidden">Nouveau bilan</span></button>
+  </header>;
 }
 
 export function ParticipantsToolbar({ total, selectedCount, onSelectAll, onDelete }: { total: number; selectedCount: number; onSelectAll: (checked: boolean) => void; onDelete: () => void }) {

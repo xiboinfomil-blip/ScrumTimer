@@ -20,6 +20,7 @@ BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000').rstrip('/')
 TEAM = 'a' * 64
 NAME = '\u00c9quipe Alpha'
 LINK = 'https://participants.example/t/fake-signed'
+LINK_WITH_TEAM = f'{LINK}?equipe=%C3%89quipe+Alpha'
 UNAVAILABLE = 'Configurez PARTICIPANT_PORTAL_URL pour partager le portail.'
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -124,6 +125,13 @@ def ui_case(browser, width, height):
     page.on('pageerror', lambda error: errors.append(str(error)))
     try:
         page.goto(f'{BASE}/manage-team?team={TEAM}')
+        introduction = page.get_by_role('button', name='Fermer l’introduction', exact=True)
+        if introduction.count():
+            introduction.click()
+        continue_without_fullscreen = page.get_by_role('button', name='Continuer sans plein écran', exact=True)
+        if width >= 1024:
+            expect(continue_without_fullscreen).to_be_visible()
+            continue_without_fullscreen.click()
         expect(page.locator('#manage-team-heading')).to_have_text(NAME)
         expect(page.locator('.site-header [role="status"]')).to_have_attribute(
             'title', 'Équipe enregistrée dans Neon.')
@@ -135,10 +143,10 @@ def ui_case(browser, width, height):
         button.click()
         dialog = page.get_by_role('dialog', name=f'Portail participants · {NAME}', exact=True)
         expect(dialog).to_be_visible()
-        field = dialog.get_by_role('textbox', name='Lien de l’équipe', exact=True)
-        expect(field).to_have_value(LINK)
+        field = dialog.get_by_role('textbox', name='Lien à partager', exact=True)
+        expect(field).to_have_value(LINK_WITH_TEAM)
         expect(field).to_have_attribute('readonly', '')
-        expect(dialog.get_by_text('Toute personne ayant ce lien peut modifier les notes de cette équipe.',
+        expect(dialog.get_by_text('Toute personne qui le possède peut modifier les notes.',
                                   exact=False)).to_be_visible()
         expect(dialog.get_by_text('Ne publiez pas ce lien.', exact=False)).to_be_visible()
         settle(page)
@@ -147,10 +155,10 @@ def ui_case(browser, width, height):
         field.click()
         assert field.evaluate('e => e.selectionStart === 0 && e.selectionEnd === e.value.length')
         dialog.get_by_role('button', name='Copier le lien', exact=True).click()
-        expect(dialog.get_by_role('alert')).to_have_text(
-            'Copie indisponible. Sélectionnez et copiez le lien manuellement.')
-        assert page.evaluate('globalThis.__copyAttempt') == LINK
-        expect(field).to_have_value(LINK)
+        expect(dialog.get_by_role('alert')).to_contain_text(
+            'Copie indisponible. Sélectionnez le lien pour le copier manuellement.')
+        assert page.evaluate('globalThis.__copyAttempt') == LINK_WITH_TEAM
+        expect(field).to_have_value(LINK_WITH_TEAM)
         expect(dialog.get_by_text('Lien copié.', exact=True)).to_have_count(0)
         screenshot(page, width, 'copy-fallback')
         dialog.get_by_role('button', name='Fermer', exact=True).click()
@@ -159,7 +167,7 @@ def ui_case(browser, width, height):
         mock.unavailable = True
         button.click()
         expect(dialog).to_be_visible()
-        expect(dialog.get_by_role('alert')).to_have_text(UNAVAILABLE)
+        expect(dialog.get_by_role('alert')).to_contain_text(UNAVAILABLE)
         expect(dialog.get_by_role('textbox')).to_have_count(0)
         expect(dialog.get_by_role('button', name='Copier le lien', exact=True)).to_have_count(0)
         expect(dialog.get_by_text(LINK, exact=False)).to_have_count(0)
