@@ -43,24 +43,26 @@ export function ManageTeamPage() {
     if (!updateTeam(current => ({ ...current, session: [], roster: current.roster.map(person => person.id === id ? { ...person, name: name.trim() } : person) }))) return 'Modification impossible. Vérifiez la connexion et les sauvegardes.';
     notify('Nom du participant modifié.'); return null;
   }
-  return <div className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-4 overflow-y-auto pb-3" aria-labelledby="manage-team-heading">
-    <header className="flex shrink-0 flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-line pb-4">
-      <div className="min-w-0 flex-1 basis-56">
-        <Link href={`/teams?team=${activeTeamId}`} className="inline-flex min-h-11 items-center gap-2 rounded-lg text-[11px] font-medium text-brand hover:text-brand-dark"><ArrowBackIcon className="size-3.5" fontSize="inherit" aria-hidden="true" />Toutes les équipes</Link>
-        <div className="flex flex-wrap items-center gap-3"><h1 id="manage-team-heading" className="min-w-0 text-2xl font-bold tracking-tight wrap-anywhere text-ink">{activeTeamName}</h1><span className="rounded-md border border-line bg-slate-50 px-2 py-0.5 text-[10px] text-muted">{state.roster.length} membre{state.roster.length === 1 ? '' : 's'}</span></div>
+  return <div className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto pb-5" aria-labelledby="manage-team-heading">
+    <header className="relative isolate flex shrink-0 flex-wrap items-end justify-between gap-x-5 gap-y-4 overflow-hidden rounded-xl border border-line bg-[linear-gradient(112deg,#f7fbff_0%,#ffffff_64%,#fff8ef_100%)] px-4 py-4 sm:px-6 sm:py-5">
+      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-accent" />
+      <div className="relative min-w-0 flex-1 basis-60">
+        <Link href={`/teams?team=${activeTeamId}`} className="inline-flex min-h-11 items-center gap-2 rounded-lg text-xs font-semibold text-brand hover:text-brand-dark"><ArrowBackIcon className="size-4" fontSize="inherit" aria-hidden="true" />Toutes les équipes</Link>
+        <p className="mt-1 text-[10px] font-bold uppercase text-muted">Gestion de l’équipe</p>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1"><h1 id="manage-team-heading" className="min-w-0 text-2xl font-bold wrap-anywhere text-ink sm:text-[28px]">{activeTeamName}</h1><span className="inline-flex min-h-7 items-center rounded-full border border-line bg-white/80 px-3 text-xs font-medium text-muted">{state.roster.length} membre{state.roster.length === 1 ? '' : 's'}</span></div>
       </div>
-      <Link href={`/participants?team=${activeTeamId}`} className="group inline-flex min-h-11 items-center justify-center gap-3 rounded-lg bg-brand px-4 text-xs font-semibold text-white hover:bg-brand-dark max-sm:w-full">Confirmer les présences<ArrowForwardIcon aria-hidden="true" fontSize="inherit" className="size-4 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" /></Link>
+      <Link href={`/participants?team=${activeTeamId}`} className="group relative inline-flex min-h-12 items-center justify-center gap-3 rounded-lg bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-dark max-sm:w-full">Confirmer les présences<ArrowForwardIcon aria-hidden="true" fontSize="inherit" className="size-4 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" /></Link>
     </header>
-    <div className="grid shrink-0 items-start gap-5 lg:grid-cols-[minmax(0,2.05fr)_minmax(260px,1fr)]">
+    <div className="grid shrink-0 items-start gap-5 lg:grid-cols-[minmax(0,2.05fr)_minmax(280px,1fr)]">
       <div className="flex min-w-0 flex-col gap-4">
-      <section aria-label="Gérer les membres" className="flex h-[min(680px,calc(100dvh-300px))] min-h-112 min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-white">
+      <section aria-label="Gérer les membres" className="flex h-[min(720px,calc(100dvh-290px))] min-h-112 min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-white">
         <div className="shrink-0">
           <div className="flex min-h-17 flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 sm:px-5">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">Membres<span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-brand">{state.roster.length}<span className="sr-only"> membres</span></span></h2>
-            <span className={`inline-flex items-center gap-1 text-[10px] ${cloudStatus === 'saved' ? 'text-success' : 'text-muted'}`}><NavIcon name={cloudStatus === 'saved' ? 'check' : 'cloud'} width="13" height="13" />{cloudStatus === 'saved' ? 'Modifications enregistrées' : cloudStatus === 'error' ? 'Sauvegarde à vérifier' : 'Synchronisation…'}</span>
+            <div><h2 className="flex items-center gap-2 text-base font-bold text-ink">Les membres<span className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold tabular-nums text-brand">{state.roster.length}<span className="sr-only"> membres</span></span></h2><p className="mt-1 text-xs text-muted">La liste partagée de votre équipe</p></div>
+            <span className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-[11px] ${cloudStatus === 'saved' ? 'border-emerald-100 bg-emerald-50 text-success' : cloudStatus === 'error' ? 'border-red-100 bg-red-50 text-danger' : 'border-line bg-slate-50 text-muted'}`}><NavIcon name={cloudStatus === 'saved' ? 'check' : 'cloud'} width="14" height="14" />{cloudStatus === 'saved' ? 'Enregistré' : cloudStatus === 'error' ? 'À vérifier' : 'Synchronisation…'}</span>
           </div>
           {!isSprint && <div className="px-4 pt-4 sm:px-5 [&_.add-person_.MuiInputBase-root]:rounded-lg [&_.add-person_.MuiInputBase-root]:bg-slate-50/60 [&_.add-person_button]:rounded-lg">
-          <h3 className="mb-2 text-[11px] font-medium text-ink">Ajouter un membre</h3>
+          <h3 className="mb-2 text-xs font-semibold text-ink">Ajouter un membre</h3>
           <AddPersonForm />
           </div>}
         </div>
@@ -92,23 +94,24 @@ export function ManageTeamPage() {
         </div>
         <p className="flex shrink-0 items-start gap-2 border-t border-line bg-slate-50/70 px-4 py-3 text-[10px] leading-relaxed text-muted sm:px-5"><NavIcon name="help" width="13" height="13" className="mt-0.5 shrink-0" />{isSprint ? 'Participants · Responsables des tickets du sprint Jira' : 'Retirer un membre conserve ses bilans déjà archivés.'}</p>
       </section>
-      <details className="group border-t border-line [&:not([open])::details-content]:hidden">
-        <summary className="flex min-h-12 list-none items-center justify-between gap-2 rounded-xl px-4 py-3 text-[10px] font-medium text-ink uppercase hover:bg-slate-50 [&::-webkit-details-marker]:hidden">Suppression de l’équipe<NavIcon name="chevron" width="16" height="16" className="shrink-0 group-open:rotate-180 motion-safe:transition-transform" /></summary>
-        <div className="border-t border-line px-4 py-3 motion-safe:animate-enter"><p className="mb-2 text-xs leading-relaxed text-muted">Supprime l’espace et ses données pour tous les appareils. Cette action est irréversible.</p><DeleteTeamButton /></div>
+      <details className="group overflow-hidden rounded-xl border border-line bg-white [&:not([open])::details-content]:hidden">
+        <summary className="flex min-h-12 list-none items-center justify-between gap-2 px-4 py-3 text-xs font-semibold text-muted hover:bg-slate-50 [&::-webkit-details-marker]:hidden">Options de l’équipe<NavIcon name="chevron" width="16" height="16" className="shrink-0 group-open:rotate-180 motion-safe:transition-transform" /></summary>
+        <div className="border-t border-line bg-red-50/40 px-4 py-3 motion-safe:animate-enter"><p className="mb-2 text-xs leading-relaxed text-muted">La suppression efface l’espace et ses données pour tous les appareils. Cette action est irréversible.</p><DeleteTeamButton /></div>
       </details>
       </div>
       <aside className="flex min-w-0 flex-col gap-3" aria-label="Espace et accès de l’équipe">
         {isSprint && <SprintManagement />}
-        {!isSprint && <section className="border-l-2 border-brand py-1 pl-4" aria-labelledby="team-access-heading">
-          <h2 id="team-access-heading" className="flex items-center gap-2 text-sm font-bold text-ink"><NavIcon name="people" width="19" height="19" className="text-brand" />Un espace à partager</h2>
-          <p className="mt-2 text-sm leading-relaxed text-muted">Notes, statistiques et bilans de l’équipe.</p>
-          <div className="mt-3 flex [&_button]:w-full"><ParticipantLinkButton key={activeTeamId} /></div>
-          <p className="mt-3 text-xs leading-relaxed text-muted">Le lien donne aussi accès à la modification des notes partagées.</p>
+        {!isSprint && <section className="relative overflow-hidden rounded-xl border border-blue-100 bg-[linear-gradient(145deg,#f3f8fd_0%,#ffffff_72%)] p-4 sm:p-5" aria-labelledby="team-access-heading">
+          <span aria-hidden="true" className="absolute right-0 top-0 h-20 w-20 translate-x-7 -translate-y-7 rounded-full border-[10px] border-accent/15" />
+          <h2 id="team-access-heading" className="relative flex items-center gap-2 text-base font-bold text-ink"><NavIcon name="people" width="19" height="19" className="text-brand" />Accès des participants</h2>
+          <p className="relative mt-2 text-sm leading-relaxed text-muted">Un espace partagé pour les notes, les statistiques et les bilans de l’équipe.</p>
+          <div className="relative mt-4 flex [&_button]:w-full"><ParticipantLinkButton key={activeTeamId} /></div>
+          <p className="relative mt-3 text-xs leading-relaxed text-muted">Toute personne qui possède le lien peut consulter ces données et modifier les notes.</p>
         </section>}
-        <section className="flex items-start gap-3 border-t border-line pt-4" aria-labelledby="team-daily-heading">
-          <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg border border-emerald-100 bg-emerald-50 text-success"><NavIcon name="check" width="16" height="16" /></span>
-          <div><h2 id="team-daily-heading" className="text-[11px] font-semibold text-ink">Et pour le point du jour ?</h2>
-          <p className="mt-1 text-[11px] leading-relaxed text-muted">La liste des membres reste partagée entre les appareils. Indiquez les présences et les absences dans Participants, sans retirer de membres.</p></div>
+        <section className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4" aria-labelledby="team-daily-heading">
+          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg bg-white text-success"><NavIcon name="check" width="16" height="16" /></span>
+          <div><h2 id="team-daily-heading" className="text-sm font-semibold text-ink">Préparer le point du jour</h2>
+          <p className="mt-1 text-xs leading-relaxed text-muted">La liste des membres reste partagée entre les appareils. Gérez les présences et absences dans Participants, sans retirer les membres de l’équipe.</p></div>
         </section>
       </aside>
     </div>

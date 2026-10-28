@@ -92,8 +92,17 @@ def controls_fit(scope, width):
         'button,a,input,summary')].filter(e => e.getClientRects().length).map(e => {
         const target = e.closest('.MuiCheckbox-root,.MuiInputBase-root') || e;
         const r = target.getBoundingClientRect();
+        let left=r.left, right=r.right, top=r.top, bottom=r.bottom;
+        for (let parent=e.parentElement; parent; parent=parent.parentElement) {
+            const style=getComputedStyle(parent), b=parent.getBoundingClientRect();
+            if (/auto|scroll|hidden|clip/.test(style.overflowX)) { left=Math.max(left,b.left); right=Math.min(right,b.right); }
+            if (/auto|scroll|hidden|clip/.test(style.overflowY)) { top=Math.max(top,b.top); bottom=Math.min(bottom,b.bottom); }
+        }
+        left=Math.max(left,0); right=Math.min(right,innerWidth);
+        top=Math.max(top,0); bottom=Math.min(bottom,innerHeight);
         return {name:e.getAttribute('aria-label') || e.textContent || e.id,
-            x:r.x,y:r.y,w:r.width,h:r.height};
+            x:r.x,y:r.y,w:r.width,h:r.height,
+            visible:{x:left,y:top,w:Math.max(0,right-left),h:Math.max(0,bottom-top)}};
     })''')
     assert geometry, 'No controls found'
     for box in geometry:
@@ -102,8 +111,11 @@ def controls_fit(scope, width):
     # Distinct actionable targets must not overlap; no label/wrapper duplicates.
     for index, first in enumerate(geometry):
         for second in geometry[index + 1:]:
-            overlap_x = min(first['x'] + first['w'], second['x'] + second['w']) - max(first['x'], second['x'])
-            overlap_y = min(first['y'] + first['h'], second['y'] + second['h']) - max(first['y'], second['y'])
+            a, b = first['visible'], second['visible']
+            if not a['w'] or not a['h'] or not b['w'] or not b['h']:
+                continue
+            overlap_x = min(a['x'] + a['w'], b['x'] + b['w']) - max(a['x'], b['x'])
+            overlap_y = min(a['y'] + a['h'], b['y'] + b['h']) - max(a['y'], b['y'])
             assert overlap_x <= 1 or overlap_y <= 1, ('Overlapping controls', first, second)
 
 
@@ -251,12 +263,35 @@ def journeys(page, mock, width):
         share = page.get_by_role('dialog', name=f'Portail participants · {NAME}', exact=True)
         expect(share).to_be_visible()
         if error:
-            expect(share.get_by_role('alert')).to_have_text(SHARE_ERROR)
+            expect(share.get_by_role('alert')).to_contain_text(SHARE_ERROR)
+            expect(share.get_by_role('button', name='Réessayer', exact=True)).to_be_visible()
             expect(share.get_by_role('textbox')).to_have_count(0)
             expect(share.get_by_role('button', name='Copier le lien', exact=True)).to_have_count(0)
         else:
-            expect(share.get_by_role('textbox', name='Lien de l’équipe', exact=True)).to_have_value(LINK)
-            expect(share.get_by_role('textbox')).to_have_attribute('readonly', '')
+            name_field = share.get_by_role('textbox', name='Nom de l’équipe dans le lien', exact=True)
+            link_field = share.get_by_role('textbox', name='Lien à partager', exact=True)
+            expect(name_field).to_have_value(NAME)
+            expect(link_field).to_have_attribute('readonly', '')
+            original = urlparse(LINK)
+            generated = urlparse(link_field.input_value())
+            assert generated.scheme == original.scheme and generated.netloc == original.netloc and generated.path == original.path
+            assert parse_qs(generated.query) == {'equipe': [NAME]}
+            qr = share.locator('[data-testid="participant-share-qr"] svg')
+            expect(qr).to_have_count(1)
+            qr_before = qr.inner_html()
+            name_field.fill('Equipe Support')
+            expect(link_field).to_have_value(f'{LINK}?equipe=Equipe+Support')
+            assert qr.inner_html() != qr_before, 'QR payload must follow the edited team label'
+            name_field.fill(NAME)
+            expect(link_field).to_have_value(f'{LINK}?equipe=%C3%89quipe+%C3%89lan')
+            page.evaluate('''() => {
+                window.__copiedParticipantLinks = [];
+                Object.defineProperty(navigator, 'clipboard', {configurable:true,
+                    value:{writeText:async text => window.__copiedParticipantLinks.push(text)}});
+            }''')
+            share.get_by_role('button', name='Copier le lien', exact=True).click()
+            expect(share.get_by_role('status')).to_have_text('Lien copié dans le presse-papiers.')
+            assert page.evaluate('window.__copiedParticipantLinks') == [link_field.input_value()]
         settle(page)
         controls_fit(share, width)
         share.get_by_role('button', name='Fermer', exact=True).click()
