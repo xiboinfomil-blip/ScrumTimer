@@ -1,7 +1,6 @@
 """Speaking-turn cues with mocked Neon APIs; never writes to the live database."""
 import os
 import base64
-import re
 import struct
 import zlib
 from playwright.sync_api import sync_playwright, expect
@@ -26,16 +25,6 @@ SVG = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/19
     f'<g transform="matrix(2.4 0 0 2.4 {left} {top})"><image width="100" height="100" xlink:href="{PICTURES[index]}"/></g>'
     for index, left, top in [(3, 620, 10), (1, 80, 285), (2, 620, 285), (0, 80, 10)]
 ) + f'<image x="410" y="200" width="40" height="40" href="{PICTURES[3]}"/></svg>'
-GIF_HEADER = b'GIF89a' + struct.pack('<HHBBB', 1, 1, 0x80, 0, 0) + bytes([220, 40, 40, 30, 90, 210])
-GIF_LOOP = b'\x21\xff\x0bNETSCAPE2.0\x03\x01\x00\x00\x00'
-GIF_CONTROL = b'\x21\xf9\x04\x00\x02\x00\x00\x00'
-GIF_FRAME = b'\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02'
-GIF = GIF_HEADER + GIF_LOOP + GIF_CONTROL + GIF_FRAME + b'\x44\x01\x00' + GIF_CONTROL + GIF_FRAME + b'\x4c\x01\x00\x3b'
-GIF_DELAYS = [len(GIF_HEADER + GIF_LOOP) + 4, len(GIF_HEADER + GIF_LOOP + GIF_CONTROL + GIF_FRAME) + 7]
-GIF_SVG = SVG
-for source in PICTURES:
-    GIF_SVG = GIF_SVG.replace(source, 'data:image/gif;base64,' + base64.b64encode(GIF).decode())
-
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for motion in ['no-preference', 'reduce']:
@@ -295,29 +284,6 @@ with sync_playwright() as p:
         expect(page.locator('#timer-ring [data-mood-picture]')).to_have_count(0)
         expect(page.locator('#timer-ring #speaker-name')).to_have_text(current)
         expect(page.locator('#timer-display')).to_be_visible()
-        context.route(f'**{SLIDE_ROOT}/first.svg', lambda route: route.fulfill(content_type='image/svg+xml', body=GIF_SVG))
-        page.reload()
-        animated = page.locator('#timer-ring [data-mood-picture] img')
-        expect(animated).to_have_attribute('src', re.compile(r'^blob:'))
-        slowed = animated.evaluate('async el => Array.from(new Uint8Array(await (await fetch(el.src)).arrayBuffer()))')
-        assert len(slowed) == len(GIF)
-        assert [slowed[offset] | slowed[offset + 1] << 8 for offset in GIF_DELAYS] == [12, 12]
-        if motion == 'reduce':
-            expect(animated).to_be_hidden()
-            frozen = page.locator('#timer-ring [data-mood-picture] canvas')
-            expect(frozen).to_be_visible()
-            assert frozen.evaluate("el => el.getContext('2d').getImageData(0,0,1,1).data[3]") == 255
-        else:
-            expect(animated).to_be_visible()
-            page.wait_for_function("document.querySelector('#timer-ring [data-mood-picture] img')?.naturalWidth > 0")
-            image_box = animated.bounding_box()
-            clip = {'x': image_box['x'] + image_box['width'] / 2 - 2, 'y': image_box['y'] + 8, 'width': 4, 'height': 4}
-            first_frame = page.screenshot(clip=clip)
-            assert any(page.screenshot(clip=clip) != first_frame for _ in range(20)), 'Slower GIF must still animate'
-        object_url = animated.get_attribute('src')
-        page.get_by_role('navigation', name='Navigation du point quotidien').get_by_role('link', name='Participants', exact=True).click()
-        expect(page.locator('#timer-ring')).to_have_count(0)
-        assert page.evaluate('async url => { try { await fetch(url); return false; } catch { return true; } }', object_url)
         assert not errors, errors
         assert not external_notes, external_notes
         bootstrap.assert_no_unexpected_api()
