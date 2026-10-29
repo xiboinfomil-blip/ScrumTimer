@@ -9,6 +9,7 @@ import { TeamSwitcher } from './team-switcher';
 import { NavIcon } from './nav-icon';
 
 const steps = [
+  { path: '/teams', label: 'Équipe', ariaLabel: 'Choisir une équipe', icon: 'people' },
   { path: '/participants', label: 'Participants', icon: 'people' },
   { path: '/mood', label: 'Humeurs', icon: 'mood' },
   { path: '/timer', label: 'Minuteur', icon: 'timer' },
@@ -18,7 +19,7 @@ export function Navbar() {
   const pathname = usePathname();
   const reduced = useReducedMotion();
   const { state, ready, todayRound, cloudStatus, retryCloud, updateTeam } = useTeam();
-  const currentStep = steps.findIndex(step => step.path === pathname);
+  const currentStep = steps.findIndex(step => step.path === pathname || (step.path === '/teams' && pathname === '/manage-team'));
   const hasPeople = ready && (Boolean(todayRound) || state.roster.some(person => person.present));
   const canUseTimer = ready && (Boolean(todayRound) || hasValidSession(state));
   const loading = cloudStatus !== 'error' && (!ready || cloudStatus === 'loading');
@@ -32,15 +33,15 @@ export function Navbar() {
       <Link className="flex min-h-11 shrink-0 items-center rounded-lg pr-4 max-[1100px]:pr-1 min-[1101px]:border-r min-[1101px]:border-line" href="/teams" aria-label="Accueil du point quotidien Infomil Mauritius"><img className="h-8 w-25 object-contain max-[1100px]:w-22 max-[800px]:h-7 max-[800px]:w-17 max-[360px]:w-14" src="/infomil-logo.svg" alt="Infomil Mauritius" width={190} height={60} /></Link>
       <TeamSwitcher />
       <nav aria-label="Navigation du point quotidien" className="mx-auto min-w-0 max-w-132 flex-1 max-[800px]:order-3 max-[800px]:max-w-none max-[800px]:basis-full max-[800px]:border-t max-[800px]:border-line/70">
-        <ol aria-label="Progression du point quotidien" className="grid list-none grid-cols-3 gap-1">
+        <ol aria-label="Progression du point quotidien" className="grid list-none grid-cols-4 gap-1">
           {steps.map((step, index) => {
             const active = currentStep === index;
             const complete = Boolean(todayRound) || index < currentStep;
-            const available = index === 0 || (index === 1 ? hasPeople : canUseTimer);
-            const reason = !ready ? 'Chargement de votre équipe…' : index === 1 ? 'Ajoutez au moins une personne présente pour continuer.' : 'Complétez les humeurs et créez le tour de parole pour continuer.';
+            const available = index < 2 || (index === 2 ? hasPeople : canUseTimer);
+            const reason = !ready ? 'Chargement de votre équipe…' : index === 2 ? 'Ajoutez au moins une personne présente pour continuer.' : 'Complétez les humeurs et créez le tour de parole pour continuer.';
             const content = <><motion.span initial={false} animate={{ backgroundColor: active ? '#205f9d' : complete ? '#edf9f2' : '#f1f5f9', color: active ? '#ffffff' : complete ? '#147d52' : '#65798d' }} transition={{ duration: reduced ? 0 : .2 }} className="grid size-6 shrink-0 place-items-center rounded-lg" aria-hidden="true"><NavIcon name={complete && !active ? 'check' : step.icon} className="size-3.5" /></motion.span><span className="truncate text-xs font-semibold max-[1000px]:text-[11px] max-[360px]:text-[10px]">{step.label}</span>{active && <span className="absolute inset-x-5 bottom-0 h-0.5 rounded-full bg-accent" aria-hidden="true" />}</>;
             const itemClass = `relative flex min-h-11 w-full items-center justify-center gap-2 rounded-md px-2 transition-colors max-[1000px]:gap-1.5 max-[360px]:gap-1 max-[360px]:px-0.5 motion-reduce:transition-none ${active ? 'bg-blue-50/70 text-brand' : complete ? 'text-success hover:bg-slate-50' : available ? 'text-muted hover:bg-slate-50 hover:text-brand' : 'text-slate-400'}`;
-            return <li key={step.path} className="min-w-0" data-step-complete={complete} aria-current={active ? 'step' : undefined}>{available ? <ButtonBase component={Link} href={step.path} aria-label={step.label} aria-current={active ? 'page' : undefined} className={itemClass}>{content}</ButtonBase> : <ButtonBase disabled aria-label={`${step.label} — ${reason}`} title={reason} className={itemClass}>{content}</ButtonBase>}</li>;
+            return <li key={step.path} className="min-w-0" data-step-complete={complete} aria-current={active ? 'step' : undefined}>{available ? <ButtonBase component={Link} href={step.path} aria-label={step.path === '/teams' ? 'Choisir une équipe' : step.label} aria-current={active ? 'page' : undefined} className={itemClass}>{content}</ButtonBase> : <ButtonBase disabled aria-label={`${step.label} — ${reason}`} title={reason} className={itemClass}>{content}</ButtonBase>}</li>;
           })}
         </ol>
       </nav>

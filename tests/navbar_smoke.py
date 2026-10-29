@@ -25,6 +25,8 @@ with sync_playwright() as p:
                 route.fulfill(json={'team': {'roster': [], 'duration': 120, 'warning': 30, 'sound': False, 'session': [], 'usedMoodMeters': []}, 'revision': 1})
             elif path == 'history':
                 route.fulfill(json={'rounds': [], 'day': '2026-10-15'})
+            elif path == 'jira':
+                route.fulfill(json={'connected': False})
             else:
                 raise AssertionError(path)
         context.route('**/api/**', api)
@@ -35,9 +37,17 @@ with sync_playwright() as p:
         trigger = page.get_by_role('button', name='Choisir une équipe : Équipe Expérience & Innovation', exact=True)
         expect(trigger).to_be_enabled()
         navigation = page.get_by_role('navigation', name='Navigation du point quotidien')
+        team_step = navigation.get_by_role('link', name='Choisir une équipe', exact=True)
+        expect(team_step).to_have_attribute('href', '/teams')
         expect(navigation.get_by_role('link', name='Participants', exact=True)).to_have_attribute('aria-current', 'page')
         expect(navigation.get_by_role('button', name='Humeurs — Ajoutez au moins une personne présente pour continuer.', exact=True)).to_be_disabled()
         expect(navigation.get_by_role('button', name='Minuteur', exact=False)).to_be_disabled()
+        team_step.click()
+        page.wait_for_url('**/teams*')
+        expect(navigation.get_by_role('link', name='Choisir une équipe', exact=True)).to_have_attribute('aria-current', 'page')
+        page.get_by_role('link', name='Participants', exact=True).click()
+        page.wait_for_url('**/participants*')
+        expect(navigation.get_by_role('link', name='Participants', exact=True)).to_have_attribute('aria-current', 'page')
         page.keyboard.press('Control+Home')
         page.get_by_role('link', name='Aller au contenu', exact=True).focus()
         page.keyboard.press('Enter')
@@ -78,6 +88,13 @@ with sync_playwright() as p:
             if width in [320, 1366] and preference == 'no-preference':
                 page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-navbar-{width}.png'))
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        team_step.click()
+        page.wait_for_url('**/teams*')
+        page.get_by_role('button', name='Gérer l’équipe Équipe Expérience & Innovation', exact=True).click()
+        page.wait_for_url('**/manage-team*')
+        expect(page.locator('.site-header nav a[href="/teams"]')).to_have_attribute('aria-current', 'page')
+        page.keyboard.press('Escape')
+        page.wait_for_url('**/teams*')
         page.get_by_role('link', name='Guide d’utilisation', exact=True).click()
         expect(page.get_by_role('link', name='Guide d’utilisation', exact=True)).to_have_attribute('aria-current', 'page')
         failing[0] = True

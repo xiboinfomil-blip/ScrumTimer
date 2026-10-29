@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSelectedLayoutSegment } from 'next/navigation';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTeam } from '@/providers/team-provider';
 import { Navbar } from '@/components/layout/navbar';
 import { useActionMotion } from '@/hooks/motion/use-action-motion';
@@ -13,20 +13,41 @@ import { DailyRound } from './daily-round';
 import { DesktopFullscreenGate } from './desktop-fullscreen-gate';
 import { WelcomeEntrance } from './welcome-entrance';
 
-export function AppShell({ children }: { children: ReactNode }) {
+const WELCOME_DAY_KEY = 'standup.welcome.day.v1';
+
+export function AppShell({ children, modal }: { children: ReactNode; modal: ReactNode }) {
   useActionMotion();
-  const [introOpen, setIntroOpen] = useState(true);
+  const [introOpen, setIntroOpen] = useState(false);
+  const [introChecked, setIntroChecked] = useState(false);
+  const introDay = useRef<string | null>(null);
   const closeIntro = useCallback(() => setIntroOpen(false), []);
   const router = useRouter();
   const pathname = usePathname();
   const segment = useSelectedLayoutSegment();
   // Native history updates change pathname before Next loads the new route tree.
   // Never reveal the previous route's children (and its guards) in that gap.
-  const routeLoaded = pathname === (segment ? `/${segment}` : '/');
+  const routeLoaded = pathname === (segment ? `/${segment}` : '/') || (pathname === '/manage-team' && modal !== null);
   const publicPage = pathname === '/help' || pathname === '/teams';
   const reduced = useReducedMotion();
   const [routeScope, animateRoute] = useAnimate();
   const { ready, activeTeamId, todayRound, cloudStatus, retryCloud } = useTeam();
+  useEffect(() => {
+    if (pathname === '/remote' || pathname === '/spectator') {
+      setIntroOpen(false);
+      setIntroChecked(true);
+      return;
+    }
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date());
+    if (introDay.current === day) { setIntroChecked(true); return; }
+    introDay.current = day;
+    let seen = false;
+    try {
+      seen = window.localStorage.getItem(WELCOME_DAY_KEY) === day;
+      if (!seen) window.localStorage.setItem(WELCOME_DAY_KEY, day);
+    } catch { /* Show the introduction when browser storage is unavailable. */ }
+    setIntroOpen(!seen);
+    setIntroChecked(true);
+  }, [pathname]);
   useEffect(() => {
     if (!ready || !routeScope.current || reduced) return;
     const transition = animateRoute(routeScope.current, { opacity: [0, 1], y: [8, 0] }, { duration: .28, ease: [.22, 1, .36, 1] });
@@ -43,13 +64,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   return <MotionConfig reducedMotion="user" transition={{ type: 'spring', stiffness: 420, damping: 28 }}>
     {introOpen && pathname !== '/spectator' && <WelcomeEntrance onClose={closeIntro} />}
     <div className="contents" inert={introOpen && pathname !== '/spectator'} aria-hidden={introOpen && pathname !== '/spectator' ? true : undefined}>
-    {!introOpen && pathname !== '/spectator' && <DesktopFullscreenGate />}
+    {introChecked && !introOpen && pathname !== '/spectator' && <DesktopFullscreenGate />}
     {pathname !== '/spectator' && <Navbar />}
     <main id="main-content" tabIndex={-1} className="page mx-auto flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden px-6 pt-4.5 pb-2.5 max-[1100px]:px-4 max-[1100px]:pt-3 max-[650px]:gap-2 max-[650px]:px-3 max-[650px]:py-2.5">
       {cloudStatus === 'error' && <Alert severity="warning" className="shrink-0" action={<Button onClick={retryCloud}>Réessayer Neon</Button>}>Données Neon indisponibles ou conflit de sauvegarde. Aucun stockage local. Les modifications non confirmées restent en mémoire. Ne rechargez pas avant de les sauvegarder.</Alert>}
       {ready || publicPage ? <motion.div ref={routeScope} key={activeTeamId} className="flex min-h-0 flex-1 flex-col" data-route-transition>{todayRound && (pathname === '/mood' || pathname === '/timer') ? <DailyRound key={todayRound.id} /> : routeLoaded ? children : cloudStatus === 'error' ? <p role="status" className="text-sm text-muted">Connexion à Neon nécessaire pour ouvrir votre équipe.</p> : <PageSkeleton variant={skeletonVariantForPath(pathname)} />}</motion.div> : cloudStatus === 'error' ? <div className="grid flex-1 place-content-center text-sm text-muted" role="status">Connexion à Neon nécessaire pour ouvrir votre équipe.</div> : <PageSkeleton variant={skeletonVariantForPath(pathname)} label="Chargement de votre équipe depuis Neon…" />}
       <footer className="flex h-5 shrink-0 items-center justify-between text-[9px] text-muted max-[800px]:hidden [@media(max-height:650px)]:hidden"><span><AutoAwesomeIcon className="mr-2 inline-block size-4 text-accent" fontSize="inherit" aria-hidden="true" /> Moins de réunions. Plus de sens.</span><span>Au rythme de votre équipe. <span className="ml-2">Persistance exclusivement dans Neon.</span></span></footer>
     </main>
+    {ready && modal}
     </div>
   </MotionConfig>;
 }

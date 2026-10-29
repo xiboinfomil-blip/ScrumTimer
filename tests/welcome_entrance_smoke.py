@@ -1,4 +1,4 @@
-"""Initial welcome cover: mocked APIs, no durable data or browser storage writes."""
+"""Daily welcome cover: mocked APIs and isolated browser-local day preference."""
 import os
 from datetime import datetime, timedelta, timezone
 from playwright.sync_api import sync_playwright, expect
@@ -44,15 +44,22 @@ with sync_playwright() as p:
             page.get_by_role('link', name='Guide d’utilisation', exact=True).click()
             expect(page).to_have_url(BASE + '/help')
             expect(intro).to_have_count(0)
+            key = 'standup.welcome.day.v1'
+            assert page.evaluate('(key) => localStorage.getItem(key) === new Intl.DateTimeFormat("en-CA", {timeZone:"Indian/Mauritius"}).format(new Date())', key)
+            page.reload()
+            expect(intro).to_have_count(0)
+            page.evaluate('(key) => localStorage.setItem(key, "2000-01-01")', key)
             page.reload()
             expect(intro).to_be_visible()
             expect(close).to_be_focused()
             close.click()
             expect(intro).to_have_count(0)
-            page.clock.run_for(1000)
+            page.evaluate('(key) => localStorage.setItem(key, "2000-01-01")', key)
             page.reload()
-            expect(close).to_be_focused()
+            expect(intro).to_be_visible()
             page.keyboard.press('Escape')
+            expect(intro).to_have_count(0)
+            page.reload()
             expect(intro).to_have_count(0)
             assert not errors, errors
             context.close()

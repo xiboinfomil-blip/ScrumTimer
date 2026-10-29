@@ -20,7 +20,7 @@ import { SprintManagement } from './sprint-management';
 
 const searchable = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr-FR');
 
-export function ManageTeamPage() {
+export function ManageTeamPage({ modal = false }: { modal?: boolean } = {}) {
   const { state, teams, activeTeamName, activeTeamId, updateTeam, cloudStatus } = useTeam();
   const isSprint = teams.find(team => team.id === activeTeamId)?.kind === 'sprint';
   const notify = useNotify();
@@ -47,7 +47,7 @@ export function ManageTeamPage() {
     <header className="relative isolate flex shrink-0 flex-wrap items-end justify-between gap-x-5 gap-y-4 overflow-hidden rounded-xl border border-line bg-[linear-gradient(112deg,#f7fbff_0%,#ffffff_64%,#fff8ef_100%)] px-4 py-4 sm:px-6 sm:py-5">
       <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-accent" />
       <div className="relative min-w-0 flex-1 basis-60">
-        <Link href={`/teams?team=${activeTeamId}`} className="inline-flex min-h-11 items-center gap-2 rounded-lg text-xs font-semibold text-brand hover:text-brand-dark"><ArrowBackIcon className="size-4" fontSize="inherit" aria-hidden="true" />Toutes les équipes</Link>
+        {!modal && <Link href={`/teams?team=${activeTeamId}`} className="inline-flex min-h-11 items-center gap-2 rounded-lg text-xs font-semibold text-brand hover:text-brand-dark"><ArrowBackIcon className="size-4" fontSize="inherit" aria-hidden="true" />Toutes les équipes</Link>}
         <p className="mt-1 text-[10px] font-bold uppercase text-muted">Gestion de l’équipe</p>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1"><h1 id="manage-team-heading" className="min-w-0 text-2xl font-bold wrap-anywhere text-ink sm:text-[28px]">{activeTeamName}</h1><span className="inline-flex min-h-7 items-center rounded-full border border-line bg-white/80 px-3 text-xs font-medium text-muted">{state.roster.length} membre{state.roster.length === 1 ? '' : 's'}</span></div>
       </div>
