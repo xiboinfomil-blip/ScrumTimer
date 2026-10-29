@@ -95,6 +95,9 @@ with sync_playwright() as p:
                     db['meter'] = req.post_data_json
                     db['patches'] += 1
                 route.fulfill(json={'day': day, 'meter': db['meter']})
+            elif path == '/api/participant-link' and req.method == 'POST':
+                assert req.headers.get('x-team-id') == ID
+                route.fulfill(json={'url': 'https://participants.example/t/fake-signed'})
             elif path == '/api/mood-meters/catalog':
                 route.fulfill(json=[{'title': 'Test meter', 'category': 'Animals & Creatures', 'remoteId': 'deck-1234567890abcdef1234', 'slides': []}])
             elif path.startswith('/api/mood-meters/decks/'):
@@ -108,6 +111,15 @@ with sync_playwright() as p:
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(BASE + '/mood')
+        share_button = page.get_by_role('button', name='Lien participants', exact=True)
+        expect(share_button).to_be_visible()
+        share_button.click()
+        share_dialog = page.get_by_role('dialog', name='Portail participants · Test', exact=True)
+        expect(share_dialog).to_be_visible()
+        expect(share_dialog.get_by_role('textbox', name='Lien à partager', exact=True)).to_have_value('https://participants.example/t/fake-signed?equipe=Test')
+        expect(share_dialog.locator('[data-testid="participant-share-qr"] svg')).to_be_visible()
+        share_dialog.get_by_role('button', name='Fermer', exact=True).click()
+        expect(share_dialog).not_to_be_visible()
         select = page.locator('#meter-catalogue-select')
         expect(select).to_be_enabled()
         expand = page.locator('#expand-meter-button')

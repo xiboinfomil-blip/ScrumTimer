@@ -149,6 +149,15 @@ def ui_case(browser, width, height):
         expect(dialog.get_by_text('Toute personne qui le possède peut modifier les notes.',
                                   exact=False)).to_be_visible()
         expect(dialog.get_by_text('Ne publiez pas ce lien.', exact=False)).to_be_visible()
+        name_input = dialog.get_by_role('textbox', name='Nom d’équipe dans le lien', exact=True)
+        qr_svg = dialog.locator('[data-testid="participant-share-qr"] svg')
+        original_qr = qr_svg.evaluate('svg => svg.innerHTML')
+        name_input.fill('Equipe Delta')
+        expect(field).to_have_value(f'{LINK}?equipe=Equipe+Delta')
+        expect(qr_svg).not_to_have_js_property('innerHTML', original_qr)
+        dialog.get_by_role('button', name='Utiliser le nom de l’équipe', exact=True).click()
+        expect(name_input).to_have_value(NAME)
+        expect(field).to_have_value(LINK_WITH_TEAM)
         settle(page)
         box = dialog.bounding_box()
         assert box and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, box

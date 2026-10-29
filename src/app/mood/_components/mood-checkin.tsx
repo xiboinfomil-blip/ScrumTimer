@@ -1,13 +1,20 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useRef } from 'react';
+import { Fragment, useRef } from 'react';
 import { PaginatedList } from '@/components/ui/paginated-list';
 import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
 import { canStartSession } from '@/lib/team/team-storage';
 import type { Mood } from '@/types/team';
 import { MoodIcon } from './mood-icon';
+
+const moodChoices: { value: Mood; description: string; tone: string }[] = [
+  { value: 1, description: 'Mauvaise humeur, énergie élevée', tone: 'border-orange-200 text-amber-900 hover:bg-orange-50 aria-pressed:border-orange-600 aria-pressed:bg-orange-600' },
+  { value: 2, description: 'Mauvaise humeur, énergie basse', tone: 'border-blue-200 text-blue-900 hover:bg-blue-50 aria-pressed:border-blue-700 aria-pressed:bg-blue-700' },
+  { value: 3, description: 'Bonne humeur, énergie basse', tone: 'border-teal-200 text-teal-900 hover:bg-teal-50 aria-pressed:border-teal-700 aria-pressed:bg-teal-700' },
+  { value: 4, description: 'Bonne humeur, énergie élevée', tone: 'border-green-200 text-green-900 hover:bg-green-50 aria-pressed:border-green-700 aria-pressed:bg-green-700' },
+];
 
 export function MoodCheckin({ className = '' }: { className?: string }) {
   const { state, updateTeam, dailyReady, participantOrder, getTimerCheckpoint, rejoinLateParticipant, activeTeamId } = useTeam();
@@ -44,12 +51,15 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
         <li key={person.id} className={`checkin-person flex h-25 shrink-0 flex-wrap content-center items-center gap-x-1 gap-y-1 rounded-md border-b px-2 @max-[340px]:h-36 motion-safe:animate-enter ${state.postponed?.includes(person.id) ? 'border-amber-200 bg-amber-50/40' : person.mood ? 'border-success/20 bg-success-soft/30' : 'border-line bg-white hover:bg-slate-50'}`}>
           <strong className="flex min-w-0 basis-full items-center gap-2 text-sm font-semibold" title={person.name}><span aria-hidden="true" className={`grid size-6 shrink-0 place-items-center rounded-lg text-[10px] font-bold ${state.postponed?.includes(person.id) ? 'bg-amber-100 text-amber-800' : person.mood ? 'bg-success-soft text-success' : 'bg-blue-50 text-brand'}`}>{person.mood ? <MoodIcon name="check" className="size-3.5" /> : Array.from(person.name)[0]?.toLocaleUpperCase('fr-FR')}</span><span className="min-w-0 flex-1 truncate">{person.name}</span><span className="shrink-0 text-[10px] font-medium text-muted">{state.postponed?.includes(person.id) ? 'En attente' : person.mood ? `Humeur ${person.mood}` : 'À vous'}</span></strong>
           <div className="flex shrink-0 items-center gap-1" role="group" aria-label={`Humeur de ${person.name} : choisissez de 1 à 4`}>
-            {([1, 2, 3, 4] as Mood[]).map(mood => (
-              <button type="button" key={mood} className="relative grid size-11 shrink-0 place-items-center rounded-md border border-line bg-white text-sm font-semibold text-brand hover:border-brand/40 hover:bg-blue-50 aria-pressed:border-brand aria-pressed:bg-brand aria-pressed:text-white aria-pressed:ring-2 aria-pressed:ring-brand/15 aria-pressed:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-45"
-                disabled={!dailyReady} aria-label={`Humeur ${mood} pour ${person.name}`} aria-pressed={person.mood === mood}
-                onClick={() => { if (resuming) { if (rejoinLateParticipant(person.id, mood)) notify(`${person.name} rejoint la fin du tour. Son humeur est enregistrée.`); return; } const timestamp = new Date().toISOString(); if (updateTeam(current => ({ ...current, session: [], postponed: current.postponed?.filter(id => id !== person.id), usedMoodMeters: [...new Set([...(current.usedMoodMeters ?? []), ...(current.currentMoodSlide?.meterId ? [current.currentMoodSlide.meterId] : [])])], roster: current.roster.map(p => p.id === person.id ? { ...p, mood, moodUpdatedAt: timestamp, moodSlide: current.currentMoodSlide ?? null } : p) }))) notify(`${person.name} : humeur ${mood} enregistrée.`); }}>
-                {mood}
+            {moodChoices.map(choice => (
+              <Fragment key={choice.value}>
+              <button type="button" className={`relative grid size-11 shrink-0 place-items-center rounded-md border bg-white text-sm font-semibold aria-pressed:text-white aria-pressed:ring-2 aria-pressed:ring-brand/15 aria-pressed:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-45 ${choice.tone}`}
+                disabled={!dailyReady} aria-label={`Humeur ${choice.value} pour ${person.name}`} aria-describedby={`mood-choice-${person.id}-${choice.value}`} aria-pressed={person.mood === choice.value}
+                onClick={() => { if (resuming) { if (rejoinLateParticipant(person.id, choice.value)) notify(`${person.name} rejoint la fin du tour. Son humeur est enregistrée.`); return; } const timestamp = new Date().toISOString(); if (updateTeam(current => ({ ...current, session: [], postponed: current.postponed?.filter(id => id !== person.id), usedMoodMeters: [...new Set([...(current.usedMoodMeters ?? []), ...(current.currentMoodSlide?.meterId ? [current.currentMoodSlide.meterId] : [])])], roster: current.roster.map(p => p.id === person.id ? { ...p, mood: choice.value, moodUpdatedAt: timestamp, moodSlide: current.currentMoodSlide ?? null } : p) }))) notify(`${person.name} : humeur ${choice.value} enregistrée.`); }}>
+                {choice.value}
               </button>
+              <span id={`mood-choice-${person.id}-${choice.value}`} className="sr-only">{choice.description}</span>
+              </Fragment>
             ))}
           </div>
           {!resuming && <button type="button" className="ml-auto min-h-11 shrink-0 rounded-xl px-1.5 text-[11px] font-semibold text-muted hover:bg-slate-100 aria-pressed:bg-amber-50 aria-pressed:text-amber-800 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Reporter l’humeur et le passage de ${person.name}`} aria-pressed={state.postponed?.includes(person.id) ?? false} disabled={!dailyReady} onClick={() => updateTeam(current => ({ ...current, session: [], postponed: current.postponed?.includes(person.id) ? current.postponed.filter(id => id !== person.id) : [...(current.postponed ?? []), person.id] }))}>{state.postponed?.includes(person.id) ? <>En attente <MoodIcon name="check" className="inline-block size-3.5" /></> : 'Plus tard'}</button>}

@@ -15,6 +15,7 @@ import { MoodIcon } from './mood-icon';
 import { MOOD_RETRY_DELAYS } from '@/lib/mood/mood-retry';
 import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
 import PauseRounded from '@mui/icons-material/PauseRounded';
+import CloseRounded from '@mui/icons-material/CloseRounded';
 
 const slideError = 'Diapositive indisponible. Le baromètre par défaut est affiché.';
 const meterStage = 'meter-stage relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden rounded-md border border-line bg-slate-50';
@@ -289,15 +290,21 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
   const playing = !paused && (wide || mobileVisible);
 
   return (
-    <Paper component="section" elevation={0} ref={panelRef} className={`flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden rounded-lg border border-line bg-white p-4 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-2.5 ${className}`} aria-labelledby="meter-title">
-      <Dialog open={expanded} onClose={() => setExpanded(false)} fullScreen aria-labelledby="expanded-meter-title" sx={{ zIndex: 1700 }}>
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-2"><DialogTitle id="expanded-meter-title" className="min-w-0 truncate p-0! text-base!">{title}</DialogTitle><Button onClick={() => setExpanded(false)} sx={{ minHeight: 44 }}>Fermer le plein écran</Button></div>
-        <DialogContent className="flex min-h-0 flex-1 flex-col gap-3 bg-slate-50 p-3! sm:p-5!">
+    <Paper component="section" elevation={0} ref={panelRef} className={`flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden rounded-lg border border-line border-t-2 border-t-accent bg-white p-4 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-2.5 ${className}`} aria-labelledby="meter-title">
+      <Dialog open={expanded} onClose={() => setExpanded(false)} fullScreen aria-labelledby="expanded-meter-title" sx={{ zIndex: 1700 }} slotProps={{ paper: { sx: { bgcolor: '#f4f7f9' } } }}>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-white px-4 py-2.5 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3"><span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-brand"><MoodIcon name="meter" className="size-5" /></span><div className="min-w-0"><p className="text-[10px] font-bold uppercase text-muted">Baromètre du jour</p><DialogTitle id="expanded-meter-title" className="truncate p-0! text-sm! font-bold! sm:text-base!">{title}</DialogTitle></div></div>
+          <IconButton onClick={() => setExpanded(false)} aria-label="Fermer le plein écran" title="Fermer" sx={{ width: 44, height: 44, flexShrink: 0 }}><CloseRounded /></IconButton>
+        </div>
+        <DialogContent className="flex min-h-0 flex-1 flex-col gap-3 bg-[#f4f7f9] p-3! sm:p-5!">
           {expanded && (deck?.slides[expandedSlide] ? <MeterSlide key={`${expandedSlide}:${retry}`} slide={deck.slides[expandedSlide]} title={`${title} — diapositive ${expandedSlide + 1}`} paused={!playing} idPrefix="expanded-meter" /> : <div className={`${meterStage}`}><DefaultMoodMeter /></div>)}
-          {deck && <div className="flex shrink-0 flex-wrap items-center justify-center gap-2" role="group" aria-label="Diapositives en plein écran">{deck.slides.map((_, index) => <Button key={index} variant={expandedSlide === index ? 'contained' : 'outlined'} onClick={() => setExpandedSlide(index)} aria-pressed={expandedSlide === index} sx={{ minHeight: 44 }}>Diapositive {index + 1}</Button>)}</div>}
+          {deck && <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 rounded-lg border border-line bg-white p-2" role="group" aria-label="Diapositives en plein écran">{deck.slides.map((_, index) => <Button key={index} variant={expandedSlide === index ? 'contained' : 'text'} onClick={() => setExpandedSlide(index)} aria-pressed={expandedSlide === index} sx={{ minHeight: 44, minWidth: 44, textTransform: 'none' }}>Diapositive {index + 1}</Button>)}</div>}
         </DialogContent>
       </Dialog>
-      <h2 id="meter-title" className="shrink-0 text-lg font-bold tracking-tight max-[800px]:sr-only">Baromètre du jour</h2>
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <div className="min-w-0"><p className="text-[10px] font-bold uppercase text-muted max-[800px]:sr-only">Référence commune</p><h2 id="meter-title" className="truncate text-base font-bold text-ink max-[800px]:sr-only">Baromètre du jour</h2></div>
+        <span className="shrink-0 rounded-md bg-orange-50 px-2 py-1 text-[10px] font-bold uppercase text-amber-800 max-[800px]:sr-only">Partagé</span>
+      </div>
       <div className="flex min-w-0 shrink-0 items-center gap-2">
         <div className={`flex min-w-0 flex-1 items-center gap-2 ${locked ? 'max-[800px]:sr-only' : ''}`}>
         <label className="sr-only" htmlFor="meter-catalogue-select">Catalogue · {catalog.length} baromètres</label>

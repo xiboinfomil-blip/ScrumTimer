@@ -30,26 +30,26 @@ export function ParticipantLinkButton({ compact = false }: { compact?: boolean }
   }
   return <><Button onClick={load} aria-label="Lien participants" title="Lien participants" variant="outlined" startIcon={<QrCode2Rounded />} className={compact ? 'max-[650px]:!min-w-11 max-[650px]:!px-0 [&_.MuiButton-startIcon]:max-[650px]:!mr-0' : undefined} sx={{ minHeight: 44, textTransform: 'none', fontSize: 12 }}><span className={compact ? 'max-[650px]:sr-only' : undefined}>Lien participants</span></Button>
     <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="md" aria-labelledby="participant-link-title" slotProps={{ paper: { sx: { display: 'flex', flexDirection: 'column', borderRadius: { xs: '14px', sm: '18px' }, m: { xs: 1.5, sm: 3 }, maxHeight: 'calc(100dvh - 24px)' } } }}>
-      <DialogTitle id="participant-link-title" className="border-b border-line bg-[linear-gradient(112deg,#f3f8fd_0%,#ffffff_72%,#fff8ef_100%)] px-4 py-4 sm:px-6">
-        <span className="flex items-start gap-3"><span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-lg bg-white text-brand shadow-sm"><QrCode2Rounded /></span><span className="min-w-0"><span aria-hidden="true" className="block text-xs font-semibold text-muted">PORTAIL PARTICIPANTS</span><span className="mt-1 block break-words text-base font-bold text-ink">Portail participants · {activeTeamName}</span></span></span>
+      <DialogTitle id="participant-link-title" className="border-b border-line border-t-2 border-t-accent bg-white px-4 py-4 sm:px-6">
+        <span className="flex items-start gap-3"><span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-lg bg-blue-50 text-brand"><QrCode2Rounded /></span><span className="min-w-0"><span aria-hidden="true" className="block text-[10px] font-bold uppercase text-muted">PARTAGE D’ÉQUIPE</span><span className="mt-1 block break-words text-base font-bold text-ink">Portail participants · {activeTeamName}</span></span></span>
       </DialogTitle>
-      <DialogContent className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-        <p className="mb-4 max-w-3xl text-sm leading-relaxed text-muted">Partagez ce lien uniquement avec l’équipe. Il ouvre les notes, statistiques et bilans, sans connexion ni contrôle de la réunion. Toute personne qui le possède peut modifier les notes.</p>
+      <DialogContent className="min-h-0 overflow-y-auto bg-[#f8fafb] px-4 py-4 sm:px-6 sm:py-5">
+        <p className="mb-4 max-w-3xl text-sm leading-relaxed text-muted">Partagez ce lien avec l’équipe. Il ouvre les notes, statistiques et bilans, sans connexion ni contrôle de la réunion. Toute personne qui le possède peut modifier les notes.</p>
         {pending && <p role="status" className="rounded-lg border border-line bg-slate-50 p-4 text-sm text-muted">Préparation du lien sécurisé…</p>}
         {error && <Alert role="alert" severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Réessayer</Button>}>{error}</Alert>}
-        {url && <div className="grid items-start gap-5 md:grid-cols-[minmax(0,1fr)_220px]">
-          <div className="min-w-0">
-            <TextField fullWidth size="small" label="Nom d’équipe pour le partage" value={linkName} onChange={event => { setLinkName(event.target.value); setCopied(false); }} helperText="Le lien et le QR code suivent automatiquement vos modifications." slotProps={{ htmlInput: { maxLength: 80, 'aria-describedby': 'participant-share-name-hint' }, formHelperText: { id: 'participant-share-name-hint' } }} sx={{ '& .MuiInputBase-root': { minHeight: 44 } }} />
-            <Button type="button" variant="text" startIcon={<RestartAltRounded />} disabled={linkName === activeTeamName} onClick={() => { setLinkName(activeTeamName); setCopied(false); }} sx={{ mt: 0.5, minHeight: 44, textTransform: 'none', fontSize: 12 }}>Reprendre le nom de l’équipe</Button>
+        {url && <div className="grid items-start gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-line bg-white p-2 md:col-start-2 md:row-start-1 md:p-3">
+            <p className="text-xs font-semibold text-ink">Scanner pour rejoindre</p>
+            <div className="grid aspect-square w-full max-w-[148px] place-items-center rounded-lg bg-white p-1.5 md:max-w-[188px] md:p-2" data-testid="participant-share-qr"><QRCode value={url} size={172} level="M" title={`QR code du lien participant pour ${linkName || activeTeamName}`} className="h-auto w-full max-w-full" /></div>
+            <p className="text-center text-[11px] leading-relaxed text-muted">Le QR code ouvre le même lien que le bouton de copie.</p>
+          </div>
+          <div className="min-w-0 md:col-start-1 md:row-start-1">
+            <TextField fullWidth size="small" label="Nom d’équipe dans le lien" value={linkName} onChange={event => { setLinkName(event.target.value); setCopied(false); setError(''); }} helperText="Modifiez ce nom : le lien et le QR code se mettent à jour ensemble." slotProps={{ htmlInput: { maxLength: 80, 'aria-describedby': 'participant-share-name-hint' }, formHelperText: { id: 'participant-share-name-hint' } }} sx={{ '& .MuiInputBase-root': { minHeight: 44 } }} />
+            <Button type="button" variant="text" startIcon={<RestartAltRounded />} disabled={linkName === activeTeamName} onClick={() => { setLinkName(activeTeamName); setCopied(false); setError(''); }} sx={{ mt: 0.5, minHeight: 44, textTransform: 'none', fontSize: 12 }}>Utiliser le nom de l’équipe</Button>
             <label htmlFor="participant-share-url" className="mt-4 block text-xs font-semibold text-ink">Lien à partager</label>
             <input id="participant-share-url" readOnly value={url} onFocus={event => event.currentTarget.select()} aria-describedby="participant-share-hint" className="mt-2 min-h-12 w-full min-w-0 rounded-lg border border-line bg-slate-50 px-3 text-xs text-ink focus-visible:outline-2 focus-visible:outline-brand" />
             <p id="participant-share-hint" className="mt-2 text-xs leading-relaxed text-muted">Le nom est uniquement un repère lisible. L’accès sécurisé reste attaché à l’équipe sélectionnée.</p>
             <p className="mt-2 text-xs leading-relaxed text-muted">Ne publiez pas ce lien. Le changement du secret partagé invalide les liens existants.</p>
-          </div>
-          <div className="flex flex-col items-center gap-3 rounded-xl border border-line bg-white p-3">
-            <p className="text-xs font-semibold text-ink">Scanner pour rejoindre</p>
-            <div className="grid aspect-square w-full max-w-[188px] place-items-center rounded-lg bg-white p-2" data-testid="participant-share-qr"><QRCode value={url} size={172} level="M" title={`QR code du lien participant pour ${linkName || activeTeamName}`} className="h-auto w-full max-w-full" /></div>
-            <p className="text-center text-[11px] leading-relaxed text-muted">Le QR code ouvre le même lien que le bouton de copie.</p>
           </div>
         </div>}
         {copied && <p role="status" aria-live="polite" className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-success">Lien copié dans le presse-papiers.</p>}
