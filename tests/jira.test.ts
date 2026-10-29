@@ -139,7 +139,7 @@ test('Jira sprint creation is atomic; unauthenticated lists expose only locked e
     assert.equal(stored.team?.roster[0].id, 'jira:1');
     assert.equal(stored.team?.roster.length, 1);
     const lockedList = await visibleJiraTeams(client, request, imported);
-    assert.deepEqual(lockedList.teams.find(team => team.id === teamId), { id: teamId, name: 'Sprint', memberCount: 0, category: null, favorite: false, kind: 'sprint', jiraLocked: true });
+    assert.deepEqual(lockedList.teams.find(team => team.id === teamId), { id: teamId, name: 'Sprint', memberCount: 0, category: null, kind: 'sprint', jiraLocked: true });
     assert.notEqual(lockedList.activeTeamId, teamId);
     assert.equal((await visibleJiraTeams(client, request, { teams: imported.teams.filter(team => team.id === teamId), activeTeamId: teamId })).activeTeamId, null);
     await assert.rejects(authorizeJiraTeam(client, request, teamId), { status: 401 });

@@ -8,10 +8,25 @@ type HostSnapshot = Omit<RemoteSnapshot, 'version'>;
 
 export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, actions: { toggle: () => void; next: () => void; restart: () => void; penalty: () => void; blackScreen: () => void }) {
   const [enabled, setEnabled] = useState(false);
+  const activationTeam = useRef<string | null>(null);
   const [pair, setPair] = useState<Pair | null>(null);
   const [status, setStatus] = useState('');
   const publishNow = useRef<() => void>(() => {});
   const latest = useRef({ snapshot: { ...snapshot, version: '0' }, actions, signature: '', revision: 0 });
+  useEffect(() => {
+    if (!teamId) {
+      activationTeam.current = null;
+      setEnabled(false);
+      return;
+    }
+    if (activationTeam.current !== teamId) {
+      activationTeam.current = teamId;
+      setPair(null);
+      setStatus('Création du lien sécurisé…');
+      setEnabled(true);
+    }
+  }, [teamId]);
+
   useEffect(() => {
     // A tick must not invalidate a button; every semantic timer change must.
     const signature = JSON.stringify([snapshot.activeId, snapshot.running, snapshot.deadline, snapshot.completed, snapshot.total, snapshot.blocked, snapshot.speaker, snapshot.nextSpeaker, snapshot.running ? null : snapshot.remaining, snapshot.blackScreen, snapshot.manualPenalty]);
@@ -111,5 +126,14 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
     return () => { cancelled = true; publishNow.current = () => {}; clearInterval(interval); clearTimeout(immediate); controller.abort(); window.removeEventListener('pagehide', pagehide); document.removeEventListener('visibilitychange', visible); window.removeEventListener('online', visible); if (credentials) revoke(credentials); };
   }, [enabled, teamId]);
 
-  return { enabled, pair, status, toggle: () => { setPair(null); setStatus('Création du lien sécurisé…'); setEnabled(value => !value); } };
+  return { enabled, pair, status, toggle: () => {
+    setPair(null);
+    if (enabled) {
+      setStatus('Télécommande désactivée.');
+      setEnabled(false);
+    } else {
+      setStatus('Création du lien sécurisé…');
+      setEnabled(true);
+    }
+  } };
 }

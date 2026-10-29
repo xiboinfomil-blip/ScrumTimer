@@ -50,15 +50,9 @@ class DirectoryMock:
             if method == 'PATCH':
                 body = request.post_data_json
                 self.patches.append(deepcopy(body))
-                assert set(body) == {'teamId', 'favorite'}, body
+                assert set(body) == {'teamId', 'category'}, body
                 target = next(team for team in self.teams if team['id'] == body['teamId'])
-                if self.fail_next:
-                    self.fail_next = False
-                    route.fulfill(status=503, json={'error': 'Échec simulé du classement.'})
-                    return
-                assert type(body['favorite']) is bool, body
-                target['favorite'] = body['favorite']
-                # Metadata never changes the authoritative active team.
+                target['category'] = body['category']
             elif method == 'POST':
                 body = request.post_data_json
                 assert set(body) == {'name', 'category'}, body
@@ -206,6 +200,8 @@ def run_case(browser, width, height, motion, screenshots):
         page.goto(f'{BASE}/teams?team={ACTIVE}')
         expect(listing(page).get_by_role('listitem')).to_have_count(3)
         expect(favorite(page, 'Équipe Atlas', False)).to_be_enabled()
+        expect(favorite(page, 'Équipe Boréal', False)).to_be_enabled()
+        expect(page.get_by_role('group', name='Afficher les équipes', exact=True).get_by_role('button', name='Mon équipe', exact=True)).to_have_count(0)
         geometry(page)
         expect(page.get_by_role('textbox', name='Nom de l’équipe', exact=True)).to_have_count(0)
         panel, field = creation_panel(page, width)
@@ -245,35 +241,30 @@ def run_case(browser, width, height, motion, screenshots):
         favorite(page, 'Équipe Atlas', False).click()
         expect(favorite(page, 'Équipe Atlas', True)).to_have_attribute('aria-pressed', 'true')
         expect(favorite(page, 'Équipe Atlas', True)).to_be_enabled()
-        assert db.patches[-1] == {'teamId': ACTIVE, 'favorite': True}
+        assert not db.patches, 'Favorite changes must never be written to the server'
         views = page.get_by_role('group', name='Afficher les équipes', exact=True)
         views.get_by_role('button', name='Favoris', exact=True).click()
-        expect(listing(page).get_by_role('listitem')).to_have_count(2)
-        favorite(page, 'Équipe Boréal', True).click()
         expect(listing(page).get_by_role('listitem')).to_have_count(1)
-        assert db.patches[-1] == {'teamId': OTHER, 'favorite': False}
+        views.get_by_role('button', name='Toutes', exact=True).click()
+        favorite(page, 'Équipe Boréal', False).click()
+        views.get_by_role('button', name='Favoris', exact=True).click()
+        expect(listing(page).get_by_role('listitem')).to_have_count(2)
         favorite(page, 'Équipe Atlas', True).click()
+        expect(listing(page).get_by_role('listitem')).to_have_count(1)
+        favorite(page, 'Équipe Boréal', True).click()
         expect(page.get_by_text('Aucune équipe favorite dans cette sélection.', exact=True)).to_be_visible()
         page.get_by_role('button', name='Afficher toutes les équipes', exact=True).click()
+        assert not db.patches
         favorite(page, 'Équipe Atlas', False).click()
         expect(favorite(page, 'Équipe Atlas', True)).to_be_enabled()
+        assert page.evaluate("localStorage.getItem('standup.team.favorites.v1')") == f'["{ACTIVE}"]'
+        assert not db.patches
         active_unchanged(page, db, reads, original_url)
-
-        # Failed assignments must leave both the visible and durable mock unchanged.
-        db.fail_next = True
-        favorite(page, 'Équipe Atlas', True).click()
-        expect(page.get_by_text('Classement non confirmé. Réessayez ou rechargez pour vérifier le choix enregistré.', exact=True)).to_be_visible()
-        expect(favorite(page, 'Équipe Atlas', True)).to_be_enabled()
-        assert db.teams[0]['favorite'] is True
-        active_unchanged(page, db, reads, original_url)
-        favorite(page, 'Équipe Atlas', True).click()
-        expect(favorite(page, 'Équipe Atlas', False)).to_be_enabled()
-        favorite(page, 'Équipe Atlas', False).click()
-        expect(favorite(page, 'Équipe Atlas', True)).to_be_enabled()
 
         page.reload()
         expect(page.get_by_role('combobox')).to_have_count(0)
         expect(favorite(page, 'Équipe Atlas', True)).to_be_enabled()
+        expect(favorite(page, 'Équipe Boréal', False)).to_be_enabled()
         assert [team['category'] for team in db.teams] == ['Tech', 'Produit', None]
         expect(card(page, 'Équipe Atlas').get_by_text('Actuelle', exact=True)).to_be_visible()
         assert parse_qs(urlparse(page.url).query)['team'] == [ACTIVE]
@@ -283,6 +274,17 @@ def run_case(browser, width, height, motion, screenshots):
         expect(page).to_have_url(re.compile(r'/participants\?team=' + ACTIVE + '$'))
         page.goto(f'{BASE}/teams?team={ACTIVE}')
         expect(favorite(page, 'Équipe Atlas', True)).to_be_enabled()
+
+        if width == 320 and motion == 'reduce':
+            other_context = browser.new_context(viewport={'width': width, 'height': height}, service_workers='block')
+            other_bootstrap = install_browser_bootstrap(other_context)
+            other_context.route('**/api/**', db.api)
+            other_page = other_context.new_page()
+            other_page.goto(f'{BASE}/teams?team={ACTIVE}')
+            expect(favorite(other_page, 'Équipe Atlas', False)).to_be_enabled()
+            expect(favorite(other_page, 'Équipe Boréal', False)).to_be_enabled()
+            other_bootstrap.assert_no_unexpected_api()
+            other_context.close()
 
         # >6 entries: pagination resets after filtering and keeps focus accessible.
         for index in range(4):
@@ -327,7 +329,7 @@ def run_case(browser, width, height, motion, screenshots):
         assert len(db.creations) == 2
         bootstrap.assert_no_unexpected_api()
         assert not errors, errors
-        print(f'PASS {width}x{height} {motion}: name search/favorites/no categories/no-selection/reload/errors/recovery/pagination/creation', flush=True)
+        print(f'PASS {width}x{height} {motion}: name search/local favorites/no current filter/reload/isolation/pagination/creation', flush=True)
     finally:
         bootstrap.assert_no_unexpected_api()
         context.close()

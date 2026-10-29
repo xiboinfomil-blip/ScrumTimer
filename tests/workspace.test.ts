@@ -51,11 +51,13 @@ test('migration metadata preserves every unchanged relational table and API owne
   assert.match(read('../src/lib/persistence/database.ts'), /request.headers.get\('X-Team-Id'\)/);
 });
 
-test('API identity is database-only, with no cookie or browser-storage dependency', () => {
+test('Team APIs remain database-only while favorites use only the local preference key', () => {
   const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
-  for (const path of ['../src/lib/persistence/database.ts', '../src/lib/team/workspace-store.ts', '../src/app/api/teams/route.ts', '../src/providers/team-provider.tsx']) {
+  for (const path of ['../src/lib/persistence/database.ts', '../src/lib/team/workspace-store.ts', '../src/app/api/teams/route.ts']) {
     assert.doesNotMatch(read(path), /privateSpace|next\/headers|standup-space|localStorage|sessionStorage|indexedDB|document\.cookie|Set-Cookie/i, path);
   }
+  assert.match(read('../src/providers/team-provider.tsx'), /standup\.team\.favorites\.v1/);
+  assert.doesNotMatch(read('../src/providers/team-provider.tsx'), /document\.cookie|indexedDB/);
   assert.doesNotMatch(read('../src/lib/team/workspace-store.ts'), /selected_team_id/, 'selection is never persisted');
 });
 
@@ -94,7 +96,7 @@ test('PGlite: shared teams across devices, independent selection, daily singleto
     await engine.exec(migration('0009_remove_unused_audit_timestamps'));
     await readMoodFetchCache(client, catalog, clock);
     const first = await listTeams(client);
-    assert.deepEqual(first, { teams: [{ id: workspace, name: 'Mon équipe', memberCount: 1, category: null, favorite: false }], activeTeamId: workspace });
+    assert.deepEqual(first, { teams: [{ id: workspace, name: 'Mon équipe', memberCount: 1, category: null }], activeTeamId: workspace });
     assert.deepEqual(await listTeams(client), first);
     const bootstrap = await Promise.all([listTeams(client), listTeams(client)]);
     assert.deepEqual(bootstrap[0], bootstrap[1]);

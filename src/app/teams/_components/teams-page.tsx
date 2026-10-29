@@ -27,10 +27,10 @@ const pageSize = 6;
 const secondaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 text-xs font-semibold text-brand hover:border-brand/40 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50';
 const primaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-xs font-semibold text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50';
 const field = 'min-h-11 min-w-0 rounded-lg border border-line bg-slate-50/80 px-3 text-sm text-ink placeholder:text-muted focus:border-brand';
-type View = 'all' | 'current' | 'favorites';
+type View = 'all' | 'favorites';
 
 export function TeamsPage() {
-  const { teams, activeTeamId, teamBusy, ready, cloudStatus, switchTeam, createTeam, updateTeamDirectory } = useTeam();
+  const { teams, activeTeamId, teamBusy, ready, cloudStatus, switchTeam, createTeam, setTeamFavorite } = useTeam();
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [view, setView] = useState<View>('all');
@@ -51,7 +51,7 @@ export function TeamsPage() {
   const nameInput = useRef<HTMLInputElement>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
   const results = filterTeams(teams, { favoritesOnly: view === 'favorites' })
-    .filter(team => (view !== 'current' || team.id === activeTeamId) && searchable(team.name).includes(searchable(query.trim())));
+    .filter(team => searchable(team.name).includes(searchable(query.trim())));
   const pageCount = Math.max(1, Math.ceil(results.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
   const visibleTeams = results.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
@@ -108,9 +108,9 @@ export function TeamsPage() {
     <div className="min-w-0">
       <section className="min-w-0 pt-5 lg:pt-7" aria-labelledby="team-list-heading">
         <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div role="group" aria-label="Afficher les équipes" className="grid min-h-12 min-w-0 grid-cols-3 gap-1 rounded-xl border border-line bg-slate-100/80 p-1 sm:w-auto sm:min-w-[390px]">
-            {([['all', 'Toutes', GridViewOutlinedIcon, teams.length], ['current', 'Mon équipe', NavIcon, activeTeamId ? 1 : 0], ['favorites', 'Favoris', StarOutlineIcon, teams.filter(team => team.favorite).length]] as const).map(([value, label, Icon, count]) => <button key={value} type="button" aria-pressed={view === value} onClick={() => { setView(value); setPage(0); }} className={`flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-lg px-1.5 text-[11px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand sm:gap-2 sm:px-3 sm:text-xs ${view === value ? 'bg-white text-brand shadow-sm' : 'text-muted hover:bg-white/70 hover:text-ink'}`}>
-              {value === 'current' ? <NavIcon name="people" className="hidden shrink-0 sm:block" width="16" height="16" /> : <Icon aria-hidden="true" className="hidden shrink-0 sm:block" sx={{ fontSize: 17 }} />}
+          <div role="group" aria-label="Afficher les équipes" className="grid min-h-12 min-w-0 grid-cols-2 gap-1 rounded-xl border border-line bg-slate-100/80 p-1 sm:w-auto sm:min-w-[260px]">
+            {([['all', 'Toutes', GridViewOutlinedIcon, teams.length], ['favorites', 'Favoris', StarOutlineIcon, teams.filter(team => team.favorite).length]] as const).map(([value, label, Icon, count]) => <button key={value} type="button" aria-pressed={view === value} onClick={() => { setView(value); setPage(0); }} className={`flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-lg px-1.5 text-[11px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand sm:gap-2 sm:px-3 sm:text-xs ${view === value ? 'bg-white text-brand shadow-sm' : 'text-muted hover:bg-white/70 hover:text-ink'}`}>
+              <Icon aria-hidden="true" className="hidden shrink-0 sm:block" sx={{ fontSize: 17 }} />
               <span className="min-w-0 truncate">{label}</span><span aria-hidden="true" className={`min-w-4 rounded px-1 text-center text-[10px] tabular-nums ${view === value ? 'bg-blue-50 text-brand' : 'text-muted'}`}>{ready ? count : '—'}</span>
             </button>)}
           </div>
@@ -121,7 +121,7 @@ export function TeamsPage() {
           </div>
         </div>
         <div className="mb-3 flex min-w-0 items-baseline justify-between gap-3">
-          <h2 ref={listHeading} tabIndex={-1} id="team-list-heading" className="min-w-0 text-sm font-semibold text-ink">{view === 'favorites' ? 'Équipes favorites' : view === 'current' ? 'Mon équipe' : 'Choisir une équipe'}</h2>
+          <h2 ref={listHeading} tabIndex={-1} id="team-list-heading" className="min-w-0 text-sm font-semibold text-ink">{view === 'favorites' ? 'Équipes favorites' : 'Choisir une équipe'}</h2>
           <p role="status" aria-live="polite" aria-atomic="true" className="shrink-0 text-[11px] text-muted">{!ready ? 'Chargement…' : `${results.length} résultat${results.length === 1 ? '' : 's'}`}</p>
         </div>
         {error && <Alert severity="error" className="mb-3">{error}</Alert>}
@@ -142,7 +142,7 @@ export function TeamsPage() {
                   <div className="flex items-center justify-between gap-2 px-4 pt-3.5">
                     <span aria-hidden="true" className={`grid size-11 shrink-0 place-items-center rounded-xl text-sm font-bold ${active ? 'bg-brand text-white' : team.kind === 'sprint' ? 'bg-orange-50 text-accent' : 'bg-slate-100 text-muted'}`}>{team.name.split(/\s+/).slice(0, 2).map(word => Array.from(word)[0]).join('').toLocaleUpperCase('fr-FR')}</span>
                     {active && <span className="mr-auto inline-flex min-h-7 items-center gap-1.5 rounded-full bg-blue-50 px-2.5 text-[10px] font-semibold text-brand"><span aria-hidden="true" className="size-1.5 rounded-full bg-brand" />Actuelle</span>}
-                    <button type="button" disabled={disabled || team.jiraLocked} aria-label={`${team.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} : ${team.name}`} title={team.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} aria-pressed={team.favorite} onClick={() => void updateTeamDirectory({ teamId: team.id, favorite: !team.favorite })} className={`grid size-11 shrink-0 place-items-center rounded-lg transition-colors hover:bg-amber-50 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand disabled:opacity-50 ${team.favorite ? 'text-amber-500' : 'text-slate-400'}`}>{team.favorite ? <StarIcon aria-hidden="true" sx={{ fontSize: 21 }} /> : <StarOutlineIcon aria-hidden="true" sx={{ fontSize: 21 }} />}</button>
+                    <button type="button" disabled={disabled || team.jiraLocked} aria-label={`${team.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} : ${team.name}`} title={team.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} aria-pressed={team.favorite} onClick={() => setTeamFavorite(team.id, !team.favorite)} className={`grid size-11 shrink-0 place-items-center rounded-lg transition-colors hover:bg-amber-50 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand disabled:opacity-50 ${team.favorite ? 'text-amber-500' : 'text-slate-400'}`}>{team.favorite ? <StarIcon aria-hidden="true" sx={{ fontSize: 21 }} /> : <StarOutlineIcon aria-hidden="true" sx={{ fontSize: 21 }} />}</button>
                   </div>
                   <div className="min-w-0 flex-1 px-4 pt-3 pb-4"><h3 className="text-base leading-6 font-semibold wrap-anywhere text-ink">{team.name}</h3><p className="mt-2 flex items-center gap-1.5 text-xs text-muted"><NavIcon name="people" width="15" height="15" />{team.jiraLocked ? 'Connexion Jira requise' : <>{team.memberCount} membre{team.memberCount === 1 ? '' : 's'}{team.memberCount === 0 && ' · À compléter'}</>}</p>{team.kind === 'sprint' && <p className="mt-2 flex items-start gap-1.5 text-[11px] wrap-anywhere text-brand"><AccountTreeOutlinedIcon aria-hidden="true" sx={{ fontSize: 15 }} />Sprint Jira · {team.sprintName ?? ''}</p>}</div>
                   <div className={`flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 ${active ? 'border-brand/10 bg-blue-50/40' : 'border-slate-100'}`}>

@@ -437,7 +437,6 @@ def main():
                 first = host.locator('#speaker-name').inner_text()
                 host.get_by_role('button', name='Télécommande mobile', exact=True).click()
                 pairing = host.get_by_role('dialog', name='Votre téléphone, aux commandes', exact=True)
-                pairing.get_by_role('button', name='Activer le QR de l’équipe', exact=True).click()
                 expect(pairing.locator('[data-testid="remote-qr"] svg')).to_be_visible()
                 qr_path = pairing.locator('[data-testid="remote-qr"] svg').inner_html()
                 expect(pairing.locator('[data-testid="remote-qr"] svg title')).to_have_text('Scanner pour ouvrir la télécommande')
@@ -518,7 +517,20 @@ def main():
                 assert len(api.commands) == before_cancel
 
                 before_penalty = checkpoint(host)
+                before_penalty_commands = len(api.commands)
                 penalty.click()
+                penalty_dialog = phone.get_by_role('dialog', name='Ajouter une pénalité ?', exact=True)
+                expect(penalty_dialog).to_be_visible()
+                expect(penalty_dialog).to_contain_text(first)
+                penalty_dialog.get_by_role('button', name='Annuler', exact=True).click()
+                expect(penalty_dialog).not_to_be_visible()
+                assert checkpoint(host) == before_penalty
+                assert len(api.commands) == before_penalty_commands
+                penalty.click()
+                expect(penalty_dialog).to_be_visible()
+                expect(penalty_dialog).to_contain_text(first)
+                penalty_dialog.get_by_role('button', name='Ajouter −50 points', exact=True).click()
+                expect(penalty_dialog).not_to_be_visible()
                 expect(phone.get_by_text('Pénalités manuelles : −50 points', exact=True)).to_be_visible()
                 expect(penalty).to_be_enabled()
                 penalized = checkpoint(host)

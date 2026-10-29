@@ -99,7 +99,7 @@ class JiraMock(DirectoryMock):
             self.active = SPRINT
             self.teams.append({'id': SPRINT, 'name': body['name'], 'category': None,
                                'kind': 'sprint', 'sprintName': 'Sprint 2',
-                               'memberCount': 2, 'favorite': False})
+                               'memberCount': 2})
             self.states[SPRINT] = team_fixture(roster=[
                 {'id': f'jira:{account}', 'name': name, 'present': True,
                  'mood': None, 'moodUpdatedAt': None}
@@ -274,7 +274,7 @@ def login_case(browser, width, height):
     db = JiraMock()
     db.connected = False
     db.teams.append({'id': SPRINT, 'name': 'Sprint verrouillé', 'kind': 'sprint',
-                     'jiraLocked': True, 'memberCount': 0, 'category': None, 'favorite': False})
+                     'jiraLocked': True, 'memberCount': 0, 'category': None})
     context.route('**/api/**', db.api)
     page = context.new_page()
     try:

@@ -33,7 +33,7 @@ export async function visibleJiraTeams(db: Database, request: Request, list: { t
   for (const team of list.teams) {
     const link = links.get(team.id);
     if (!link) { teams.push({ ...team, kind: 'ordinary' }); continue; }
-    const locked: TeamSummary = { id: team.id, name: team.name, memberCount: 0, category: null, favorite: false, kind: 'sprint', jiraLocked: true };
+    const locked: TeamSummary = { id: team.id, name: team.name, memberCount: 0, category: null, kind: 'sprint', jiraLocked: true };
     if (!jiraRequestCookie(request)) { teams.push(locked); continue; }
     try {
       await (await jiraService(db, request)).authorize(String(link.cloud_id), Number(link.board_id));

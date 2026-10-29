@@ -2,9 +2,9 @@
 import { validateJiraSelection, type JiraSprintSelection } from '../jira/jira.ts';
 export const teamCategories = ['Tech', 'Produit', 'Support', 'Marketing'] as const;
 export type TeamCategory = typeof teamCategories[number];
-export type TeamSummary = { id: string; name: string; memberCount: number; category: TeamCategory | null; favorite: boolean; kind?: 'ordinary' | 'sprint'; sprintName?: string; jiraLocked?: boolean };
+export type TeamSummary = { id: string; name: string; memberCount: number; category: TeamCategory | null; favorite?: boolean; kind?: 'ordinary' | 'sprint'; sprintName?: string; jiraLocked?: boolean };
 export type TeamCreation = { name: unknown; category: TeamCategory | null; sprint?: JiraSprintSelection };
-export type TeamDirectoryUpdate = { teamId: string; category: TeamCategory | null } | { teamId: string; favorite: boolean };
+export type TeamDirectoryUpdate = { teamId: string; category: TeamCategory | null };
 export type TeamDirectoryPatch = { teamId: string } | TeamDirectoryUpdate;
 
 export function isTeamCategory(value: unknown): value is TeamCategory {
@@ -33,17 +33,13 @@ export function validateTeamCreation(value: unknown): TeamCreation {
 /** Presence, not truthiness, discriminates absolute metadata assignments. */
 export function validateTeamDirectoryPatch(value: unknown): TeamDirectoryPatch {
   const keys = value && typeof value === 'object' ? Object.keys(value) : [];
-  const field = keys.includes('category') ? 'category' : keys.includes('favorite') ? 'favorite' : null;
+  const field = keys.includes('category') ? 'category' : null;
   const input = exactObject(value, field ? ['teamId', field] : ['teamId']);
   if (typeof input.teamId !== 'string' || !/^[a-f0-9]{64}$/.test(input.teamId)) throw new TypeError('Équipe invalide.');
   if (field === 'category') return { teamId: input.teamId, category: validateTeamCategory(input.category) };
-  if (field === 'favorite') {
-    if (typeof input.favorite !== 'boolean') throw new TypeError('Favori invalide.');
-    return { teamId: input.teamId, favorite: input.favorite };
-  }
   return { teamId: input.teamId };
 }
 
 export function filterTeams<T extends TeamSummary>(teams: readonly T[], filters: { category?: TeamCategory | null; favoritesOnly?: boolean } = {}): T[] {
-  return teams.filter(team => (filters.category === undefined || team.category === filters.category) && (!filters.favoritesOnly || team.favorite));
+  return teams.filter(team => (filters.category === undefined || team.category === filters.category) && (!filters.favoritesOnly || team.favorite === true));
 }

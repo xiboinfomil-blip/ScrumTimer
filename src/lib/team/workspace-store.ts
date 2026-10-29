@@ -49,9 +49,9 @@ async function batch(db: Database, statements: SQL[]) {
 }
 // A single database namespace, not a browser identity. Legacy rows stay visible.
 const sharedWorkspace = '0'.repeat(64);
-const listStatement = () => sql`SELECT t.id,t.name,t.category,t.favorite,(SELECT count(*)::int FROM team_members m WHERE m.team_id=t.id) AS "memberCount" FROM teams t ORDER BY lower(t.name),t.id`;
+const listStatement = () => sql`SELECT t.id,t.name,t.category,(SELECT count(*)::int FROM team_members m WHERE m.team_id=t.id) AS "memberCount" FROM teams t ORDER BY lower(t.name),t.id`;
 function listResult(rows: Record<string, unknown>[], selectedId: string | null = null) {
-  const teams: TeamSummary[] = rows.map(row => ({ id: String(row.id), name: String(row.name), memberCount: Number(row.memberCount), category: validateTeamCategory(row.category ?? null), favorite: row.favorite === true }));
+  const teams: TeamSummary[] = rows.map(row => ({ id: String(row.id), name: String(row.name), memberCount: Number(row.memberCount), category: validateTeamCategory(row.category ?? null) }));
   return { teams, activeTeamId: selectedId ?? (rows.length ? String(rows[0].id) : null) };
 }
 export async function listTeams(db: Database) {
@@ -123,10 +123,10 @@ export async function updateTeamDirectory(db: Database, value: unknown) {
   let input;
   try {
     input = validateTeamDirectoryPatch(value);
-    if (!('category' in input) && !('favorite' in input)) throw new TypeError();
+    if (!('category' in input)) throw new TypeError();
   } catch { throw new WorkspaceError(400, 'Métadonnées d’équipe invalides.'); }
   const teamId = input.teamId;
-  const assignment = 'category' in input ? sql`category=${input.category}` : sql`favorite=${input.favorite}`;
+  const assignment = sql`category=${input.category}`;
   const results = await batch(db, [
     sql`INSERT INTO workspaces(id) VALUES(${sharedWorkspace}) ON CONFLICT DO NOTHING`,
     sql`SELECT id FROM workspaces WHERE id=${sharedWorkspace} FOR UPDATE`,

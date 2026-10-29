@@ -34,6 +34,7 @@ export function TimerRemotePage() {
   const [now, setNow] = useState(0);
   const [confirmNext, setConfirmNext] = useState<string | null>(null);
   const [confirmRestart, setConfirmRestart] = useState<string | null>(null);
+  const [confirmPenalty, setConfirmPenalty] = useState<string | null>(null);
   const mounted = useRef(false);
   const refresh = useRef<() => Promise<void>>(async () => {});
 
@@ -111,6 +112,7 @@ export function TimerRemotePage() {
     if (!usable || !snapshot || !credentials.current || pendingRef.current || (snapshot.blackScreen && action !== 'black-screen')) return;
     pendingRef.current = true; setPending(true); setConfirmNext(null);
     setConfirmRestart(null);
+    setConfirmPenalty(null);
     try {
       // getRandomValues also works on an HTTP LAN preview, unlike randomUUID.
       const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -153,7 +155,7 @@ export function TimerRemotePage() {
         </section>
         <section aria-label="Autres commandes" className="grid grid-cols-3 gap-2">
           <button type="button" disabled={!usable || snapshot?.blackScreen} onClick={() => setConfirmRestart(snapshot?.version ?? null)} className="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border border-slate-500 bg-slate-50 px-1 text-[10px] font-semibold text-brand focus-visible:outline-3 focus-visible:outline-brand disabled:text-slate-600"><RestartAltRounded fontSize="small" />Redémarrer</button>
-          <button type="button" disabled={!usable || snapshot?.blackScreen || (snapshot?.manualPenalty ?? 0) > 999_950} onClick={() => void command('penalty')} className="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border border-amber-700 bg-amber-50 px-1 text-[10px] font-semibold text-amber-900 focus-visible:outline-3 focus-visible:outline-brand disabled:text-slate-600" aria-label="Pénalité de 50 points"><span className="flex items-center gap-1"><WarningAmberRounded fontSize="small" /><span>−50</span></span>Pénalité</button>
+          <button type="button" disabled={!usable || snapshot?.blackScreen || (snapshot?.manualPenalty ?? 0) > 999_950} onClick={() => setConfirmPenalty(snapshot?.version ?? null)} className="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border border-amber-700 bg-amber-50 px-1 text-[10px] font-semibold text-amber-900 focus-visible:outline-3 focus-visible:outline-brand disabled:text-slate-600" aria-label="Pénalité de 50 points"><span className="flex items-center gap-1"><WarningAmberRounded fontSize="small" /><span>−50</span></span>Pénalité</button>
           <button type="button" disabled={!usable} onClick={() => void command('black-screen')} aria-pressed={snapshot?.blackScreen ?? false} className="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border border-slate-500 bg-slate-50 px-1 text-[10px] font-semibold text-brand focus-visible:outline-3 focus-visible:outline-brand disabled:text-slate-600"><DesktopWindowsRounded fontSize="small" />{snapshot?.blackScreen ? 'Rétablir l’écran' : 'Écran noir'}</button>
         </section>
         {(snapshot?.manualPenalty ?? 0) > 0 && <p className="text-center text-xs font-semibold text-amber-900">Pénalités manuelles : −{snapshot?.manualPenalty} points</p>}
@@ -166,6 +168,11 @@ export function TimerRemotePage() {
         <DialogTitle id="remote-restart-title">Redémarrer ce passage ?</DialogTitle>
         <DialogContent><p id="remote-restart-description" className="text-sm leading-relaxed text-slate-600">Le décompte de {snapshot?.speaker} reviendra à sa durée initiale, en pause. Le temps déjà parlé et les pénalités sont conservés. La prochaine reprise comptera comme une nouvelle tentative.</p></DialogContent>
         <DialogActions><Button autoFocus onClick={() => setConfirmRestart(null)} sx={{ minHeight: 44 }}>Non</Button><Button onClick={() => void command('restart')} sx={{ minHeight: 44 }}>Oui, redémarrer</Button></DialogActions>
+      </Dialog>
+      <Dialog open={Boolean(confirmPenalty && confirmPenalty === snapshot?.version && usable && !snapshot?.blackScreen)} onClose={() => setConfirmPenalty(null)} aria-labelledby="remote-penalty-title" aria-describedby="remote-penalty-description" fullWidth maxWidth="xs" slotProps={{ paper: { sx: { border: '1px solid #dce3e9', borderRadius: '14px' } } }}>
+        <DialogTitle id="remote-penalty-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Ajouter une pénalité ?</DialogTitle>
+        <DialogContent><p id="remote-penalty-description" className="text-sm leading-relaxed text-slate-700">Ajouter 50 points de pénalité à <strong>{snapshot?.speaker}</strong> pour ce passage ? Cette action ne peut pas être annulée depuis le téléphone.</p></DialogContent>
+        <DialogActions className="border-t border-line"><Button autoFocus onClick={() => setConfirmPenalty(null)} sx={{ minHeight: 44 }}>Annuler</Button><Button variant="contained" color="warning" onClick={() => void command('penalty')} sx={{ minHeight: 44 }}>Ajouter −50 points</Button></DialogActions>
       </Dialog>
       {connection && connection.roundTripMs > 1000 && <p role="note" className="text-center text-xs leading-relaxed text-amber-800">Réseau lent · aller-retour {Math.round(connection.roundTripMs)} ms. Les commandes attendent la confirmation de l’ordinateur.</p>}
       {storageNotice && <p role="note" className="text-center text-xs leading-relaxed text-amber-800">{storageNotice}</p>}

@@ -21,6 +21,21 @@ interface TeamList {
   activeTeamId: string | null;
 }
 
+const TEAM_FAVORITES_KEY = 'standup.team.favorites.v1';
+
+function readFavoriteIds() {
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(TEAM_FAVORITES_KEY) ?? '[]');
+    if (Array.isArray(value) && value.every(id => typeof id === 'string' && /^[a-f0-9]{64}$/.test(id))) return value as string[];
+  } catch { /* Favorites remain available in memory when storage is blocked. */ }
+  return [];
+}
+
+function withLocalFavorites(teams: TeamSummary[], favoriteIds: string[]) {
+  const favorites = new Set(favoriteIds);
+  return teams.map(team => ({ ...team, favorite: favorites.has(team.id) }));
+}
+
 function readTeamList(value: unknown): TeamList {
   const list = value as TeamList | null;
   if (!list || !Array.isArray(list.teams) || (list.activeTeamId !== null && typeof list.activeTeamId !== 'string')
@@ -50,6 +65,7 @@ interface TeamContextValue {
   createTeam: (name: string, category?: TeamCategory | null, sprint?: JiraSprintSelection) => Promise<boolean>;
   syncSprint: (sprint: JiraSprintSelection) => Promise<boolean>;
   updateTeamDirectory: (update: TeamDirectoryUpdate) => Promise<boolean>;
+  setTeamFavorite: (teamId: string, favorite: boolean) => void;
   deleteTeam: (id: string, name: string) => Promise<boolean>;
   state: TeamState;
   ready: boolean;
@@ -77,6 +93,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   const selectedId = useRef<string | null>(null);
   const busy = useRef(true);
   const generation = useRef(0);
+  const favoriteIds = useRef<string[]>([]);
   const loadController = useRef<AbortController | null>(null);
   const writeController = useRef<AbortController | null>(null);
   const directoryController = useRef<AbortController | null>(null);
@@ -281,6 +298,16 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   }, [clearRetry]);
 
   useEffect(() => {
+    const syncFavorites = (event: StorageEvent) => {
+      if (event.key !== TEAM_FAVORITES_KEY && event.key !== null) return;
+      favoriteIds.current = readFavoriteIds();
+      setTeams(current => withLocalFavorites(current, favoriteIds.current));
+    };
+    window.addEventListener('storage', syncFavorites);
+    return () => window.removeEventListener('storage', syncFavorites);
+  }, []);
+
+  useEffect(() => {
     const controller = new AbortController();
     loadController.current = controller;
     const token = ++generation.current;
@@ -296,7 +323,8 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         if (!response.ok) throw new Error('Liste des équipes indisponible.');
         const list = readTeamList(await response.json());
         if (generation.current !== token || controller.signal.aborted) return;
-        setTeams(list.teams);
+        favoriteIds.current = readFavoriteIds();
+        setTeams(withLocalFavorites(list.teams, favoriteIds.current));
         if (!list.activeTeamId) { clearSelection(); clearRetry(); loadNotice.current = false; return; }
         const teamId = resolveTeamContext(list.teams.filter(team => !team.jiraLocked).map(team => team.id), selectedId.current
           ?? new URL(window.location.href).searchParams.get('team'), list.activeTeamId);
@@ -374,7 +402,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       selectedId.current = list.activeTeamId;
       // Hide the previous guarded route before a newly created empty team hydrates.
       if (method === 'POST') window.history.replaceState(window.history.state, '', `/manage-team?team=${list.activeTeamId}`);
-      setTeams(list.teams);
+      setTeams(withLocalFavorites(list.teams, favoriteIds.current));
       setActiveTeamId(list.activeTeamId);
       setState(defaultTeam());
       return await hydrateTeam(list.activeTeamId, controller, token);
@@ -431,7 +459,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       const list = readTeamList(await response.json());
       if (!mounted.current || generation.current !== token) return false;
       // Directory-only changes must never select a team or reset its live session.
-      setTeams(list.teams);
+      setTeams(withLocalFavorites(list.teams, favoriteIds.current));
       return true;
     } catch {
       if (mounted.current) notify('Classement non confirmé. Réessayez ou rechargez pour vérifier le choix enregistré.', 'error');
@@ -445,6 +473,17 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [teams, notify, flush]);
+
+  const setTeamFavorite = useCallback((teamId: string, favorite: boolean) => {
+    if (busy.current || !hydrated.current || !teams.some(team => team.id === teamId)) return;
+    const favorites = new Set(favoriteIds.current);
+    if (favorite) favorites.add(teamId);
+    else favorites.delete(teamId);
+    favoriteIds.current = [...favorites];
+    try { window.localStorage.setItem(TEAM_FAVORITES_KEY, JSON.stringify([...favorites])); }
+    catch { notify('Ce favori ne peut pas être conservé sur cet appareil.', 'warning'); }
+    setTeams(withLocalFavorites(teams, favoriteIds.current));
+  }, [teams, notify]);
 
   const deleteTeam = useCallback(async (id: string, name: string) => {
     if (!teams.some(team => team.id === id && team.name === name) || busy.current || uploading.current || dirty.current || pendingRounds.current.length || conflict.current || !hydrated.current) {
@@ -462,7 +501,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       if (!response.ok) throw new Error(body.error ?? 'Suppression non confirmée. Réessayez Neon.');
       const list = readTeamList(body);
       if (generation.current !== token || controller.signal.aborted) return false;
-      setTeams(list.teams);
+      setTeams(withLocalFavorites(list.teams, favoriteIds.current));
       if (selectedId.current === id) {
         // Leave stale guarded route children before changing the team state.
         window.history.replaceState(window.history.state, '', '/teams');
@@ -567,7 +606,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     } finally { clearTimeout(timeout); busy.current = false; setTeamBusy(false); }
   }, [todayRound, hydrateTeam, notify, scheduleRetry]);
   const activeTeamName = teams.find(team => team.id === activeTeamId)?.name ?? '';
-  return <TeamContext.Provider value={{ getTimerCheckpoint, storeTimerCheckpoint, rejoinLateParticipant, participantOrder, setParticipantOrder, teams, activeTeamId, activeTeamName, teamBusy, dailyReady, todayRound, resetToday, setDailyReady, switchTeam, createTeam, syncSprint, updateTeamDirectory, deleteTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;
+  return <TeamContext.Provider value={{ getTimerCheckpoint, storeTimerCheckpoint, rejoinLateParticipant, participantOrder, setParticipantOrder, teams, activeTeamId, activeTeamName, teamBusy, dailyReady, todayRound, resetToday, setDailyReady, switchTeam, createTeam, syncSprint, updateTeamDirectory, setTeamFavorite, deleteTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;
 }
 
 export function useTeam() {

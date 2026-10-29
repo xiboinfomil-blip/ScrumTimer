@@ -57,7 +57,7 @@ test('directory contracts: exact discriminated PATCH, legacy creation, categorie
   }
   assert.deepEqual(validateTeamCreation({ name: 'A' }), { name: 'A', category: null });
   assert.deepEqual(validateTeamDirectoryPatch({ teamId: id }), { teamId: id });
-  for (const favorite of [true, false]) assert.deepEqual(validateTeamDirectoryPatch({ teamId: id, favorite }), { teamId: id, favorite });
+  for (const favorite of [true, false]) assert.throws(() => validateTeamDirectoryPatch({ teamId: id, favorite }));
   for (const value of [undefined, '', 'tech', 'Autre', 0, false, [], {}]) assert.throws(() => validateTeamCategory(value));
   for (const value of [null, [], {}, { category: 'Tech' }, { name: 'A', favorite: true }, { name: 'A', category: undefined }, { name: 'A', category: 'Tech', extra: true }]) assert.throws(() => validateTeamCreation(value));
   for (const value of [null, [], {}, { teamId: id, name: 'A' }, { teamId: id, category: 'Tech', favorite: true }, { teamId: id, favorite: true, extra: 1 },
@@ -84,10 +84,11 @@ test('teams API validates before database access, keeps selection separate and i
   assert.match(patch, /validateTeamDirectoryPatch\(await readJson\(request\)\)/);
   assert.match(patch, /teamReadCache\.mutate\(\(\) => updateTeamDirectory\(database\(\), input\)\)/);
   assert.match(patch, /selectTeam\(database\(\), input.teamId\)/);
+  assert.doesNotMatch(patch, /favorite/);
   assert.match(source, /teamReadCache.read\(teamReadKey\('teams'\)/);
 });
 
-test('PGlite: migration backfill, category creation, shared absolute favorites, isolation, roster preservation and deletion', async () => {
+test('PGlite: migration backfill, category creation, local-only favorites, isolation, roster preservation and deletion', async () => {
   const engine = new PGlite();
   try {
     const journal = JSON.parse(read('../drizzle/meta/_journal.json')) as { entries: { tag: string }[] };
@@ -101,17 +102,18 @@ test('PGlite: migration backfill, category creation, shared absolute favorites, 
     assert.equal(latest, '0006_pretty_shiver_man');
     await engine.exec(read(`../drizzle/${latest}.sql`));
     assert.deepEqual((await engine.query('SELECT * FROM teams')).rows[0], { ...beforeMigration, category: null, favorite: false });
+    await engine.query('UPDATE teams SET favorite=true WHERE id=$1', [id]);
     for (const { tag } of journal.entries.slice(directoryIndex + 1)) await engine.exec(read(`../drizzle/${tag}.sql`));
     delete beforeMigration.updated_at;
     const statements: string[] = [];
     const client = clientFor(engine, statements);
     const first = (await listTeams(client)).teams[0];
-    assert.deepEqual(first, { id, name: 'Ancienne', memberCount: 0, category: null, favorite: false });
+    assert.deepEqual(first, { id, name: 'Ancienne', memberCount: 0, category: null });
     const plain = await createTeam(client, 'Sans catégorie');
     assert.equal(plain.teams.find(team => team.id === plain.activeTeamId)!.category, null);
     for (const category of teamCategories) {
       const created = await createTeam(client, category, category);
-      assert.deepEqual(created.teams.find(team => team.id === created.activeTeamId), { id: created.activeTeamId, name: category, memberCount: 0, category, favorite: false });
+      assert.deepEqual(created.teams.find(team => team.id === created.activeTeamId), { id: created.activeTeamId, name: category, memberCount: 0, category });
     }
     await assert.rejects(createTeam(client, 'tech', 'Produit'), hasStatus(409));
     const untouched = (await engine.query('SELECT * FROM teams WHERE id<>$1 ORDER BY id', [id])).rows;
@@ -122,35 +124,36 @@ test('PGlite: migration backfill, category creation, shared absolute favorites, 
     const categorized = await updateTeamDirectory(client, { teamId: id, category: 'Support' });
     assert.equal(categorized.activeTeamId, id);
     assert.equal(categorized.teams.find(team => team.id === id)!.category, 'Support');
+    assert.equal('favorite' in categorized.teams.find(team => team.id === id)!, false, 'shared favorite values are never returned');
     assert.match(statements[1], /FROM workspaces .*FOR UPDATE/);
     assert.match(statements[2], /FROM teams .*FOR UPDATE/);
     assert.match(statements[3], /^UPDATE teams SET category=/);
     assert.doesNotMatch(statements[3], /revision|updated_at|write_transaction/);
-    const favorite = await updateTeamDirectory(client, { teamId: id, favorite: true });
-    assert.deepEqual(await updateTeamDirectory(client, { teamId: id, favorite: true }), favorite, 'absolute assignment is idempotent');
-    assert.deepEqual(await selectTeam(clientFor(engine), id), favorite, 'another device sees shared metadata');
+    await assert.rejects(updateTeamDirectory(client, { teamId: id, favorite: false }), hasStatus(400));
+    assert.deepEqual(await selectTeam(clientFor(engine), id), categorized, 'directory reads omit shared favorite metadata');
     assert.deepEqual((await engine.query('SELECT * FROM teams WHERE id=$1', [id])).rows[0], { ...beforeMigration, category: 'Support', favorite: true });
     assert.deepEqual(await readTeam(client, id), rosterBefore, 'metadata does not change roster revision/session DTO');
     assert.deepEqual((await engine.query('SELECT * FROM standup_sessions')).rows, sessions);
     assert.deepEqual((await engine.query('SELECT * FROM teams WHERE id<>$1 ORDER BY id', [id])).rows, untouched);
     await assert.rejects(updateTeamDirectory(clientFor(engine, [], true), { teamId: id, category: 'Marketing' }), /injected list failure/);
-    assert.deepEqual(await selectTeam(client, id), favorite, 'later failure rolls back the update');
+    assert.deepEqual(await selectTeam(client, id), categorized, 'later failure rolls back the update');
     const roster = { ...rosterBefore.team!, roster: [{ id: 'person', name: 'Élodie', present: true, mood: null, moodUpdatedAt: null, moodSlide: null }] };
     assert.equal(await writeTeam(client, id, rosterBefore.revision, roster), rosterBefore.revision + 1, 'metadata never invalidates an in-flight roster CAS');
     const afterRoster = (await selectTeam(client, id)).teams.find(team => team.id === id)!;
-    assert.deepEqual(afterRoster, { ...first, memberCount: 1, category: 'Support', favorite: true });
-    await Promise.all([updateTeamDirectory(client, { teamId: id, category: 'Produit' }), updateTeamDirectory(client, { teamId: id, favorite: false })]);
-    assert.deepEqual((await selectTeam(client, id)).teams.find(team => team.id === id), { ...afterRoster, category: 'Produit', favorite: false });
+    assert.deepEqual(afterRoster, { ...first, memberCount: 1, category: 'Support' });
+    await updateTeamDirectory(client, { teamId: id, category: 'Produit' });
+    await updateTeamDirectory(client, { teamId: id, category: 'Marketing' });
+    assert.deepEqual((await selectTeam(client, id)).teams.find(team => team.id === id), { ...afterRoster, category: 'Marketing' });
     await updateTeamDirectory(client, { teamId: id, category: null });
     const beforeInvalid = (await engine.query('SELECT * FROM teams ORDER BY id')).rows;
     for (const value of [{ teamId: id }, { teamId: id, favorite: 'true' }, { teamId: id, category: 'Bad' }, { teamId: id, category: null, favorite: true }, { teamId: 'bad', favorite: true }]) await assert.rejects(updateTeamDirectory(client, value), hasStatus(400));
     await assert.rejects(createTeam(client, 'Invalid', 'Bad' as never), hasStatus(400));
-    await assert.rejects(updateTeamDirectory(client, { teamId: 'f'.repeat(64), favorite: true }), hasStatus(404));
+    await assert.rejects(updateTeamDirectory(client, { teamId: 'f'.repeat(64), category: 'Tech' }), hasStatus(404));
     await assert.rejects(engine.query("UPDATE teams SET category='Other' WHERE id=$1", [id]), /teams_category/);
     await assert.rejects(engine.query('UPDATE teams SET favorite=NULL WHERE id=$1', [id]), /not-null/);
     assert.deepEqual((await engine.query('SELECT * FROM teams ORDER BY id')).rows, beforeInvalid);
-    const [updated, removed] = await Promise.all([updateTeamDirectory(client, { teamId: id, favorite: true }), deleteTeam(client, { teamId: id, name: first.name })]);
-    assert.equal(updated.teams.find(team => team.id === id)!.favorite, true);
+    const [updated, removed] = await Promise.all([updateTeamDirectory(client, { teamId: id, category: 'Tech' }), deleteTeam(client, { teamId: id, name: first.name })]);
+    assert.equal(updated.teams.find(team => team.id === id)!.category, 'Tech');
     assert.equal(removed.teams.some(team => team.id === id), false);
     await assert.rejects(updateTeamDirectory(client, { teamId: id, category: 'Tech' }), hasStatus(404));
     assert.equal((await listTeams(clientFor(engine))).teams.some(team => team.id === id), false, 'metadata writes cannot resurrect deleted teams');

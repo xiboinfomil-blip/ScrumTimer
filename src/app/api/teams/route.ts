@@ -36,7 +36,7 @@ export async function PATCH(request: Request) {
   } catch (error) { return databaseFailure(error instanceof WorkspaceError ? error : new WorkspaceError(400, 'Requête invalide.')); }
   try {
     await authorizeJiraTeam(database(), request, input.teamId);
-    if ('category' in input || 'favorite' in input) return response(await visibleJiraTeams(database(), request, await teamReadCache.mutate(() => updateTeamDirectory(database(), input))));
+    if ('category' in input) return response(await visibleJiraTeams(database(), request, await teamReadCache.mutate(() => updateTeamDirectory(database(), input))));
     return response(await visibleJiraTeams(database(), request, await selectTeam(database(), input.teamId)));
   }
   catch (error) { return databaseFailure(error); }
