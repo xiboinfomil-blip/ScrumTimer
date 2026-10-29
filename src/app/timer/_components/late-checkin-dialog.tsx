@@ -10,13 +10,13 @@ import type { StandupTimer } from './timer-page';
 export function LateCheckinDialog({ timer }: { timer: StandupTimer }) {
   const { dailyReady, cloudStatus } = useTeam();
   const people = timer.people.filter(person => person.postponed && !person.done);
-  return <Dialog open={timer.lateChecking} onClose={timer.closeLateCheckin} aria-labelledby="late-checkin-title" aria-describedby="late-checkin-description" maxWidth={false} slotProps={{ paper: { sx: { m: 1, width: 'calc(100% - 16px)', maxWidth: 1200, height: 'min(820px, calc(100dvh - 16px))', borderRadius: '24px' } } }}>
-    <DialogTitle id="late-checkin-title" className="pb-1! text-xl! font-bold!">Un instant pour votre humeur</DialogTitle>
+  return <Dialog open={timer.lateChecking} onClose={timer.closeLateCheckin} aria-labelledby="late-checkin-title" aria-describedby="late-checkin-description" maxWidth={false} slotProps={{ paper: { sx: { m: 1, width: 'calc(100% - 16px)', maxWidth: 1200, height: 'min(820px, calc(100dvh - 16px))', border: '1px solid #dce3e9', borderRadius: '14px' } } }}>
+    <DialogTitle id="late-checkin-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Un instant pour votre humeur</DialogTitle>
     <p id="late-checkin-description" className="shrink-0 px-6 pb-3 text-xs text-muted [@media(max-height:650px)]:sr-only">Le même baromètre, le même tour. Le minuteur est en pause et tous les passages sont conservés.</p>
     <DialogContent className="flex min-h-0 flex-1 flex-col px-3! py-0! sm:px-5!">
       {timer.lateChecking && <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.5fr)_minmax(280px,.8fr)] gap-3 max-[800px]:grid-cols-1 max-[800px]:grid-rows-[minmax(0,1fr)_auto]">
         <MoodMeter locked className="[&_[id=meter-slide-stack]]:auto-rows-[minmax(44px,1fr)]" />
-        <section className={`flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-slate-50/60 p-3 ${people.length > 1 ? 'max-[800px]:h-48' : 'max-[800px]:h-40'} [@media(max-height:650px)]:p-2 [&_.list-pagination.invisible]:hidden [&_.late-checkin-list]:mt-1 [&_.late-checkin-list]:p-0`} aria-label="Humeurs des personnes reportées">
+        <section className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-line bg-white p-3 ${people.length > 1 ? 'max-[800px]:h-48' : 'max-[800px]:h-40'} [@media(max-height:650px)]:p-2 [&_.list-pagination.invisible]:hidden [&_.late-checkin-list]:mt-1 [&_.late-checkin-list]:p-0`} aria-label="Humeurs des personnes reportées">
           <h2 className="shrink-0 text-sm font-bold">Rejoindre le tour · {people.length}</h2>
           {people.length ? <PaginatedList className="late-checkin-list" items={people} renderItem={person => <li key={person.id} className="flex h-24 shrink-0 flex-col justify-center gap-2 rounded-xl border border-line bg-white px-3">
             <strong className="truncate text-sm" title={person.name}>{person.name}</strong>

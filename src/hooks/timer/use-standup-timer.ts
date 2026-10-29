@@ -169,8 +169,7 @@ export function useStandupTimer() {
   const manage = useCallback(() => {
     const current = tick();
     commit({ ...current, running: false, managing: true });
-    notify('Minuteur en pause. Vous pouvez modifier les réglages.');
-  }, [tick, commit, notify]);
+  }, [tick, commit]);
   const closeManage = useCallback(() => commit({ ...latest.current, managing: false }), [commit]);
   const openLateCheckin = useCallback(() => {
     const current = tick();

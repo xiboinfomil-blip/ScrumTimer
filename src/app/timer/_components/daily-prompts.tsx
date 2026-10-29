@@ -123,24 +123,24 @@ function TeamPrompts({ teamId, sprint, className, speakerId, speakerName, note, 
       </>}
       </motion.div>
       </>}
-      <Dialog open={editing} onClose={() => { if (!saving) setEditing(false); }} aria-labelledby="edit-prompts-title" fullWidth maxWidth="sm">
-        <DialogTitle id="edit-prompts-title">Questions de l’équipe</DialogTitle>
-        <DialogContent>
+      <Dialog open={editing} onClose={() => { if (!saving) setEditing(false); }} aria-labelledby="edit-prompts-title" fullWidth maxWidth="sm" slotProps={{ paper: { sx: { maxHeight: 'calc(100dvh - 24px)', border: '1px solid #dce3e9', borderRadius: '14px' } } }}>
+        <DialogTitle id="edit-prompts-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Questions de l’équipe</DialogTitle>
+        <DialogContent className="min-h-0 overflow-y-auto">
           <p className="mb-3 text-xs text-muted">1 à 5 questions, 160 caractères chacune. Ces questions sont partagées avec tous les appareils de cette équipe.</p>
           <div className="flex flex-col gap-3">
             {draft.map((prompt, index) => <div key={index} className="flex items-start gap-1">
               <TextField fullWidth label={`Question ${index + 1}`} value={prompt} disabled={saving || conflict} onChange={event => setDraft(current => current.map((text, i) => i === index ? event.target.value : text))} helperText={`${[...prompt].length}/160`} />
-              <Button disabled={saving || conflict || draft.length === 1} onClick={() => setDraft(current => current.filter((_, i) => i !== index))} aria-label={`Supprimer la question ${index + 1}`}>Retirer</Button>
+              <Button sx={{ minHeight: 44, flexShrink: 0 }} disabled={saving || conflict || draft.length === 1} onClick={() => setDraft(current => current.filter((_, i) => i !== index))} aria-label={`Supprimer la question ${index + 1}`}>Retirer</Button>
             </div>)}
           </div>
           <div className="mt-2 flex flex-wrap gap-1">
-            <Button disabled={saving || conflict || draft.length >= 5} onClick={() => setDraft(current => [...current, ''])}>Ajouter une question</Button>
-            <Button disabled={saving || conflict} onClick={() => setDraft([...DEFAULT_DISCUSSION_PROMPTS])}>Rétablir les 3 questions par défaut</Button>
+            <Button sx={{ minHeight: 44 }} disabled={saving || conflict || draft.length >= 5} onClick={() => setDraft(current => [...current, ''])}>Ajouter une question</Button>
+            <Button sx={{ minHeight: 44 }} disabled={saving || conflict} onClick={() => setDraft([...DEFAULT_DISCUSSION_PROMPTS])}>Rétablir les 3 questions par défaut</Button>
           </div>
           {error && <p role="alert" className="mt-2 text-xs text-danger">{error}</p>}
-          {conflict && <Button onClick={retry}>Recharger les questions partagées</Button>}
+          {conflict && <Button sx={{ minHeight: 44 }} onClick={retry}>Recharger les questions partagées</Button>}
         </DialogContent>
-        <DialogActions><Button disabled={saving} onClick={() => { setEditing(false); setError(''); if (conflict) retry(); }}>Annuler</Button><Button variant="contained" disabled={saving || conflict} onClick={() => void save()}>{saving ? 'Enregistrement…' : 'Enregistrer'}</Button></DialogActions>
+        <DialogActions className="border-t border-line"><Button sx={{ minHeight: 44 }} disabled={saving} onClick={() => { setEditing(false); setError(''); if (conflict) retry(); }}>Annuler</Button><Button sx={{ minHeight: 44 }} variant="contained" disabled={saving || conflict} onClick={() => void save()}>{saving ? 'Enregistrement…' : 'Enregistrer'}</Button></DialogActions>
       </Dialog>
     </Paper>
   );
