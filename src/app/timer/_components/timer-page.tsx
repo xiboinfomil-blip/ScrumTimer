@@ -32,7 +32,7 @@ export function TimerPage() {
   const reduced = useReducedMotion();
   const allowed = useStepGuard('timer');
   const timer = useStandupTimer();
-  const [view, setView] = useState<'timer' | 'prompts'>('timer');
+  const [view, setView] = useState<'timer' | 'queue' | 'prompts'>('timer');
   const [lineupOpen, setLineupOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [remoteOpen, setRemoteOpen] = useState(false);
@@ -109,17 +109,19 @@ export function TimerPage() {
         </div>} />
       {!presentation.presenting && <ScreenTabs
         className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 max-[1359px]:flex min-[1360px]:hidden [@media(max-height:650px)]:flex [@media(max-height:650px)]:h-11 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0`}
-        label="Panneau du minuteur"
+        label="Espace du point quotidien"
         value={view}
         onChange={setView}
         tabs={[
           { value: 'timer', label: 'Minuteur' },
-          { value: 'prompts', label: isSprint ? 'Tickets & notes' : note ? 'Pense-bête' : 'Questions' },
+          { value: 'queue', label: `Tour · ${timer.people.length}` },
+          { value: 'prompts', label: isSprint ? 'Tickets & notes' : note ? 'Pense-bête' : 'Notes' },
         ]}
       />}
-      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'grid-rows-1' : 'grid-rows-1 min-[1360px]:grid-cols-[minmax(0,1fr)_minmax(0,720px)_minmax(0,1fr)]'}`} data-view={presentation.presenting ? 'timer' : view}>
-        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`min-[1360px]:col-start-2 ${!presentation.presenting && view !== 'timer' ? 'max-[1359px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
-        {!presentation.presenting && <DailyPrompts speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => setView('timer')} className={`min-[1360px]:col-start-3 ${view !== 'prompts' ? 'max-[1359px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />}
+      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'grid-rows-1' : 'grid-rows-1 min-[1360px]:grid-cols-[minmax(230px,.78fr)_minmax(420px,1.38fr)_minmax(300px,.9fr)] [@media(max-height:650px)]:grid-cols-1'}`} data-view={presentation.presenting ? 'timer' : view}>
+        {!presentation.presenting && <TeamLineup timer={timer} idPrefix="queue" className={`min-[1360px]:col-start-1 [@media(max-height:650px)]:col-start-1 ${view !== 'queue' ? 'max-[1359px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />}
+        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`min-[1360px]:col-start-2 [@media(max-height:650px)]:col-start-1 ${!presentation.presenting && view !== 'timer' ? 'max-[1359px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
+        {!presentation.presenting && <DailyPrompts speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => setView('timer')} className={`min-[1360px]:col-start-3 [@media(max-height:650px)]:col-start-1 ${view !== 'prompts' ? 'max-[1359px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />}
       </div>
       <TimerManagementDialog timer={timer} />
       <LateCheckinDialog timer={timer} />

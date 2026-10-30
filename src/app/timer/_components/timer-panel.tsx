@@ -17,8 +17,6 @@ import { SpeakerSlider } from './speaker-slider';
 import { TimerIcon } from './timer-icon';
 import { SpeakerMoodPicture } from './speaker-mood-picture';
 
-const circumference = 2 * Math.PI * 136;
-
 export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTimer; notes: ReturnType<typeof useDailyHints>; className?: string }) {
   const { people, person, remaining, turnTotal, running, ended, warning, turnStarted } = timer;
   const [readingNote, setReadingNote] = useState(false);
@@ -35,7 +33,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
   const speakerName = person ? person.name : complete ? 'Le tour de table est terminé !' : 'En attente des personnes reportées';
   const feedback = complete ? 'Tout le monde a eu la parole. Bonne journée !' : ended ? 'Concluez puis Suivant : le prochain minuteur démarrera.' : critical ? 'Dernières secondes : terminez votre phrase.' : nearly ? 'Le temps diminue : préparez votre conclusion.' : running ? 'Suivant lance immédiatement le prochain passage.' : 'Cliquez sur Démarrer lorsque vous prenez la parole.';
   const ratio = turnTotal > 0 ? Math.min(1, Math.max(0, remaining / turnTotal)) : 0;
-  const ringColor = ended || critical ? 'text-danger' : nearly ? 'text-amber-700' : 'text-brand';
+  const progressColor = ended || critical ? 'bg-danger' : nearly ? 'bg-accent' : 'bg-brand';
   const statusColor = ended || critical ? 'border-red-200 bg-danger-soft text-danger' : nearly ? 'border-orange-200 bg-orange-50 text-amber-800' : complete ? 'border-green-200 bg-success-soft text-success' : running || !turnStarted ? 'border-blue-200 bg-blue-50 text-brand' : 'border-orange-200 bg-orange-50 text-amber-800';
   const feedbackColor = complete ? 'text-success' : ended || critical ? 'font-semibold text-danger' : nearly ? 'text-amber-800' : 'text-muted';
   const panelColor = ended || critical ? 'border-red-200! bg-red-50/30' : nearly ? 'border-orange-200! bg-orange-50/30' : complete ? 'border-green-200! bg-success-soft' : running ? 'border-brand/40! bg-white' : 'border-slate-200/80';
@@ -43,7 +41,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
   const FeedbackIcon = complete ? CheckIcon : ended ? ErrorOutlineIcon : nearly ? AccessTimeIcon : running ? RadioButtonCheckedIcon : NorthEastIcon;
 
   return (
-    <Paper component="section" elevation={0} className={`timer-panel relative isolate grid min-h-0 min-w-0 grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-2 overflow-hidden rounded-lg border border-line bg-white p-5 text-center max-[650px]:gap-1 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-3 ${timer.focusMode ? '[@media(max-height:650px)]:grid-rows-[auto_auto_minmax(0,1fr)_auto]' : ''} ${panelColor} ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
+    <Paper component="section" elevation={0} className={`timer-panel relative isolate grid min-h-0 min-w-0 grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-3 overflow-hidden rounded-lg border border-line bg-white p-5 text-center max-[650px]:gap-2 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-3 ${timer.focusMode ? '[@media(max-height:650px)]:grid-rows-[auto_auto_minmax(0,1fr)_auto]' : ''} ${panelColor} ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
       <div className="col-span-full flex min-w-0 items-center justify-between gap-2 self-start border-b border-line pb-2">
         <div className="flex min-w-0 items-center gap-2 max-[650px]:gap-1.5">
           <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1.5 text-[11px] font-semibold tabular-nums text-muted max-[650px]:px-1.5">{person ? `Passage ${people.findIndex(candidate => candidate.id === person.id) + 1} / ${people.length}` : 'Terminé'}</span>
@@ -58,32 +56,23 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
         <SpeakerSlider timer={timer} />
         {ended ? <p id="time-up-alert" role="alert" className="text-[11px] font-semibold text-danger"><span className="sr-only">{person?.name}, </span>Temps utilisé. Merci de passer la parole.</p> : <span className="sr-only" id="speaker-mood-description" hidden={!person}>{person ? `Humeur ${person.mood} / 4 · ${running ? 'Parle maintenant' : 'À vous la parole'}` : ''}</span>}
       </div>
-      <div className="row-start-3 grid h-full min-h-0 min-w-0 place-items-center [container-type:size]">
-        {/* Size against both dimensions of the remaining grid cell, not the viewport. */}
-        <div key={`${timer.activeId}-${timer.focusMode}`} className={`timer-ring relative isolate aspect-square w-[min(100cqw,100cqh,380px)] rounded-full bg-slate-50/70 [container-type:inline-size] transition-colors motion-reduce:transition-none ${ringColor} ${pulse}`} id="timer-ring">
-          {timer.focusMode && <span className="pointer-events-none absolute inset-0 rounded-full border-2 border-accent opacity-0 motion-safe:animate-turn-halo" aria-hidden="true" />}
-          <div className="absolute inset-[6%] rounded-full bg-neutral-900" aria-hidden="true" />
-          <svg className="relative size-full -rotate-90 overflow-visible" viewBox="0 0 300 300" aria-hidden="true">
-            <circle className="fill-none stroke-current stroke-[4] opacity-10" cx="150" cy="150" r="136" />
-            <circle className="fill-none stroke-current stroke-[5] [stroke-linecap:round] transition-[stroke-dashoffset,stroke] duration-150 ease-linear motion-reduce:transition-none" id="ring-progress" cx="150" cy="150" r="136" style={{ strokeDasharray: circumference, strokeDashoffset: circumference * (1 - ratio) }} />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-[12%]">
-            <div className="flex w-full min-w-0 flex-col items-center gap-1 px-[3%] py-[5%] text-white [text-shadow:0_1px_2px_#000,0_0_4px_#000,1px_0_1px_#000,-1px_0_1px_#000,0_-1px_1px_#000]">
-            <div id={timer.focusMode ? 'speaker-turn-cue' : undefined} role="status" aria-live="polite" aria-atomic="true" className="w-full min-w-0">
-              <span className="block text-[clamp(7px,3cqw,11px)] font-semibold text-white">{timer.ended ? 'Merci de passer la parole' : timer.running ? 'À TOI DE PARLER !' : timer.turnStarted ? 'TON TOUR EST EN PAUSE' : 'La parole est à'}</span>
-              <h2 id="speaker-name" className="line-clamp-2 text-[clamp(12px,7cqw,27px)] font-bold leading-tight [overflow-wrap:anywhere]" title={speakerName}>{speakerName}</h2>
-            </div>
-            {person?.mood && <div id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${person.mood} sur 4`} className="flex items-center justify-center gap-1.5 text-[clamp(6px,3cqw,10px)] font-semibold text-white">
-              <span>Humeur <strong>{person.mood}</strong> / 4</span>
-              {person.moodSlide && <SpeakerMoodPicture key={`${person.id}:${person.moodSlide.image}:${person.mood}`} context={person.moodSlide} mood={person.mood} />}
-            </div>}
-            <span className="text-[clamp(5px,3cqw,8px)] font-bold leading-relaxed text-white" id="timer-label">{ended ? 'DÉPASSEMENT · PASSEZ LA PAROLE' : critical ? 'CONCLUEZ MAINTENANT' : nearly ? 'PRÉPAREZ LA CONCLUSION' : running ? 'TEMPS RESTANT' : 'TEMPS PAR PERSONNE'}</span>
-            <div id="timer-display" className="text-[clamp(24px,23cqw,88px)] leading-none font-extrabold tabular-nums text-white [-webkit-text-stroke:clamp(2px,0.9cqw,3px)_#000] [paint-order:stroke_fill] [text-shadow:0_2px_4px_#000,0_0_8px_#000]" role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
-              {ended ? '+' : ''}{String(minutes).padStart(2, '0')}<span>:</span>{String(secs).padStart(2, '0')}
-            </div>
-            </div>
+      <div id="timer-stage" key={`${timer.activeId}-${timer.focusMode}`} className={`row-start-3 flex min-h-0 min-w-0 flex-col items-center justify-center gap-3 overflow-hidden rounded-lg bg-brand-dark px-4 py-5 text-white transition-colors motion-reduce:transition-none max-[650px]:gap-2 max-[650px]:py-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:py-2 ${pulse}`}>
+        <div id={timer.focusMode ? 'speaker-turn-cue' : undefined} role="status" aria-live="polite" aria-atomic="true" className="w-full min-w-0">
+          <span className={`block text-[11px] font-bold uppercase ${ended || critical ? 'text-red-200' : nearly ? 'text-orange-200' : 'text-blue-100'}`}>{timer.ended ? 'Merci de passer la parole' : timer.running ? 'À toi de parler' : timer.turnStarted ? 'Ton tour est en pause' : 'La parole est à'}</span>
+          <h2 id="speaker-name" className="mt-1 break-words text-2xl font-bold leading-tight text-white sm:text-3xl" title={speakerName}>{speakerName}</h2>
+        </div>
+        {person?.mood && <div id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${person.mood} sur 4`} className="flex items-center justify-center gap-2 text-xs font-semibold text-blue-100">
+          <span>Humeur <strong className="text-white">{person.mood}</strong> / 4</span>
+          {person.moodSlide && <SpeakerMoodPicture key={`${person.id}:${person.moodSlide.image}:${person.mood}`} context={person.moodSlide} mood={person.mood} />}
+        </div>}
+        <span className={`text-[11px] font-semibold uppercase ${ended || critical ? 'text-red-200' : nearly ? 'text-orange-200' : 'text-blue-100'}`} id="timer-label">{ended ? 'Dépassement · passez la parole' : critical ? 'Concluez maintenant' : nearly ? 'Préparez la conclusion' : running ? 'Temps restant' : 'Temps par personne'}</span>
+        <div id="timer-display" className={`text-7xl leading-none font-bold tabular-nums text-white sm:text-8xl min-[1360px]:text-9xl [@media(max-height:650px)]:text-6xl ${ended || critical ? 'text-red-200' : nearly ? 'text-orange-200' : ''}`} role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
+          {ended ? '+' : ''}{String(minutes).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+        </div>
+        <div className="w-full max-w-xl">
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/20" role="progressbar" aria-label="Temps écoulé" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((1 - ratio) * 100)}>
+            <span id="timer-progress" className={`block h-full rounded-full transition-[width] duration-200 motion-reduce:transition-none ${progressColor}`} style={{ width: `${(1 - ratio) * 100}%` }} />
           </div>
-          <span className="absolute top-[3%] left-1/2 size-[3%] -translate-x-1/2 rounded-full bg-current" aria-hidden="true" />
         </div>
       </div>
       <div className="col-span-full mx-auto flex w-full max-w-lg min-w-0 items-center justify-center gap-2 max-[650px]:gap-1">

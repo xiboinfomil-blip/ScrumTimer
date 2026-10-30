@@ -272,7 +272,7 @@ def prompts_case(browser, mock, width, height):
 
 
 def observe_ring(page):
-    page.locator('#ring-progress').evaluate("""ring => {
+    page.locator('#timer-progress').evaluate("""ring => {
         window.__ringProbe?.observer.disconnect();
         const probe = {mutations: 0, started: performance.now(), initial: ring.getAttribute('style')};
         probe.observer = new MutationObserver(records => { probe.mutations += records.length; });
@@ -284,7 +284,7 @@ def observe_ring(page):
 def ring_sample(page):
     return page.evaluate("""() => ({mutations: __ringProbe.mutations,
         seconds: (performance.now() - __ringProbe.started) / 1000,
-        initial: __ringProbe.initial, current: document.querySelector('#ring-progress').getAttribute('style')})""")
+        initial: __ringProbe.initial, current: document.querySelector('#timer-progress').getAttribute('style')})""")
 
 
 def timer_case(browser, mock, width, height):
