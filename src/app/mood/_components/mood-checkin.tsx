@@ -10,10 +10,10 @@ import type { Mood } from '@/types/team';
 import { MoodIcon } from './mood-icon';
 
 const moodChoices: { value: Mood; description: string; tone: string }[] = [
-  { value: 1, description: 'Mauvaise humeur, énergie élevée', tone: 'border-orange-200 text-amber-900 hover:bg-orange-50 aria-pressed:border-orange-600 aria-pressed:bg-orange-600' },
-  { value: 2, description: 'Mauvaise humeur, énergie basse', tone: 'border-blue-200 text-blue-900 hover:bg-blue-50 aria-pressed:border-blue-700 aria-pressed:bg-blue-700' },
-  { value: 3, description: 'Bonne humeur, énergie basse', tone: 'border-teal-200 text-teal-900 hover:bg-teal-50 aria-pressed:border-teal-700 aria-pressed:bg-teal-700' },
-  { value: 4, description: 'Bonne humeur, énergie élevée', tone: 'border-green-200 text-green-900 hover:bg-green-50 aria-pressed:border-green-700 aria-pressed:bg-green-700' },
+  { value: 1, description: 'Mauvaise humeur, énergie élevée', tone: 'border-red-300 bg-red-100 text-red-950 hover:bg-red-200 aria-pressed:border-red-800 aria-pressed:bg-red-700 aria-pressed:text-white' },
+  { value: 2, description: 'Mauvaise humeur, énergie basse', tone: 'border-yellow-500 bg-yellow-200 text-yellow-950 hover:bg-yellow-300 aria-pressed:border-yellow-700 aria-pressed:bg-yellow-400 aria-pressed:text-yellow-950' },
+  { value: 3, description: 'Bonne humeur, énergie basse', tone: 'border-blue-300 bg-blue-100 text-blue-950 hover:bg-blue-200 aria-pressed:border-blue-800 aria-pressed:bg-blue-700 aria-pressed:text-white' },
+  { value: 4, description: 'Bonne humeur, énergie élevée', tone: 'border-green-300 bg-green-100 text-green-950 hover:bg-green-200 aria-pressed:border-green-800 aria-pressed:bg-green-700 aria-pressed:text-white' },
 ];
 
 export function MoodCheckin({ className = '' }: { className?: string }) {
@@ -53,7 +53,7 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
           <div className="flex shrink-0 items-center gap-1" role="group" aria-label={`Humeur de ${person.name} : choisissez de 1 à 4`}>
             {moodChoices.map(choice => (
               <Fragment key={choice.value}>
-              <button type="button" className={`relative grid size-11 shrink-0 place-items-center rounded-md border bg-white text-sm font-semibold aria-pressed:text-white aria-pressed:ring-2 aria-pressed:ring-brand/15 aria-pressed:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-45 ${choice.tone}`}
+              <button type="button" className={`relative grid size-11 shrink-0 place-items-center rounded-md border text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink aria-pressed:ring-2 aria-pressed:ring-brand/15 aria-pressed:ring-offset-1 motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-45 ${choice.tone}`}
                 disabled={!dailyReady} aria-label={`Humeur ${choice.value} pour ${person.name}`} aria-describedby={`mood-choice-${person.id}-${choice.value}`} aria-pressed={person.mood === choice.value}
                 onClick={() => { if (resuming) { if (rejoinLateParticipant(person.id, choice.value)) notify(`${person.name} rejoint la fin du tour. Son humeur est enregistrée.`); return; } const timestamp = new Date().toISOString(); if (updateTeam(current => ({ ...current, session: [], postponed: current.postponed?.filter(id => id !== person.id), usedMoodMeters: [...new Set([...(current.usedMoodMeters ?? []), ...(current.currentMoodSlide?.meterId ? [current.currentMoodSlide.meterId] : [])])], roster: current.roster.map(p => p.id === person.id ? { ...p, mood: choice.value, moodUpdatedAt: timestamp, moodSlide: current.currentMoodSlide ?? null } : p) }))) notify(`${person.name} : humeur ${choice.value} enregistrée.`); }}>
                 {choice.value}

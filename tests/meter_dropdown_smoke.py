@@ -10,6 +10,24 @@ from browser_bootstrap import install_browser_bootstrap
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 ID = 'a' * 64
+def mood_contrast(button):
+    return button.evaluate('''element => {
+        const style = getComputedStyle(element);
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        const rgb = color => {
+            context.fillStyle = color;
+            context.fillRect(0, 0, 1, 1);
+            return [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+        };
+        const luminance = color => rgb(color)
+            .map(value => value / 255 <= .04045 ? value / 255 / 12.92 : ((value / 255 + .055) / 1.055) ** 2.4)
+            .reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+        const foreground = luminance(style.color);
+        const background = luminance(style.backgroundColor);
+        return { foregroundColor: rgb(style.color), backgroundColor: rgb(style.backgroundColor),
+            ratio: (Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05) };
+    }''')
 
 
 def remote_geometry(page, width, height):
@@ -158,9 +176,27 @@ with sync_playwright() as p:
             box = button.bounding_box()
             assert box['width'] >= 44 and box['height'] >= 44
             assert box['x'] >= 0 and box['x'] + box['width'] <= width + 1
-        page.get_by_role('button', name='Humeur 2 pour Alice', exact=True).click()
-        page.wait_for_function("document.querySelector('.site-header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
-        expect(page.get_by_role('button', name='Humeur 2 pour Alice', exact=True)).to_have_attribute('aria-pressed', 'true')
+        mood_buttons = page.get_by_role('group', name='Humeur de Alice : choisissez de 1 à 4').get_by_role('button')
+        for button in mood_buttons.all():
+            button.evaluate('async element => { await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {}))); }')
+            colors = mood_contrast(button)
+            assert colors['ratio'] >= 4.5, ('unselected mood button contrast', colors)
+        for value in (1, 2, 3, 4, 2):
+            button = page.get_by_role('button', name=f'Humeur {value} pour Alice', exact=True)
+            button.click()
+            expect(button).to_have_attribute('aria-pressed', 'true')
+            page.wait_for_function("document.querySelector('.site-header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
+            button.evaluate('async element => { await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {}))); }')
+            colors = mood_contrast(button)
+            red, green, blue = colors['backgroundColor']
+            expected_color = {
+                1: red > 150 and red > green * 1.5 and red > blue * 1.5,
+                2: red > 200 and green > 150 and blue < 100,
+                3: blue > 150 and blue > red * 1.5 and blue > green,
+                4: green > 100 and green > red * 1.5 and green > blue * 1.2,
+            }[value]
+            assert expected_color, (value, colors)
+            assert colors['ratio'] >= 4.5, (value, colors)
         if width in [320, 1366]:
             page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-mood-design-vote-{width}.png'))
         page.reload()
