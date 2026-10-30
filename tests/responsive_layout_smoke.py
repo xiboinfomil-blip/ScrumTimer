@@ -47,8 +47,8 @@ with sync_playwright() as p:
             })''')
             assert not clipped, (path, width, height, clipped)
             if path == '/timer':
-                ring = page.locator('#timer-ring').bounding_box()
-                assert ring and ring['width'] >= 90 and ring['height'] >= 90, (width, height, ring)
+                stage = page.locator('#timer-stage').bounding_box()
+                assert stage and stage['width'] >= 90 and stage['height'] >= 90, (width, height, stage)
             for pagination in page.locator('.list-pagination:visible').all():
                 if pagination.evaluate("e => getComputedStyle(e).visibility === 'hidden'"):
                     continue

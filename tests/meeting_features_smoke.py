@@ -112,6 +112,9 @@ class MockMeeting:
                         # Keep this request pending to exercise the stale guard.
                         return
                     payload = {'snapshot': deepcopy(self.live), 'serverNow': time.time() * 1000, 'transport': 'shared'}
+            elif path == '/api/timer-remote' and method == 'POST':
+                route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'})
+                return
             elif path == '/api/round-feedback' and method in ('GET', 'PUT'):
                 round_id = body['roundId'] if method == 'PUT' else parse_qs(urlparse(req.url).query)['roundId'][0]
                 archived = next(r for r in self.rounds if r['id'] == round_id)
@@ -170,13 +173,13 @@ class MockMeeting:
 
 def prompts_panel(page, width):
     if width <= 800:
-        page.get_by_role('button', name='Questions', exact=True).click()
+        page.locator('[data-motion-tabs] button').last.click()
     return page.get_by_role('region', name='Le fil du point')
 
 
 def geometry(page, width, height, phase):
     page.evaluate('() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))))')
-    ring = page.locator('#timer-ring').evaluate('el => {const r = el.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height};}')
+    ring = page.locator('#timer-stage').evaluate('el => {const r = el.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height};}')
     problems = []
     if not ring or min(ring['width'], ring['height']) < 90:
         problems.append(f'ring <90px: {ring}')

@@ -56,20 +56,24 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
         <SpeakerSlider timer={timer} />
         {ended ? <p id="time-up-alert" role="alert" className="text-[11px] font-semibold text-danger"><span className="sr-only">{person?.name}, </span>Temps utilisé. Merci de passer la parole.</p> : <span className="sr-only" id="speaker-mood-description" hidden={!person}>{person ? `Humeur ${person.mood} / 4 · ${running ? 'Parle maintenant' : 'À vous la parole'}` : ''}</span>}
       </div>
-      <div id="timer-stage" key={`${timer.activeId}-${timer.focusMode}`} className={`row-start-3 flex min-h-0 min-w-0 flex-col items-center justify-center gap-3 overflow-hidden rounded-lg bg-brand-dark px-4 py-5 text-white transition-colors motion-reduce:transition-none max-[650px]:gap-2 max-[650px]:py-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:py-2 ${pulse}`}>
-        <div id={timer.focusMode ? 'speaker-turn-cue' : undefined} role="status" aria-live="polite" aria-atomic="true" className="w-full min-w-0">
-          <span className={`block text-[11px] font-bold uppercase ${ended || critical ? 'text-red-200' : nearly ? 'text-orange-200' : 'text-blue-100'}`}>{timer.ended ? 'Merci de passer la parole' : timer.running ? 'À toi de parler' : timer.turnStarted ? 'Ton tour est en pause' : 'La parole est à'}</span>
-          <h2 id="speaker-name" className="mt-1 break-words text-2xl font-bold leading-tight text-white sm:text-3xl" title={speakerName}>{speakerName}</h2>
+      <div id="timer-stage" key={`${timer.activeId}-${timer.focusMode}`} className={`row-start-3 grid min-h-0 min-w-0 grid-cols-1 content-center justify-items-center gap-3 self-stretch overflow-hidden rounded-lg bg-brand-dark px-4 py-5 text-white transition-colors motion-reduce:transition-none max-[650px]:gap-2 max-[650px]:py-3 [@media(max-height:650px)]:grid-cols-[minmax(0,1fr)_auto] [@media(max-height:650px)]:grid-rows-[auto_auto_auto] [@media(max-height:650px)]:gap-x-2 [@media(max-height:650px)]:gap-y-1 [@media(max-height:650px)]:px-2 [@media(max-height:650px)]:py-1 ${pulse}`}>
+        <div className="min-w-0 max-[650px]:w-full [@media(max-height:650px)]:justify-self-start">
+          <div id={timer.focusMode ? 'speaker-turn-cue' : undefined} role="status" aria-live="polite" aria-atomic="true" className="w-full min-w-0">
+            <span className={`block text-[11px] font-bold uppercase [@media(max-height:650px)]:text-[9px] ${ended || critical ? 'text-red-200' : nearly ? 'text-orange-200' : 'text-blue-100'}`}>{timer.ended ? 'Merci de passer la parole' : timer.running ? 'À TOI DE PARLER !' : timer.turnStarted ? 'TON TOUR EST EN PAUSE' : 'La parole est à'}</span>
+            <h2 id="speaker-name" className="mt-1 break-words text-2xl font-bold leading-tight text-white sm:text-3xl [@media(max-height:650px)]:text-sm" title={speakerName}>{speakerName}</h2>
+          </div>
+          {person?.mood && <div id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${person.mood} sur 4`} className="mt-2 flex items-center justify-center gap-2 text-xs font-semibold text-blue-100 [@media(max-height:650px)]:mt-1 [@media(max-height:650px)]:justify-start [@media(max-height:650px)]:text-[10px]">
+            <span>Humeur <strong className="text-white">{person.mood}</strong> / 4</span>
+            {person.moodSlide && <SpeakerMoodPicture key={`${person.id}:${person.moodSlide.image}:${person.mood}`} context={person.moodSlide} mood={person.mood} />}
+          </div>}
         </div>
-        {person?.mood && <div id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${person.mood} sur 4`} className="flex items-center justify-center gap-2 text-xs font-semibold text-blue-100">
-          <span>Humeur <strong className="text-white">{person.mood}</strong> / 4</span>
-          {person.moodSlide && <SpeakerMoodPicture key={`${person.id}:${person.moodSlide.image}:${person.mood}`} context={person.moodSlide} mood={person.mood} />}
-        </div>}
-        <span className={`text-[11px] font-semibold uppercase ${ended || critical ? 'text-red-200' : nearly ? 'text-orange-200' : 'text-blue-100'}`} id="timer-label">{ended ? 'Dépassement · passez la parole' : critical ? 'Concluez maintenant' : nearly ? 'Préparez la conclusion' : running ? 'Temps restant' : 'Temps par personne'}</span>
-        <div id="timer-display" className={`text-7xl leading-none font-bold tabular-nums text-white sm:text-8xl min-[1360px]:text-9xl [@media(max-height:650px)]:text-6xl ${ended || critical ? 'text-red-200' : nearly ? 'text-orange-200' : ''}`} role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
-          {ended ? '+' : ''}{String(minutes).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+        <div className="flex min-w-0 flex-col items-center gap-2 [@media(max-height:650px)]:items-end [@media(max-height:650px)]:gap-0">
+          <span className={`text-[11px] font-semibold uppercase [@media(max-height:650px)]:text-[8px] ${ended || critical ? 'text-red-200' : nearly ? 'text-orange-200' : 'text-blue-100'}`} id="timer-label">{ended ? 'Dépassement · passez la parole' : critical ? 'Concluez maintenant' : nearly ? 'Préparez la conclusion' : running ? 'Temps restant' : 'Temps par personne'}</span>
+          <div id="timer-display" className={`text-7xl leading-none font-bold tabular-nums text-white sm:text-8xl min-[1360px]:text-9xl [@media(max-height:650px)]:text-5xl ${ended || critical ? 'text-red-200' : nearly ? 'text-orange-200' : ''}`} role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
+            {ended ? '+' : ''}{String(minutes).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+          </div>
         </div>
-        <div className="w-full max-w-xl">
+        <div className="col-span-full w-full max-w-xl">
           <div className="h-1.5 overflow-hidden rounded-full bg-white/20" role="progressbar" aria-label="Temps écoulé" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((1 - ratio) * 100)}>
             <span id="timer-progress" className={`block h-full rounded-full transition-[width] duration-200 motion-reduce:transition-none ${progressColor}`} style={{ width: `${(1 - ratio) * 100}%` }} />
           </div>

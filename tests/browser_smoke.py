@@ -141,8 +141,8 @@ with sync_playwright() as playwright:
                     page.get_by_role('region', name='Présents', exact=True).wait_for(state='hidden')
                     page.get_by_role('button', name='Présents 40', exact=True).click()
             if route == 'timer':
-                ring = page.locator('#timer-ring').bounding_box()
-                assert ring and ring['width'] >= 90 and ring['height'] >= 90, (width, height, 'ring collapsed', ring, page.locator('.timer-panel').bounding_box())
+                stage = page.locator('#timer-stage').bounding_box()
+                assert stage and stage['width'] >= 90 and stage['height'] >= 90, (width, height, 'timer stage collapsed', stage, page.locator('.timer-panel').bounding_box())
                 for selector in ['#timer-display', '#start-button', '#duration-minutes', '#warning-seconds', '#add-time-button']:
                     box = page.locator(selector).bounding_box()
                     assert box and box['y'] >= 0 and box['y'] + box['height'] <= height, (width, height, selector, 'control clipped')
@@ -150,10 +150,10 @@ with sync_playwright() as playwright:
                     box = page.locator(selector).bounding_box()
                     assert box and box['height'] >= 44 and box['x'] >= 0 and box['x'] + box['width'] <= width, (width, height, selector, 'timer target too small or clipped')
                 if width <= 800:
-                    page.get_by_role('button', name='Participants', exact=True).click()
+                    page.get_by_role('button', name='Tour · 40', exact=True).click()
                     page.locator('.team-panel').wait_for(state='visible')
                     page.locator('.timer-panel').wait_for(state='hidden')
-                    page.get_by_role('button', name='Questions', exact=True).click()
+                    page.get_by_role('button', name='Notes', exact=True).click()
                     page.locator('.daily-prompts').wait_for(state='visible')
                 sound = page.get_by_role('button', name='Activer les alertes sonores', exact=True)
                 sound.click()
@@ -166,8 +166,8 @@ with sync_playwright() as playwright:
                 assert page.locator('#duration-minutes').count() == 0
                 assert page.locator('#reset-button').count() == 0
                 assert page.locator('#timer-page').get_attribute('data-mode') == 'speaking'
-                ring = page.locator('#timer-ring').bounding_box()
-                assert ring and ring['width'] >= 90 and ring['height'] >= 90, (width, height, 'focused ring collapsed')
+                stage = page.locator('#timer-stage').bounding_box()
+                assert stage and stage['width'] >= 90 and stage['height'] >= 90, (width, height, 'focused timer stage collapsed')
                 for selector in ['#speaker-slider', '#next-button', '#manage-timer-button']:
                     box = page.locator(selector).bounding_box()
                     assert box and box['x'] >= 0 and box['x'] + box['width'] <= width and box['y'] + box['height'] <= height, (width, height, 'focused control clipped', selector, box)
@@ -257,10 +257,10 @@ with sync_playwright() as playwright:
         speaker = page.locator('#speaker-name').inner_text()
         page.clock.run_for(11_000)
         assert panel.get_attribute('data-urgency') == 'warning'
-        animation = page.locator('#timer-ring').evaluate('(el) => getComputedStyle(el).animationName')
+        animation = page.locator('#timer-stage').evaluate('(el) => getComputedStyle(el).animationName')
         assert animation == ('warning-glow' if motion == 'no-preference' else 'none'), animation
         page.locator('#start-button').click()
-        assert page.locator('#timer-ring').evaluate('(el) => getComputedStyle(el).animationName') == 'none'
+        assert page.locator('#timer-stage').evaluate('(el) => getComputedStyle(el).animationName') == 'none'
         frozen = page.locator('#timer-display').inner_text()
         page.locator('#main-content').focus()
         page.keyboard.press('r')
@@ -271,7 +271,7 @@ with sync_playwright() as playwright:
         page.locator('#start-button').click()
         page.clock.run_for(20_000)
         assert panel.get_attribute('data-urgency') == 'critical'
-        animation = page.locator('#timer-ring').evaluate('(el) => getComputedStyle(el).animationName')
+        animation = page.locator('#timer-stage').evaluate('(el) => getComputedStyle(el).animationName')
         assert animation == ('critical-glow' if motion == 'no-preference' else 'none'), animation
         page.clock.run_for(10_000)
         assert panel.get_attribute('data-urgency') == 'expired'

@@ -92,10 +92,10 @@ with sync_playwright() as p:
             # Finish only finite effects; leave ambient infinite motion untouched.
             page.evaluate("document.getAnimations().filter(a => Number.isFinite(a.effect.getComputedTiming().endTime)).forEach(a => a.finish())")
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), (motion, width)
-            ring = page.locator('#timer-ring').bounding_box()
+            stage = page.locator('#timer-stage').bounding_box()
             display_box = page.locator('#timer-display').bounding_box()
-            assert ring and ring['width'] >= 90, (motion, width, ring)
-            assert display_box and display_box['y'] >= ring['y'] and display_box['y'] + display_box['height'] <= ring['y'] + ring['height'] + 1, (motion, width, ring, display_box)
+            assert stage and stage['width'] >= 90, (motion, width, stage)
+            assert display_box and display_box['y'] >= stage['y'] and display_box['y'] + display_box['height'] <= stage['y'] + stage['height'] + 1, (motion, width, stage, display_box)
             assert_score_free_timer(page)
             for selector in ['#start-button', '#next-button', '#manage-timer-button']:
                 box = page.locator(selector).bounding_box()

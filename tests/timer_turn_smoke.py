@@ -122,8 +122,8 @@ with sync_playwright() as p:
         for width, height in SIZES:
             page.set_viewport_size({'width': width, 'height': height})
             page.wait_for_function("document.documentElement.scrollWidth <= innerWidth")
-            ring = page.locator('#timer-ring').bounding_box()
-            assert ring and ring['width'] >= 90, ('setup', motion, width, ring)
+            stage = page.locator('#timer-stage').bounding_box()
+            assert stage and stage['width'] >= 90 and stage['height'] >= 90, ('setup', motion, width, stage)
             for selector in ['#previous-button', '#start-button', '#next-button', '#manage-timer-button']:
                 button = page.locator(selector).bounding_box()
                 assert button and button['height'] >= 43.99 and button['y'] + button['height'] <= height + 1, ('setup', motion, width, selector, button)
@@ -143,6 +143,10 @@ with sync_playwright() as p:
         cue = page.locator('#speaker-turn-cue')
         expect(cue).to_contain_text('À TOI DE PARLER !')
         first = page.locator('#speaker-name').inner_text()
+        if page.locator('.team-panel').is_visible():
+            queue = page.locator('.workspace .team-panel')
+            expect(queue.get_by_role('button', name=f'Donner la parole à {first}', exact=True)).to_be_disabled()
+            expect(queue.get_by_role('button', name=f'Reporter le passage de {first}', exact=True)).to_be_disabled()
         assert first in ['Alice <safe>', 'Bob', 'Charlie']
         chosen = next(person['mood'] for person in team['roster'] if person['name'] == first)
         expect(page.locator('#speaker-mood')).to_contain_text(f'Humeur {chosen} / 4')
@@ -151,13 +155,11 @@ with sync_playwright() as p:
         expect(mood_picture).to_have_count(1)
         mood_box = mood_picture.bounding_box()
         assert mood_box and mood_box['width'] <= 44 and mood_box['height'] <= 44, mood_box
-        expect(page.locator('#timer-ring #speaker-name')).to_have_text(first)
-        expect(page.locator('#timer-ring [data-mood-picture] span')).to_have_count(0)
-        assert page.locator('#timer-display').evaluate('el => getComputedStyle(el).textShadow') != 'none'
-        assert page.locator('#timer-display').evaluate('el => Number(getComputedStyle(el).fontWeight)') >= 800
-        assert page.locator('#timer-display').evaluate('el => parseFloat(getComputedStyle(el).webkitTextStrokeWidth)') >= 2
-        assert page.locator('#timer-display').evaluate('el => getComputedStyle(el).webkitTextStrokeColor') == 'rgb(0, 0, 0)'
-        assert page.locator('#timer-display').evaluate('el => getComputedStyle(el.parentElement).backgroundColor') == 'rgba(0, 0, 0, 0)'
+        expect(page.locator('#timer-stage #speaker-name')).to_have_text(first)
+        expect(page.locator('#timer-stage [data-mood-picture] span')).to_have_count(0)
+        assert page.locator('#timer-display').evaluate('el => Number(getComputedStyle(el).fontWeight)') >= 700
+        assert page.locator('#timer-display').evaluate('el => getComputedStyle(el).color') == 'rgb(255, 255, 255)'
+        assert page.locator('#timer-stage').evaluate('el => getComputedStyle(el).backgroundColor') == 'rgb(22, 75, 128)'
         note = page.locator('[data-speaker-hint]')
         expect(note.locator('strong')).to_have_text('Avancement')
         expect(note.locator('em')).to_have_text('Tests')
@@ -186,9 +188,8 @@ with sync_playwright() as p:
         expect(page.locator('#start-button')).to_contain_text('Pause')
         assert cue.locator('script').count() == 0
         expect(cue).to_have_attribute('aria-atomic', 'true')
-        halo = page.locator('#timer-ring > span').first
-        halo_animation = halo.evaluate('el => getComputedStyle(el).animationName')
-        assert halo_animation == ('none' if motion == 'reduce' else 'turn-halo'), halo_animation
+        stage_animation = page.locator('#timer-stage').evaluate('el => getComputedStyle(el).animationName')
+        assert stage_animation == 'none', stage_animation
 
         # Let the one-shot entrance finish before measuring geometry.
         page.wait_for_function("getComputedStyle(document.querySelector('#speaker-turn-cue')).opacity === '1' && ['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(getComputedStyle(document.querySelector('#speaker-turn-cue')).transform)")
@@ -197,15 +198,23 @@ with sync_playwright() as p:
             page.wait_for_function("document.documentElement.scrollWidth <= innerWidth")
             box = cue.bounding_box()
             assert box and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (motion, width, box)
-            ring = page.locator('#timer-ring').bounding_box()
-            assert ring and ring['width'] >= 90, (motion, width, ring)
+            stage = page.locator('#timer-stage').bounding_box()
+            assert stage and stage['width'] >= 90 and stage['height'] >= 90, (motion, width, stage)
             workspace = page.locator('.workspace').bounding_box()
-            assert workspace and abs((ring['x'] + ring['width'] / 2) - (workspace['x'] + workspace['width'] / 2)) <= 2, (motion, width, ring, workspace)
+            assert workspace and stage['x'] >= workspace['x'] and stage['x'] + stage['width'] <= workspace['x'] + workspace['width'] + 1, (motion, width, stage, workspace)
+            if width >= 1360:
+                expect(page.locator('.team-panel')).to_be_visible()
+                expect(page.locator('.daily-prompts')).to_be_visible()
+            elif width <= 800:
+                page.get_by_role('button', name='Tour · 3').click()
+                expect(page.locator('.team-panel')).to_be_visible()
+                expect(page.locator('.timer-panel')).to_be_hidden()
+                page.get_by_role('button', name='Minuteur', exact=True).click()
             expect(page.locator('#upcoming-speaker')).to_be_visible()
             for selector in ['#speaker-name', '#timer-display']:
                 text = page.locator(selector).bounding_box()
-                assert text and text['x'] >= ring['x'] and text['x'] + text['width'] <= ring['x'] + ring['width'] + 1, (width, selector, text, ring)
-                assert text['y'] >= ring['y'] and text['y'] + text['height'] <= ring['y'] + ring['height'] + 1, (width, selector, text, ring)
+                assert text and text['x'] >= stage['x'] and text['x'] + text['width'] <= stage['x'] + stage['width'] + 1, (width, selector, text, stage)
+                assert text['y'] >= stage['y'] and text['y'] + text['height'] <= stage['y'] + stage['height'] + 1, (width, selector, text, stage)
             for selector in ['#previous-button', '#start-button', '#next-button', '#manage-timer-button']:
                 button = page.locator(selector).bounding_box()
                 assert button and button['height'] >= 44 and button['y'] + button['height'] <= height + 1, (motion, width, selector, button)
@@ -303,7 +312,7 @@ with sync_playwright() as p:
         assert failed_image.value.status == 502
         expect(page.locator('#speaker-name')).to_have_text(current)
         expect(page.locator('#speaker-mood [data-mood-picture]')).to_have_count(0)
-        expect(page.locator('#timer-ring #speaker-name')).to_have_text(current)
+        expect(page.locator('#timer-stage #speaker-name')).to_have_text(current)
         expect(page.locator('#timer-display')).to_be_visible()
         assert not errors, errors
         assert not external_notes, external_notes
