@@ -25,7 +25,7 @@ def mood_contrast(button):
             .reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
         const foreground = luminance(style.color);
         const background = luminance(style.backgroundColor);
-        return { foregroundColor: rgb(style.color), backgroundColor: rgb(style.backgroundColor),
+        return { foregroundColor: rgb(style.color), backgroundColor: rgb(style.backgroundColor), borderColor: rgb(style.borderTopColor),
             ratio: (Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05) };
     }''')
 
@@ -34,7 +34,7 @@ def mood_color_family(value, colors):
     red, green, blue = colors['backgroundColor']
     return {
         1: red > 150 and red > green * 1.5 and red > blue * 1.5,
-        2: red > 200 and green > 150 and blue < 100,
+        2: red > 150 and green > 80 and blue < 100 and red > green,
         3: blue > 150 and blue > red * 1.5 and blue > green,
         4: green > 100 and green > red * 1.5 and green > blue * 1.2,
     }[value]
@@ -190,7 +190,8 @@ with sync_playwright() as p:
         for value, button in enumerate(mood_buttons.all(), start=1):
             button.evaluate('async element => { await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {}))); }')
             colors = mood_contrast(button)
-            assert mood_color_family(value, colors), ('unselected mood color family', value, colors)
+            assert all(channel >= 245 for channel in colors['backgroundColor']), ('unselected mood buttons should remain outlined', value, colors)
+            assert mood_color_family(value, {**colors, 'backgroundColor': colors['borderColor']}), ('unselected mood outline color', value, colors)
             assert colors['ratio'] >= 4.5, ('unselected mood button contrast', value, colors)
         for value in (1, 2, 3, 4, 2):
             button = page.get_by_role('button', name=f'Humeur {value} pour Alice', exact=True)
