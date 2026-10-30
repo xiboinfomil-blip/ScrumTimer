@@ -95,7 +95,7 @@ def favorite(page, name, selected):
 
 def active_unchanged(page, db, reads, url):
     expect(card(page, 'Équipe Atlas').get_by_text('Actuelle', exact=True)).to_be_visible()
-    expect(page.get_by_role('button', name='Choisir une équipe : Équipe Atlas', exact=True)).to_be_enabled()
+    expect(page.get_by_role('button', name='Choisir une équipe : Équipe Atlas', exact=True)).to_have_count(0)
     assert page.url == url, (url, page.url)
     assert parse_qs(urlparse(page.url).query)['team'] == [ACTIVE]
     assert db.active == ACTIVE
@@ -325,7 +325,7 @@ def run_case(browser, width, height, motion, screenshots):
             assert parse_qs(urlparse(page.url).query)['team'] == [db.active]
             assert db.teams[-1]['category'] is None
             page.goto(f'{BASE}/teams?team={db.active}')
-            expect(page.get_by_role('button', name=f'Choisir une équipe : {name}', exact=True)).to_be_enabled()
+            expect(page.get_by_role('button', name=f'Choisir une équipe : {name}', exact=True)).to_have_count(0)
         assert len(db.creations) == 2
         bootstrap.assert_no_unexpected_api()
         assert not errors, errors

@@ -66,7 +66,7 @@ with sync_playwright() as p:
         page.goto(BASE + '/mood?team=' + B)
         select = page.locator('#meter-catalogue-select')
         expect(select).to_be_enabled()
-        expect(page.get_by_role('button', name='Choisir une équipe : Beta', exact=True)).to_be_enabled()
+        expect(page.get_by_role('button', name='Choisir une équipe : Beta', exact=True)).to_have_count(0)
         assert reads and all(key == B for key in reads)
         first = meters[B]['meterId']
         assert first in DECKS
@@ -104,9 +104,10 @@ with sync_playwright() as p:
         expect(page.get_by_text('Bob', exact=True)).to_be_visible()
         expect(page.get_by_text('Alice', exact=True)).to_have_count(0)
         # Changing the team restores a distinct roster and updates the refresh context.
-        page.get_by_role('button', name='Choisir une équipe : Beta', exact=True).click()
-        page.get_by_role('region', name='Choisir ou créer une équipe').get_by_role('list', name='Équipes', exact=True).get_by_role('button').filter(has_text='Alpha').click()
-        expect(page.get_by_role('button', name='Choisir une équipe : Alpha', exact=True)).to_be_enabled()
+        page.get_by_role('link', name='Accueil du point quotidien Infomil Mauritius', exact=True).click()
+        page.wait_for_url('**/teams*')
+        page.get_by_role('button', name='Ouvrir l’équipe Alpha', exact=True).click()
+        expect(page.get_by_role('button', name='Choisir une équipe : Alpha', exact=True)).to_have_count(0)
         page.wait_for_function("new URL(location.href).searchParams.get('team') === '" + A + "'")
         page.reload()
         expect(page.get_by_text('Alice', exact=True)).to_be_visible()

@@ -12,46 +12,10 @@ BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 ID = 'a' * 64
 
 
-def viewer(page, remote=False):
-    """The image viewer is a dialog, independent of browser fullscreen."""
-    fullscreen_before = page.evaluate('document.fullscreenElement === document.documentElement')
-    page.get_by_role('button', name='Afficher le baromètre en plein écran', exact=True).click()
-    dialog = page.get_by_role('dialog', name='Test meter' if remote else 'Baromètre original', exact=True)
-    expect(dialog).to_be_visible()
-    close = dialog.get_by_role('button', name='Fermer le plein écran', exact=True)
-    expect(close).to_be_visible()
-    if remote:
-        image = dialog.locator('#expanded-meter-slide')
-        buttons = dialog.get_by_role('group', name='Diapositives en plein écran').get_by_role('button')
-        expect(buttons).to_have_text(['Diapositive 1', 'Diapositive 2'])
-        for number in (1, 2, 1):
-            button = dialog.get_by_role('button', name=f'Diapositive {number}', exact=True)
-            button.click()
-            expect(button).to_have_attribute('aria-pressed', 'true')
-            expect(dialog.get_by_role('button', name=f'Diapositive {3 - number}', exact=True)).to_have_attribute('aria-pressed', 'false')
-            expect(image).to_have_attribute('src', f'/mood-meters/slides/test/page-{number}.svg')
-            expect(image).to_have_js_property('complete', True)
-            expect(image).not_to_have_js_property('naturalWidth', 0)
-        # Viewer selection must not change the slide recorded with a vote.
-        dialog.get_by_role('button', name='Diapositive 2', exact=True).click()
-    else:
-        expect(dialog.locator('#default-mood-meter')).to_be_visible()
-    close.click()
-    expect(dialog).not_to_be_visible()
-    assert page.evaluate('document.fullscreenElement === document.documentElement') == fullscreen_before
-    if remote:
-        # Opening again starts on the selected check-in slide, not the last
-        # viewed slide (2); both inline slides must still be displayed.
-        page.get_by_role('button', name='Afficher le baromètre en plein écran', exact=True).click()
-        expect(dialog.locator('#expanded-meter-slide')).to_have_attribute('src', '/mood-meters/slides/test/page-1.svg')
-        expect(dialog.get_by_role('button', name='Diapositive 1', exact=True)).to_have_attribute('aria-pressed', 'true')
-        close.click()
-        expect(dialog).not_to_be_visible()
-
-
 def remote_geometry(page, width, height):
     stack = page.locator('#meter-slide-stack')
     expect(stack.locator('img')).to_have_count(2)
+    expect(page.get_by_text('Survolez ou touchez la flèche pour retourner', exact=True)).to_be_visible()
     for image in stack.locator('img').all():
         expect(image).to_have_js_property('complete', True)
         expect(image).not_to_have_js_property('naturalWidth', 0)
@@ -147,12 +111,9 @@ with sync_playwright() as p:
         expect(share_dialog).not_to_be_visible()
         select = page.locator('#meter-catalogue-select')
         expect(select).to_be_enabled()
-        expand = page.locator('#expand-meter-button')
-        expect(expand).to_have_text('')
-        expect(expand.locator('.MuiSvgIcon-root')).to_have_count(1)
+        expect(page.get_by_role('button', name='Afficher le baromètre en plein écran', exact=True)).to_have_count(0)
         random_box = page.locator('#random-meter-button').bounding_box()
-        expand_box = expand.bounding_box()
-        assert expand_box and random_box and abs(expand_box['y'] - random_box['y']) <= 1 and expand_box['x'] >= random_box['x'] + random_box['width'], ('meter toolbar actions must be adjacent', random_box, expand_box)
+        assert random_box, 'random meter control remains available'
         expect(select.locator('optgroup')).to_have_attribute('label', 'Animaux et créatures (1)')
         expect(select).to_have_value('0')
         assert db['patches'] == 1, 'load randomizes an unlocked original meter'
@@ -162,7 +123,6 @@ with sync_playwright() as p:
         assert db['patches'] == 3
         assert db['meter']['meterId'] == 'deck-1234567890abcdef1234'
         remote_geometry(page, width, height)
-        viewer(page, remote=True)
         remote_geometry(page, width, height)
         page.reload()
         expect(select).to_have_value('0')
@@ -175,7 +135,6 @@ with sync_playwright() as p:
         page.evaluate('async () => { for (let i=0; i<3; i++) await new Promise(requestAnimationFrame); }')
         meter_size = page.locator('#default-mood-meter').evaluate('e => ({height: e.clientHeight, scroll: e.scrollHeight})')
         assert meter_size['scroll'] <= meter_size['height'] + 2, (width, height, meter_size)
-        viewer(page)
         if width in [320, 1366]:
             page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-mood-design-meter-{width}.png'))
         if width <= 800:

@@ -113,7 +113,7 @@ def selected(page, key):
     if urlparse(page.url).path == '/manage-team':
         expect(page.locator('#manage-team-heading')).to_have_text(NAMES[key])
     else:
-        expect(page.get_by_role('button', name='Choisir une équipe : ' + NAMES[key], exact=True)).to_be_visible()
+        expect(card(page, key).get_by_text('Actuelle', exact=True)).to_be_visible()
     assert parse_qs(urlparse(page.url).query).get('team') == [key], page.url
 
 
@@ -294,17 +294,9 @@ def failure_case(page, mock, failure):
     request_count = len(mock.requests)
     for name in ('Humeurs —', 'Minuteur —'):
         expect(page.get_by_role('button', name=name, exact=False)).to_be_disabled()
-    # The switcher can open on an error, but its mutation controls stay gated.
-    page.get_by_role('button', name='Choisir une équipe : ' + NAMES[A], exact=True).click()
-    panel = page.get_by_role('region', name='Choisir ou créer une équipe', exact=True)
-    expect(panel).to_be_visible()
-    for control in panel.get_by_role('button').all():
-        expect(control).to_be_disabled()
-    expect(panel.get_by_role('link', name='Gérer l’équipe', exact=True)).to_be_disabled()
-    # /teams remains public during the error. Navigate without reloading the
-    # provider, then verify its stale cards cannot select/manage/create teams.
-    panel.get_by_role('link', name='Toutes les équipes', exact=True).click()
-    expect(panel).not_to_be_visible()
+    # /teams remains public during the error. Navigate there and verify stale
+    # cards cannot select/manage/create teams.
+    page.get_by_role('link', name='Accueil du point quotidien Infomil Mauritius', exact=True).click()
     teams_page(page)
     for key in before:
         for prefix in ('Ouvrir l’équipe ', 'Gérer l’équipe '):

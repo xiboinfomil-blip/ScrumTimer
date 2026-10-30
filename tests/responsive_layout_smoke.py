@@ -30,7 +30,7 @@ with sync_playwright() as p:
     for path in ['/participants', '/mood', '/timer']:
         page.goto(BASE + path)
         expect(page.locator('[data-route-transition]')).to_be_visible()
-        expect(page.get_by_role('button', name='Choisir une équipe : Une très longue équipe de développement')).to_be_enabled()
+        expect(page.get_by_role('button', name='Choisir une équipe : Une très longue équipe de développement')).to_have_count(0)
         for width, height in SIZES:
             page.set_viewport_size(dict(width=width, height=height))
             page.wait_for_function('document.documentElement.scrollWidth <= innerWidth')

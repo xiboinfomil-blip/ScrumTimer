@@ -37,7 +37,7 @@ with sync_playwright() as p:
             page = context.new_page()
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(BASE + '/help')
-            expect(page.get_by_role('button', name='Choisir une équipe : Équipe mouvement', exact=True)).to_be_enabled()
+            expect(page.get_by_role('button', name='Choisir une équipe : Équipe mouvement', exact=True)).to_have_count(0)
             article = page.get_by_role('article', name='Une équipe, un tour de parole, un bilan.')
             expect(article).to_be_visible()
             assert article.evaluate('el => getComputedStyle(el).scrollBehavior') == ('smooth' if preference == 'no-preference' else 'auto')
@@ -74,19 +74,12 @@ with sync_playwright() as p:
             if width <= 800:
                 running = panels.evaluate('el => el.getAnimations({subtree: true}).filter(a => a.playState === "running" && a.effect.getTiming().iterations !== Infinity).length')
                 assert bool(running) == (preference == 'no-preference'), (preference, running)
-            trigger = page.get_by_role('button', name='Choisir une équipe : Équipe mouvement', exact=True)
-            trigger.click()
-            menu = page.get_by_role('region', name='Choisir ou créer une équipe')
-            expect(menu).to_be_visible()
-            page.keyboard.press('Escape')
-            expect(trigger).to_be_focused()
-            expect(menu).not_to_be_visible()
+            expect(page.get_by_role('navigation', name='Navigation du point quotidien').get_by_role('link')).to_have_count(3)
             page.wait_for_function('document.getAnimations().every(a => a.playState !== "running" || a.effect.getTiming().iterations === Infinity)')
-            assert not page.locator('[inert]').count(), 'exiting menu must be removed'
             page.emulate_media(reduced_motion='reduce')
             assert page.locator('html').evaluate('el => getComputedStyle(el).scrollBehavior') == 'auto'
             assert not unexpected, unexpected
             assert not errors, errors
             context.close()
-            print(f'PASS smooth nested scroll, panel motion, menu focus/exit, runtime motion opt-out {width}x{height} {preference}')
+            print(f'PASS smooth nested scroll, panel motion, navbar steps, runtime motion opt-out {width}x{height} {preference}')
     browser.close()

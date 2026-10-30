@@ -52,6 +52,12 @@ class WorkspaceMock:
         path, method = urlparse(request.url).path, request.method
         team_id = request.headers.get('x-team-id')
         self.requests.append((path, method, team_id))
+        if path == '/api/jira' and method == 'GET':
+            route.fulfill(json={'configured': False, 'connected': False})
+            return
+        if path == '/api/timer-remote' and method == 'POST':
+            route.fulfill(status=503, json={'code': 'REMOTE_REDIS_REQUIRED'})
+            return
         if path not in ('/api/teams', '/api/team', '/api/history', '/api/daily-meter',
                         '/api/daily-hints', '/api/meeting-settings'):
             route.fallback()
@@ -59,7 +65,7 @@ class WorkspaceMock:
         if path == '/api/teams':
             if method == 'POST':
                 body = request.post_data_json
-                assert body == {'name': 'Équipe Bêta'}
+                assert body == {'name': 'Équipe Bêta', 'category': None}
                 assert CREATED_ID not in self.teams
                 self.teams[CREATED_ID] = {'name': body['name'], 'team': empty_team(), 'revision': 0}
                 self.rounds[CREATED_ID] = []
@@ -128,10 +134,6 @@ def saved(page):
     page.wait_for_function("document.querySelector('.site-header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
 
 
-def switcher(page, name):
-    return page.get_by_role('button', name=f'Choisir une équipe : {name}', exact=True)
-
-
 def people_panel(page, width):
     if width <= 800:
         page.get_by_role('group', name='Panneau du bilan', exact=True).get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
@@ -149,7 +151,7 @@ def meter_locked(page, db, team_id, meter, day):
 def meter_editable(page, db, team_id, day):
     expect(page.locator('#meter-catalogue-select')).to_be_enabled()
     expect(page.get_by_role('button', name='Afficher un autre baromètre au hasard', exact=True)).to_be_enabled()
-    expect(page.locator('#daily-meter-note')).to_contain_text('Commun à l’équipe · Modifiable avant le premier vote.')
+    expect(page.locator('#daily-meter-note')).to_contain_text('Modifiable avant le premier vote.')
     assert db.day == day and (team_id, day) in db.daily
 
 
@@ -178,22 +180,15 @@ def choose_team(page, current, target, query, width):
     page.get_by_role('link', name='Participants', exact=True).click()
     expect(page.locator('#participants-page')).to_be_visible()
     expect(page).to_have_url(re.compile(r'/participants\?team=[a-f0-9]{64}$'))
-    switcher(page, current).click()
-    panel = page.get_by_role('region', name='Choisir ou créer une équipe', exact=True)
-    expect(panel).to_be_visible()
-    box = panel.bounding_box()
-    assert box and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (width, box)
-    search = panel.get_by_role('searchbox', name='Rechercher une équipe', exact=True)
-    expect(search).to_be_focused()
+    page.get_by_role('link', name='Accueil du point quotidien Infomil Mauritius', exact=True).click()
+    expect(page.locator('#teams-heading')).to_be_visible()
+    search = page.get_by_role('searchbox', name='Rechercher une équipe', exact=True)
     search.fill('introuvable')
-    expect(panel.get_by_text('Aucune équipe trouvée.', exact=True)).to_be_visible()
+    expect(page.get_by_text('Aucune équipe trouvée.', exact=True)).to_be_visible()
     search.fill(query)
-    choices = panel.get_by_role('list', name='Équipes', exact=True).get_by_role('button')
-    expect(choices).to_have_count(1)
-    expect(choices.first).to_contain_text(target)
-    choices.first.click()
-    expect(panel).to_have_count(0)
-    expect(switcher(page, target)).to_be_enabled()
+    choice = page.get_by_role('button', name=f'Ouvrir l’équipe {target}', exact=True)
+    expect(choice).to_be_visible()
+    choice.click()
     expect(page).to_have_url(re.compile(r'/participants(?:\?team=[a-f0-9]{64})?$'))
     saved(page)
 
@@ -218,7 +213,7 @@ with sync_playwright() as p:
         page.goto(BASE + '/participants')
         saved(page)
         expect(page.get_by_text('Alice <safe>', exact=True)).to_be_visible()
-        expect(switcher(page, 'Mon équipe').get_by_label('1 membres', exact=True)).to_have_count(1)
+        expect(page.get_by_role('button', name='Choisir une équipe : Mon équipe', exact=True)).to_have_count(0)
         nav = page.get_by_role('navigation', name='Navigation du point quotidien', exact=True)
         expect(nav.get_by_role('link', name='Participants', exact=True)).to_have_attribute('aria-current', 'page')
         expect(nav.get_by_role('link', name='Humeurs', exact=True)).to_be_visible()
@@ -260,28 +255,28 @@ with sync_playwright() as p:
         assert winner == {'status': 200, 'body': {'day': db.day, 'meter': first_meter}}
         assert db.daily[(DEFAULT_ID, db.day)] == first_meter
 
-        switcher(page, 'Mon équipe').click()
-        panel = page.get_by_role('region', name='Choisir ou créer une équipe', exact=True)
-        panel.get_by_role('button', name='Créer une équipe', exact=True).click()
-        panel.get_by_role('textbox', name='Nom de la nouvelle équipe', exact=True).fill('   ')
-        panel.get_by_role('button', name='Créer l’équipe', exact=True).click()
-        expect(panel.get_by_role('alert')).to_be_visible()
+        page.get_by_role('link', name='Accueil du point quotidien Infomil Mauritius', exact=True).click()
+        expect(page.locator('#teams-heading')).to_be_visible()
+        page.get_by_role('button', name='Ajouter une nouvelle équipe', exact=True).click()
+        dialog = page.get_by_role('dialog', name='Ajouter une nouvelle équipe', exact=True)
+        dialog.get_by_role('textbox', name='Nom de l’équipe', exact=True).fill('   ')
+        dialog.get_by_role('button', name='Créer l’équipe', exact=True).click()
+        expect(dialog.get_by_role('alert')).to_be_visible()
         assert len(db.teams) == 1
-        panel.get_by_role('textbox', name='Nom de la nouvelle équipe', exact=True).fill('  Équipe Bêta  ')
-        panel.get_by_role('button', name='Créer l’équipe', exact=True).click()
-        expect(switcher(page, 'Équipe Bêta')).to_be_enabled()
+        dialog.get_by_role('textbox', name='Nom de l’équipe', exact=True).fill('  Équipe Bêta  ')
+        dialog.get_by_role('button', name='Créer l’équipe', exact=True).click()
         expect(page).to_have_url(re.compile(r'/manage-team(?:\?team=[a-f0-9]{64})?$'))
+        expect(page.locator('#manage-team-heading')).to_have_text('Équipe Bêta')
         saved(page)
         assert db.active == CREATED_ID
         assert not db.teams[CREATED_ID]['team']['roster']
         expect(page.get_by_text('Alice <safe>', exact=True)).to_have_count(0)
-        expect(nav.get_by_role('button', name=re.compile('^Humeurs —'))).to_be_disabled()
         page.locator('#checkin-name').fill('Bob <safe>')
         page.get_by_role('button', name='Enregistrer cette personne', exact=True).click()
         saved(page)
         assert [person['name'] for person in db.teams[CREATED_ID]['team']['roster']] == ['Bob <safe>']
         assert [person['name'] for person in db.teams[DEFAULT_ID]['team']['roster']] == ['Alice <safe>']
-        expect(switcher(page, 'Équipe Bêta').get_by_label('1 membres', exact=True)).to_have_count(1)
+        expect(page.get_by_role('button', name='Choisir une équipe : Équipe Bêta', exact=True)).to_have_count(0)
         assert read_history(page, db, CREATED_ID) == []
         expect(page.get_by_role('link', name='Voir le bilan ou réinitialiser', exact=True)).to_have_count(0)
         page.reload()
@@ -312,7 +307,7 @@ with sync_playwright() as p:
         daily_readback(page, 'Bob <safe>', 'Alice <safe>')
         page.reload()
         saved(page)
-        expect(switcher(page, 'Équipe Bêta')).to_be_enabled()
+        expect(page.get_by_role('button', name='Choisir une équipe : Équipe Bêta', exact=True)).to_have_count(0)
         daily_readback(page, 'Bob <safe>', 'Alice <safe>')
         assert read_history(page, db, CREATED_ID) == bob_round
 

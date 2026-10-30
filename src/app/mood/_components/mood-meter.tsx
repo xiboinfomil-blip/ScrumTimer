@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Dialog, DialogContent, DialogTitle, IconButton, NativeSelect, Paper } from '@mui/material';
+import { Button, IconButton, NativeSelect, Paper } from '@mui/material';
 import {
   chooseUnusedDeck, displayTitle, groupMoodMeters, moodMeterId, isAnimatedImage, overlayCropStyle,
   overlayMatrix, type MoodMeterDeck, type MoodMeterSlide,
@@ -15,7 +15,6 @@ import { MoodIcon } from './mood-icon';
 import { MOOD_RETRY_DELAYS } from '@/lib/mood/mood-retry';
 import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
 import PauseRounded from '@mui/icons-material/PauseRounded';
-import CloseRounded from '@mui/icons-material/CloseRounded';
 
 const slideError = 'Diapositive indisponible. Le baromètre par défaut est affiché.';
 const meterStage = 'meter-stage relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden rounded-md border border-line bg-slate-50';
@@ -126,12 +125,13 @@ function OrderedMeterSlides({ deck, title, retry }: { deck: MoodMeterDeck; title
   const [pinned, setPinned] = useState(false);
   const pages = deck.slides.slice(0, 2);
   return <div id="meter-slide-stack" className="group relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl [perspective:1200px]" aria-label="Diapositives du baromètre">
-    <div id="meter-page-flip" className={`relative h-full w-full [transform-style:preserve-3d] transition-transform duration-700 ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none ${pinned ? '[transform:rotateY(180deg)]' : '[transform:rotateY(0deg)] group-hover:[transform:rotateY(180deg)]'}`}>
+    <div id="meter-page-flip" className={`relative h-full w-full [transform-style:preserve-3d] transition-transform duration-1000 ease-[cubic-bezier(.22,.61,.36,1)] motion-reduce:transition-none ${pinned ? '[transform:rotateY(180deg)]' : '[transform:rotateY(0deg)] group-hover:[transform:rotateY(180deg)]'}`}>
       {pages.map((item, index) => <div id={`meter-page-${index + 1}-face`} key={`${index}:${retry}`} aria-hidden={index === 0 ? pinned : !pinned}
         className={`pointer-events-none absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[14px] [backface-visibility:hidden] ${index === 1 ? '[transform:rotateY(180deg)]' : ''}`}>
         <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`} />
       </div>)}
     </div>
+    <span className="pointer-events-none absolute top-2 left-2 z-10 rounded-md bg-white/90 px-2.5 py-1.5 text-[10px] font-semibold text-ink shadow-sm">Survolez ou touchez la flèche pour retourner</span>
     {pages.length > 1 && <IconButton id="meter-flip-button" type="button" aria-label={pinned ? 'Afficher la diapositive 1' : 'Afficher la diapositive 2'} aria-pressed={pinned}
       title={pinned ? 'Revenir à la première diapositive' : 'Maintenir la deuxième diapositive affichée'}
       onClick={() => setPinned(value => !value)}
@@ -145,8 +145,6 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
   const { state, updateTeam, activeTeamId, setDailyReady, cloudStatus } = useTeam();
   const notify = useNotify();
   const [savingMeter, setSavingMeter] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  const [expandedSlide, setExpandedSlide] = useState(0);
   const changeController = useRef<AbortController | null>(null);
   useEffect(() => () => changeController.current?.abort(), []);
   const initialUsed = useRef(state.usedMoodMeters ?? []);
@@ -302,19 +300,8 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
 
   return (
     <Paper component="section" elevation={0} ref={panelRef} className={`flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden rounded-lg border border-line border-t-2 border-t-accent bg-white p-4 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-2.5 ${className}`} aria-labelledby="meter-title">
-      <Dialog open={expanded} onClose={() => setExpanded(false)} fullScreen aria-labelledby="expanded-meter-title" sx={{ zIndex: 1700 }} slotProps={{ paper: { sx: { bgcolor: '#f4f7f9' } } }}>
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-white px-4 py-2.5 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3"><span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-brand"><MoodIcon name="meter" className="size-5" /></span><div className="min-w-0"><p className="text-[10px] font-bold uppercase text-muted">Baromètre du jour</p><DialogTitle id="expanded-meter-title" className="truncate p-0! text-sm! font-bold! sm:text-base!">{title}</DialogTitle></div></div>
-          <IconButton onClick={() => setExpanded(false)} aria-label="Fermer le plein écran" title="Fermer" sx={{ width: 44, height: 44, flexShrink: 0 }}><CloseRounded /></IconButton>
-        </div>
-        <DialogContent className="flex min-h-0 flex-1 flex-col gap-3 bg-[#f4f7f9] p-3! sm:p-5!">
-          {expanded && (deck?.slides[expandedSlide] ? <MeterSlide key={`${expandedSlide}:${retry}`} slide={deck.slides[expandedSlide]} title={`${title} — diapositive ${expandedSlide + 1}`} paused={!playing} idPrefix="expanded-meter" /> : <div className={`${meterStage}`}><DefaultMoodMeter /></div>)}
-          {deck && <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 rounded-lg border border-line bg-white p-2" role="group" aria-label="Diapositives en plein écran">{deck.slides.map((_, index) => <Button key={index} variant={expandedSlide === index ? 'contained' : 'text'} onClick={() => setExpandedSlide(index)} aria-pressed={expandedSlide === index} sx={{ minHeight: 44, minWidth: 44, textTransform: 'none' }}>Diapositive {index + 1}</Button>)}</div>}
-        </DialogContent>
-      </Dialog>
       <div className="flex shrink-0 items-center justify-between gap-3">
-        <div className="min-w-0"><p className="text-[10px] font-bold uppercase text-muted max-[800px]:sr-only">Référence commune</p><h2 id="meter-title" className="truncate text-base font-bold text-ink max-[800px]:sr-only">Baromètre du jour</h2></div>
-        <span className="shrink-0 rounded-md bg-orange-50 px-2 py-1 text-[10px] font-bold uppercase text-amber-800 max-[800px]:sr-only">Partagé</span>
+        <div className="min-w-0"><h2 id="meter-title" className="truncate text-base font-bold text-ink max-[800px]:sr-only">Baromètre du jour</h2></div>
       </div>
       <div className="flex min-w-0 shrink-0 items-center gap-2">
         <div className={`flex min-w-0 flex-1 items-center gap-2 ${locked ? 'max-[800px]:sr-only' : ''}`}>
@@ -330,9 +317,8 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
           title="Choisir un autre baromètre avant le premier vote" disabled={!canChange}
           onClick={() => void selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}><MoodIcon name="shuffle" className="size-5" /></IconButton>
         </div>
-        <IconButton id="expand-meter-button" onClick={() => { setExpandedSlide(selection.slide); setExpanded(true); }} disabled={pending || status !== 'ready' || conversion === 'error'} aria-label="Afficher le baromètre en plein écran" title="Agrandir le baromètre" sx={{ width: 44, height: 44, flexShrink: 0 }} className="rounded-xl border border-slate-200 bg-white text-brand"><MoodIcon name="expand" className="size-5" /></IconButton>
       </div>
-      <p id="daily-meter-note" role="status" className={`flex shrink-0 items-start gap-2 rounded-lg px-2 py-1 text-xs leading-snug ${locked && status === 'ready' ? 'max-[800px]:sr-only' : ''} ${status === 'error' ? 'bg-danger-soft text-danger' : savingMeter || !daily ? 'text-amber-800' : 'text-muted'}`}><MoodIcon name={hasVotes ? 'lock' : 'meter'} className="mt-0.5 size-3.5 shrink-0" /><span>{savingMeter ? 'Enregistrement du baromètre partagé…' : daily ? hasVotes ? 'Verrouillé après le premier vote. Le même repère pour toute l’équipe.' : 'Commun à l’équipe · Modifiable avant le premier vote.' : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</span></p>
+      <p id="daily-meter-note" role="status" className={`flex shrink-0 items-start gap-2 rounded-lg px-2 py-1 text-xs leading-snug ${locked && status === 'ready' ? 'max-[800px]:sr-only' : ''} ${status === 'error' ? 'bg-danger-soft text-danger' : savingMeter || !daily ? 'text-amber-800' : 'text-muted'}`}><MoodIcon name={hasVotes ? 'lock' : 'meter'} className="mt-0.5 size-3.5 shrink-0" /><span>{savingMeter ? 'Enregistrement du baromètre…' : daily ? hasVotes ? 'Verrouillé après le premier vote.' : 'Modifiable avant le premier vote.' : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</span></p>
       {stacked ? <OrderedMeterSlides key={`${deck.remoteId}:${retry}`} deck={deck} title={title} retry={retry} /> : showSlide ? <MeterSlide key={`${selection.deck}:${selection.slide}:${retry}`} slide={slide}
         title={`${title} — diapositive ${selection.slide + 1}`} paused={!playing} /> : (
         <div key={`${selection.deck}:${pending}`} className={`${meterStage} motion-safe:animate-page-reveal`}>
