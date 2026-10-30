@@ -56,14 +56,13 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
       </div>
       <div className="min-w-0 overflow-hidden">
         <SpeakerSlider timer={timer} />
-        {ended ? <p id="time-up-alert" role="alert" className="text-[11px] font-semibold text-danger"><span className="sr-only">{person?.name}, </span>Temps utilisé. Merci de passer la parole.</p> : <span className="sr-only" id="speaker-mood" hidden={!person}>{person ? `Humeur ${person.mood} / 4 · ${running ? 'Parle maintenant' : 'À vous la parole'}` : ''}</span>}
+        {ended ? <p id="time-up-alert" role="alert" className="text-[11px] font-semibold text-danger"><span className="sr-only">{person?.name}, </span>Temps utilisé. Merci de passer la parole.</p> : <span className="sr-only" id="speaker-mood-description" hidden={!person}>{person ? `Humeur ${person.mood} / 4 · ${running ? 'Parle maintenant' : 'À vous la parole'}` : ''}</span>}
       </div>
       <div className="row-start-3 grid h-full min-h-0 min-w-0 place-items-center [container-type:size]">
         {/* Size against both dimensions of the remaining grid cell, not the viewport. */}
         <div key={`${timer.activeId}-${timer.focusMode}`} className={`timer-ring relative isolate aspect-square w-[min(100cqw,100cqh,380px)] rounded-full bg-slate-50/70 [container-type:inline-size] transition-colors motion-reduce:transition-none ${ringColor} ${pulse}`} id="timer-ring">
           {timer.focusMode && <span className="pointer-events-none absolute inset-0 rounded-full border-2 border-accent opacity-0 motion-safe:animate-turn-halo" aria-hidden="true" />}
           <div className="absolute inset-[6%] rounded-full bg-neutral-900" aria-hidden="true" />
-          {person?.moodSlide && person.mood && <SpeakerMoodPicture key={`${person.moodSlide.image}:${person.mood}`} context={person.moodSlide} mood={person.mood} />}
           <svg className="relative size-full -rotate-90 overflow-visible" viewBox="0 0 300 300" aria-hidden="true">
             <circle className="fill-none stroke-current stroke-[4] opacity-10" cx="150" cy="150" r="136" />
             <circle className="fill-none stroke-current stroke-[5] [stroke-linecap:round] transition-[stroke-dashoffset,stroke] duration-150 ease-linear motion-reduce:transition-none" id="ring-progress" cx="150" cy="150" r="136" style={{ strokeDasharray: circumference, strokeDashoffset: circumference * (1 - ratio) }} />
@@ -74,11 +73,14 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
               <span className="block text-[clamp(7px,3cqw,11px)] font-semibold text-white">{timer.ended ? 'Merci de passer la parole' : timer.running ? 'À TOI DE PARLER !' : timer.turnStarted ? 'TON TOUR EST EN PAUSE' : 'La parole est à'}</span>
               <h2 id="speaker-name" className="line-clamp-2 text-[clamp(12px,7cqw,27px)] font-bold leading-tight [overflow-wrap:anywhere]" title={speakerName}>{speakerName}</h2>
             </div>
+            {person?.mood && <div id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${person.mood} sur 4`} className="flex items-center justify-center gap-1.5 text-[clamp(6px,3cqw,10px)] font-semibold text-white">
+              <span>Humeur <strong>{person.mood}</strong> / 4</span>
+              {person.moodSlide && <SpeakerMoodPicture key={`${person.id}:${person.moodSlide.image}:${person.mood}`} context={person.moodSlide} mood={person.mood} />}
+            </div>}
             <span className="text-[clamp(5px,3cqw,8px)] font-bold leading-relaxed text-white" id="timer-label">{ended ? 'DÉPASSEMENT · PASSEZ LA PAROLE' : critical ? 'CONCLUEZ MAINTENANT' : nearly ? 'PRÉPAREZ LA CONCLUSION' : running ? 'TEMPS RESTANT' : 'TEMPS PAR PERSONNE'}</span>
             <div id="timer-display" className="text-[clamp(24px,23cqw,88px)] leading-none font-extrabold tabular-nums text-white [-webkit-text-stroke:clamp(2px,0.9cqw,3px)_#000] [paint-order:stroke_fill] [text-shadow:0_2px_4px_#000,0_0_8px_#000]" role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
               {ended ? '+' : ''}{String(minutes).padStart(2, '0')}<span>:</span>{String(secs).padStart(2, '0')}
             </div>
-            {person && <span className="text-[clamp(7px,3cqw,10px)] font-medium text-white">Humeur {person.mood} / 4</span>}
             </div>
           </div>
           <span className="absolute top-[3%] left-1/2 size-[3%] -translate-x-1/2 rounded-full bg-current" aria-hidden="true" />

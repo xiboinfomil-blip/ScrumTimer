@@ -52,3 +52,52 @@ export function extractMoodPictures(svg: string): (string | null)[] {
   }
   return ([1, 2, 3, 4] as const).map(mood => selectMoodPicture(pictures, mood));
 }
+
+export function gifPlaybackDuration(bytes: Uint8Array): number | null {
+  const signature = String.fromCharCode(...bytes.subarray(0, 6));
+  if ((signature !== 'GIF87a' && signature !== 'GIF89a') || bytes.length < 13) return null;
+
+  let position = 13;
+  const screenFlags = bytes[10];
+  if (screenFlags & 0x80) position += 3 * 2 ** ((screenFlags & 0x07) + 1);
+  let frameCount = 0;
+  let duration = 0;
+  let frameDelay = 10;
+
+  const skipSubBlocks = () => {
+    while (position < bytes.length) {
+      const size = bytes[position++];
+      if (size === 0) return true;
+      position += size;
+      if (position > bytes.length) return false;
+    }
+    return false;
+  };
+
+  while (position < bytes.length) {
+    const marker = bytes[position++];
+    if (marker === 0x3b) return frameCount ? duration + 80 : null;
+    if (marker === 0x21) {
+      if (position >= bytes.length) return null;
+      const label = bytes[position++];
+      if (label === 0xf9 && bytes[position] === 4 && position + 5 < bytes.length) {
+        frameDelay = bytes[position + 2] | (bytes[position + 3] << 8);
+      }
+      if (!skipSubBlocks()) return null;
+      continue;
+    }
+    if (marker !== 0x2c || position + 9 > bytes.length) return null;
+
+    const imageFlags = bytes[position + 8];
+    position += 9;
+    if (imageFlags & 0x80) position += 3 * 2 ** ((imageFlags & 0x07) + 1);
+    if (position >= bytes.length) return null;
+    position++;
+    if (!skipSubBlocks()) return null;
+
+    frameCount++;
+    duration += Math.max(2, frameDelay) * 10;
+    frameDelay = 10;
+  }
+  return null;
+}

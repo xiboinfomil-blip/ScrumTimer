@@ -108,7 +108,7 @@ export function TimerPage() {
         <button type="button" onClick={() => presentation.presenting ? void presentation.toggle() : setSharing(true)} aria-label={presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'} title={presentation.presenting ? 'Quitter la présentation' : 'Diffusion'} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand hover:border-brand/30 hover:bg-blue-50 max-[650px]:size-11 max-[650px]:px-0">{broadcast.enabled && <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-success" />}<ScreenShareRounded fontSize="small" /><span className="max-[650px]:sr-only">{presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'}</span></button>
         </div>} />
       {!presentation.presenting && <ScreenTabs
-        className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 [@media(max-height:650px)]:h-11 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0`}
+        className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 max-[1359px]:flex min-[1360px]:hidden [@media(max-height:650px)]:flex [@media(max-height:650px)]:h-11 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0`}
         label="Panneau du minuteur"
         value={view}
         onChange={setView}
@@ -117,9 +117,9 @@ export function TimerPage() {
           { value: 'prompts', label: isSprint ? 'Tickets & notes' : note ? 'Pense-bête' : 'Questions' },
         ]}
       />}
-      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 items-stretch gap-4 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'grid-cols-1' : 'grid-cols-[minmax(0,1.2fr)_minmax(300px,.85fr)] max-[800px]:grid-cols-1'}`} data-view={presentation.presenting ? 'timer' : view}>
-        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={!presentation.presenting && view !== 'timer' ? 'max-[800px]:hidden' : ''} />
-        {!presentation.presenting && <DailyPrompts speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => setView('timer')} className={view !== 'prompts' ? 'max-[800px]:hidden' : ''} />}
+      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'grid-rows-1' : 'grid-rows-1 min-[1360px]:grid-cols-[minmax(0,1fr)_minmax(0,720px)_minmax(0,1fr)]'}`} data-view={presentation.presenting ? 'timer' : view}>
+        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`min-[1360px]:col-start-2 ${!presentation.presenting && view !== 'timer' ? 'max-[1359px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
+        {!presentation.presenting && <DailyPrompts speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => setView('timer')} className={`min-[1360px]:col-start-3 ${view !== 'prompts' ? 'max-[1359px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />}
       </div>
       <TimerManagementDialog timer={timer} />
       <LateCheckinDialog timer={timer} />

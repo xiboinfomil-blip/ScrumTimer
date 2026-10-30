@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useReducedMotion } from 'framer-motion';
 import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood/mood-catalog-client';
-import { extractMoodPictures, selectMoodPicture } from '@/lib/mood/mood-picture';
+import { extractMoodPictures, gifPlaybackDuration, selectMoodPicture } from '@/lib/mood/mood-picture';
 import type { Mood, MoodSlideContext } from '@/types/team';
 import { AnimatedImage } from '@/app/mood/_components/animated-image';
 
@@ -12,6 +12,8 @@ const cache = new Map<string, (string | null)[]>();
 export function SpeakerMoodPicture({ context, mood }: { context: MoodSlideContext; mood: Mood }) {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [playbackDuration, setPlaybackDuration] = useState<number | null>(null);
+  const [paused, setPaused] = useState(false);
   const reduced = useReducedMotion();
   useEffect(() => {
     const controller = new AbortController();
@@ -41,13 +43,33 @@ export function SpeakerMoodPicture({ context, mood }: { context: MoodSlideContex
         if (cache.size >= 4) cache.delete(cache.keys().next().value!);
         cache.set(first.image, pictures);
       }
-      if (!controller.signal.aborted) setSrc(pictures[mood - 1]);
+      const selected = pictures[mood - 1];
+      const animated = Boolean(selected && (/^data:image\/gif;/i.test(selected) || /\.gif$/i.test(selected)));
+      let duration: number | null = null;
+      if (animated && selected) {
+        const response = await fetch(selected, { signal: controller.signal });
+        if (!response.ok) return;
+        duration = gifPlaybackDuration(new Uint8Array(await response.arrayBuffer()));
+      }
+      if (!controller.signal.aborted) {
+        setPlaybackDuration(duration);
+        setPaused(Boolean(reduced) || (animated && duration === null));
+        setSrc(selected);
+      }
     }
     load().catch(() => {}).finally(() => clearTimeout(timeout));
     return () => { controller.abort(); clearTimeout(timeout); };
-  }, [context.image, mood]);
+  }, [context.image, mood, reduced]);
+  useEffect(() => {
+    if (reduced) setPaused(true);
+  }, [reduced]);
+  useEffect(() => {
+    if (!src || !playbackDuration || paused) return;
+    const timeout = setTimeout(() => setPaused(true), playbackDuration);
+    return () => clearTimeout(timeout);
+  }, [src, playbackDuration, paused]);
   if (!src || failed) return null;
-  return <div className="pointer-events-none absolute inset-[6%] overflow-hidden rounded-full bg-white" data-mood-picture={mood} aria-hidden="true">
-    <AnimatedImage src={src} alt="" animated={/^data:image\/gif;/i.test(src) || /\.gif$/i.test(src)} paused={Boolean(reduced)} className="absolute inset-0 size-full object-cover" onError={() => setFailed(true)} />
+  return <div className="pointer-events-none relative size-[clamp(28px,10cqw,42px)] shrink-0 overflow-hidden rounded-md border border-white/50 bg-white" data-mood-picture={mood} aria-hidden="true">
+    <AnimatedImage src={src} alt="" animated={/^data:image\/gif;/i.test(src) || /\.gif$/i.test(src)} paused={paused} className="absolute inset-0 size-full object-cover" onError={() => setFailed(true)} />
   </div>;
 }

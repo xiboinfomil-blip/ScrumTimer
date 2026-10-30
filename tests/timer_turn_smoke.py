@@ -50,6 +50,7 @@ with sync_playwright() as p:
             'team': team, 'revision': 1,
         } if route.request.method == 'GET' else {'revision': 2}))
         context.route('**/api/history', lambda route: route.fulfill(json={'rounds': []}))
+        context.route('**/api/timer-remote', lambda route: route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'}))
         hints = {person['id']: f"**Avancement**\n\n- API terminée\n- *Tests* en cours\n\n1. ~~Ancien~~\n2. Suite\n\n<script>alert(1)</script>\n\n![image](https://evil.invalid/note-image)\n\n[Lien](https://evil.invalid/note-link)"
                  for person in team['roster']}
         def hints_api(route):
@@ -144,7 +145,12 @@ with sync_playwright() as p:
         first = page.locator('#speaker-name').inner_text()
         assert first in ['Alice <safe>', 'Bob', 'Charlie']
         chosen = next(person['mood'] for person in team['roster'] if person['name'] == first)
-        expect(page.locator('#timer-ring [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
+        expect(page.locator('#speaker-mood')).to_contain_text(f'Humeur {chosen} / 4')
+        expect(page.locator('#speaker-mood [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
+        mood_picture = page.locator('#speaker-mood [data-mood-picture]')
+        expect(mood_picture).to_have_count(1)
+        mood_box = mood_picture.bounding_box()
+        assert mood_box and mood_box['width'] <= 44 and mood_box['height'] <= 44, mood_box
         expect(page.locator('#timer-ring #speaker-name')).to_have_text(first)
         expect(page.locator('#timer-ring [data-mood-picture] span')).to_have_count(0)
         assert page.locator('#timer-display').evaluate('el => getComputedStyle(el).textShadow') != 'none'
@@ -193,6 +199,8 @@ with sync_playwright() as p:
             assert box and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (motion, width, box)
             ring = page.locator('#timer-ring').bounding_box()
             assert ring and ring['width'] >= 90, (motion, width, ring)
+            workspace = page.locator('.workspace').bounding_box()
+            assert workspace and abs((ring['x'] + ring['width'] / 2) - (workspace['x'] + workspace['width'] / 2)) <= 2, (motion, width, ring, workspace)
             expect(page.locator('#upcoming-speaker')).to_be_visible()
             for selector in ['#speaker-name', '#timer-display']:
                 text = page.locator(selector).bounding_box()
@@ -244,7 +252,8 @@ with sync_playwright() as p:
         expect(page.locator('#speaker-name')).not_to_have_text(first)
         next_name = page.locator('#speaker-name').inner_text()
         chosen = next(person['mood'] for person in team['roster'] if person['name'] == next_name)
-        expect(page.locator('#timer-ring [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
+        expect(page.locator('#speaker-mood')).to_contain_text(f'Humeur {chosen} / 4')
+        expect(page.locator('#speaker-mood [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
         expect(page.locator('[data-speaker-hint] strong')).to_have_text('Avancement')
         expect(cue).to_contain_text('À TOI DE PARLER !')
         expect(page.locator('#start-button')).to_contain_text('Pause')
@@ -293,7 +302,7 @@ with sync_playwright() as p:
             page.reload()
         assert failed_image.value.status == 502
         expect(page.locator('#speaker-name')).to_have_text(current)
-        expect(page.locator('#timer-ring [data-mood-picture]')).to_have_count(0)
+        expect(page.locator('#speaker-mood [data-mood-picture]')).to_have_count(0)
         expect(page.locator('#timer-ring #speaker-name')).to_have_text(current)
         expect(page.locator('#timer-display')).to_be_visible()
         assert not errors, errors

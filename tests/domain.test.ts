@@ -6,7 +6,7 @@ import { secondsUntil, timerFrame, formatTime, shuffleEligible, timerUrgency } f
 import { parseMoodMeterCatalog } from '../src/lib/mood/mood-meter.ts';
 import { timeScore, scoreSpeaker, speakerScoreProgress, explainScore, sessionLeaderboard, sessionStatistics, type SessionSpeaker } from '../src/lib/history/session-results.ts';
 import { validateTeamInput } from '../src/lib/team/team-validation.ts';
-import { selectMoodPicture } from '../src/lib/mood/mood-picture.ts';
+import { gifPlaybackDuration, selectMoodPicture } from '../src/lib/mood/mood-picture.ts';
 
 test('mood pictures follow numbered quadrants, not SVG element order, and ignore decorative images', () => {
   const pictures = [
@@ -21,6 +21,21 @@ test('mood pictures follow numbered quadrants, not SVG element order, and ignore
   assert.equal(selectMoodPicture([], 1), null);
   assert.equal(selectMoodPicture([{ src: 'invalid', x: NaN, y: 0, width: .3, height: .3 }], 1), null);
   assert.equal(selectMoodPicture(pictures.filter(picture => picture.src !== 'one'), 1), null);
+});
+
+test('GIF playback duration includes each frame once and rejects malformed data', () => {
+  const gif = Uint8Array.from([
+    0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
+    0x21, 0xf9, 0x04, 0x00, 0x05, 0x00, 0x00, 0x00,
+    0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00,
+    0x21, 0xf9, 0x04, 0x00, 0x14, 0x00, 0x00, 0x00,
+    0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00,
+    0x3b,
+  ]);
+  assert.equal(gifPlaybackDuration(gif), 330);
+  assert.equal(gifPlaybackDuration(Uint8Array.from([0x47, 0x49, 0x46])), null);
+  assert.equal(gifPlaybackDuration(Uint8Array.from([...gif.slice(0, -1), 0x00])), null);
 });
 
 test('explicit postponement permits ready teammates without treating waiting members as absent or persisting progress', () => {
