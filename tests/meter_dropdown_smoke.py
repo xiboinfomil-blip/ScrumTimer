@@ -64,16 +64,37 @@ def remote_geometry(page, width, height):
     }''')
     first, second = layout['images']
     assert all(image['width'] > 0 and image['height'] > 0 for image in layout['images']), layout
-    assert first['bottom'] <= second['top'] + 1, layout
     assert abs(first['left'] - second['left']) <= 1, layout
+    assert abs(first['top'] - second['top']) <= 1, layout
+    assert abs(first['width'] - second['width']) <= 1 and abs(first['height'] - second['height']) <= 1, layout
+    assert layout['scroll'] <= layout['height'] + 2, layout
     for image in layout['images']:
         assert image['left'] >= layout['stack']['left'] - 1 and image['right'] <= layout['stack']['right'] + 1, layout
+    flip = page.get_by_role('button', name='Afficher la diapositive 2', exact=True)
+    expect(flip).to_have_attribute('aria-pressed', 'false')
+    stack.hover(position={'x': layout['stack']['width'] / 2, 'y': layout['stack']['height'] / 2})
+    page.wait_for_function("Math.abs(new DOMMatrix(getComputedStyle(document.querySelector('#meter-page-flip')).transform).m11 + 1) < .01")
+    if width == 1366:
+        duration = page.locator('#meter-page-flip').evaluate('el => parseFloat(getComputedStyle(el).transitionDuration)')
+        reduced = page.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches")
+        assert duration == 0 if reduced else duration >= .65, ('flip duration does not match motion preference', reduced, duration)
+    if width in (320, 1366):
+        page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-mood-flip-{width}.png'))
+    page.mouse.move(0, 0)
+    page.wait_for_function("Math.abs(new DOMMatrix(getComputedStyle(document.querySelector('#meter-page-flip')).transform).m11 - 1) < .01")
+    expect(flip).to_have_attribute('aria-pressed', 'false')
+    flip.focus()
+    page.keyboard.press('Enter')
+    expect(page.get_by_role('button', name='Afficher la diapositive 1', exact=True)).to_have_attribute('aria-pressed', 'true')
+    expect(page.locator('#meter-page-2-face')).to_have_attribute('aria-hidden', 'false')
+    page.keyboard.press('Enter')
+    expect(page.get_by_role('button', name='Afficher la diapositive 2', exact=True)).to_have_attribute('aria-pressed', 'false')
 
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    for width, height in [(320, 568), (390, 844), (768, 1024), (820, 568), (1024, 576), (1366, 768)]:
-        context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce', service_workers='block')
+    for width, height, motion in [(320, 568, 'reduce'), (390, 844, 'reduce'), (768, 1024, 'reduce'), (820, 568, 'reduce'), (1024, 576, 'reduce'), (1366, 768, 'reduce'), (1366, 768, 'no-preference')]:
+        context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion=motion, service_workers='block')
         bootstrap = install_browser_bootstrap(context)
         team = {'roster': [{'id': 'alice', 'name': 'Alice', 'present': True, 'mood': None, 'moodUpdatedAt': None}], 'session': [], 'duration': 120, 'warning': 30, 'sound': False, 'usedMoodMeters': [], 'currentMoodSlide': None}
         db = {'revision': 1, 'meter': {'meterId': 'original', 'title': 'Baromètre original'}, 'patches': 0}
@@ -106,7 +127,11 @@ with sync_playwright() as p:
                 route.fallback()
         context.route('**/api/**', api)
         context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
-        context.route('**/mood-meters/slides/**/*.svg', lambda route: route.fulfill(content_type='image/svg+xml', body='<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"/>'))
+        def image(route):
+            second = 'page-2' in route.request.url
+            color, label = ('#d9f3e7', 'PAGE 2') if second else ('#dcecff', 'PAGE 1')
+            route.fulfill(content_type='image/svg+xml', body=f'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="{color}"/><text x="50" y="55" text-anchor="middle">{label}</text></svg>')
+        context.route('**/mood-meters/slides/**/*.svg', image)
         page = context.new_page()
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
@@ -189,5 +214,5 @@ with sync_playwright() as p:
         assert not errors, errors
         bootstrap.assert_no_unexpected_api()
         context.close()
-        print(f'PASS dropdown change/reload/vote-lock {width}x{height}')
+        print(f'PASS dropdown change/reload/vote-lock {width}x{height} {motion}')
     browser.close()

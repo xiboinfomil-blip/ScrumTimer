@@ -64,7 +64,7 @@ with sync_playwright() as p:
     expect(page.locator('.site-header a[href^="/statistics"], .site-header a[href^="/daily-notes"]')).to_have_count(0)
     assert page.get_by_text('Alice <safe>', exact=True).count() == 0
     db['offline'] = False
-    page.get_by_role('button', name='Réessayer Neon', exact=True).click()
+    page.get_by_role('button', name='Réessayer la sauvegarde Neon', exact=True).click()
     page.get_by_text('Alice <safe>', exact=True).wait_for()
     page.get_by_role('link', name='Humeurs', exact=True).click()
     page.wait_for_function("document.querySelector('#meter-catalogue-select')?.selectedOptions[0]?.textContent === 'New meter'")
@@ -78,14 +78,16 @@ with sync_playwright() as p:
         page.wait_for_function("Array.from(document.querySelectorAll('#meter-slide-stack img')).every(img => img.complete && img.naturalWidth > 0)")
         images = page.locator('#meter-slide-stack img')
         first, second = images.nth(0).bounding_box(), images.nth(1).bounding_box()
-        assert first and second and second['y'] >= first['y'] + first['height'] - 1, (width, 'slides not stacked')
+        assert first and second and abs(second['y'] - first['y']) <= 1, (width, 'flip faces do not overlap')
         assert first['width'] > 0 and second['width'] > 0, (width, 'empty slide')
+        assert abs(second['width'] - first['width']) <= 1 and abs(second['height'] - first['height']) <= 1, (width, 'flip faces differ in size')
         stack = page.locator('#meter-slide-stack').bounding_box()
-        assert stack and second['y'] + second['height'] <= stack['y'] + stack['height'] + 1, (width, 'second slide clipped')
+        assert stack and second['y'] + second['height'] <= stack['y'] + stack['height'] + 1, (width, 'flip face clipped')
+        assert page.locator('#meter-slide-stack').evaluate('el => el.scrollHeight <= el.clientHeight + 2'), (width, 'flip surface should not add page height')
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
         assert page.get_by_role('button', name='Diapositive suivante', exact=True).count() == 0
     page.set_viewport_size({'width': 1366, 'height': 768})
-    expect(page.locator('#meter-slide-stack button')).to_have_count(0)
+    expect(page.get_by_role('button', name='Afficher la diapositive 2', exact=True)).to_have_count(1)
     used = page.locator('#meter-catalogue-select option').filter(has_text='Used meter')
     assert 'Déjà utilisé' in used.inner_text()
     assigned = deepcopy(db['daily'])

@@ -171,13 +171,14 @@ def open_late_checkin(page, db, source, meter_value):
         expect(stack.locator('img')).to_have_count(2)
         for path in REMOTE_SLIDES:
             image = stack.locator(f'img[src="/{path}"]')
-            expect(image).to_be_visible()
+            expect(image).to_be_attached()
             expect(image).to_have_js_property('complete', True)
             expect(image).not_to_have_js_property('naturalWidth', 0)
         page.evaluate('async () => { for (let i=0; i<3; i++) await new Promise(requestAnimationFrame); }')
-        geometry(page, page.viewport_size['width'], page.viewport_size['height'], stack.locator('img').all())
+        images = stack.locator('img')
+        geometry(page, page.viewport_size['width'], page.viewport_size['height'], [enlarge, images.nth(0)])
         size = stack.evaluate('el => ({height: el.clientHeight, scroll: el.scrollHeight})')
-        assert size['scroll'] <= size['height'] + 2, ('both SVGs must fit together', size)
+        assert size['scroll'] <= size['height'] + 2, ('flip surface must not add vertical scrolling', size)
         layout = stack.evaluate('''el => {
             const rect = node => {const r = node.getBoundingClientRect();
                 return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};
@@ -187,7 +188,7 @@ def open_late_checkin(page, db, source, meter_value):
             assert image['left'] >= layout['stack']['left'] - 1 and image['right'] <= layout['stack']['right'] + 1, layout
             assert image['top'] >= layout['stack']['top'] - 1 and image['bottom'] <= layout['stack']['bottom'] + 1, layout
         first, second = layout['images']
-        assert first['bottom'] <= second['top'] + 1, ('vertically stacked SVGs', layout)
+        assert abs(first['top'] - second['top']) <= 1 and abs(first['left'] - second['left']) <= 1, ('flip faces should overlap', layout)
         page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f"scrum-late-modal-{page.viewport_size['width']}.png"))
     assert db.daily == db.meter and db.daily_posts == [db.meter], 'late modal must not reassign the daily meter'
     no_archive(page, db)

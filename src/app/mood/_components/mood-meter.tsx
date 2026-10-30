@@ -123,10 +123,21 @@ export function MeterSlide({ slide, title, paused, idPrefix = 'meter', onSettled
 }
 
 function OrderedMeterSlides({ deck, title, retry }: { deck: MoodMeterDeck; title: string; retry: number }) {
-  return <div id="meter-slide-stack" className="grid min-h-0 flex-1 auto-rows-[minmax(140px,1fr)] grid-cols-1 gap-2 overflow-y-auto rounded-xl" aria-label="Toutes les diapositives du baromètre">
-    {deck.slides.map((item, index) => <div key={`${index}:${retry}`} className="relative flex min-h-0 flex-col overflow-hidden rounded-[14px] motion-safe:animate-page-reveal">
-      <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`} />
-    </div>)}
+  const [pinned, setPinned] = useState(false);
+  const pages = deck.slides.slice(0, 2);
+  return <div id="meter-slide-stack" className="group relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl [perspective:1200px]" aria-label="Diapositives du baromètre">
+    <div id="meter-page-flip" className={`relative h-full w-full [transform-style:preserve-3d] transition-transform duration-700 ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none ${pinned ? '[transform:rotateY(180deg)]' : '[transform:rotateY(0deg)] group-hover:[transform:rotateY(180deg)]'}`}>
+      {pages.map((item, index) => <div id={`meter-page-${index + 1}-face`} key={`${index}:${retry}`} aria-hidden={index === 0 ? pinned : !pinned}
+        className={`pointer-events-none absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[14px] [backface-visibility:hidden] ${index === 1 ? '[transform:rotateY(180deg)]' : ''}`}>
+        <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`} />
+      </div>)}
+    </div>
+    {pages.length > 1 && <IconButton id="meter-flip-button" type="button" aria-label={pinned ? 'Afficher la diapositive 1' : 'Afficher la diapositive 2'} aria-pressed={pinned}
+      title={pinned ? 'Revenir à la première diapositive' : 'Maintenir la deuxième diapositive affichée'}
+      onClick={() => setPinned(value => !value)}
+      sx={{ width: 44, height: 44 }} className="absolute right-1 bottom-1 z-10 rounded-full border border-line bg-white/95 text-brand shadow-sm">
+      <MoodIcon name={pinned ? 'back' : 'arrow'} className="size-5" />
+    </IconButton>}
   </div>;
 }
 
@@ -345,7 +356,7 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
         {conversion === 'error' ? <>Présentation indisponible. Choisissez un autre baromètre ou <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" className="min-h-11 px-2 text-brand underline" onClick={() => { setConversion('loading'); setRetry(value => value + 1); }}>Réessayer</Button></> : 'Chargement des diapositives SVG depuis Google…'}
       </div>}
       <p id="meter-source-note" className={deck && !deck.remoteId ? 'sr-only' : `shrink-0 text-[10px] text-muted ${status === 'ready' ? '[@media(max-height:650px)]:sr-only' : ''}`} role="status">{deck?.remoteId
-        ? `${stacked ? `${deck.slides.length} diapositives affichées ensemble. ` : ''}SVG statiques fournis par Google ; GIF non animés.` : deck
+        ? `${stacked ? `${deck.slides.length} diapositives disponibles. ` : ''}SVG statiques fournis par Google ; GIF non animés.` : deck
         ? 'Les GIF jouent en boucle à l’ouverture de chaque diapositive. Stop fige les animations ; les flèches changent la diapositive.'
         : status === 'loading' ? 'Chargement du catalogue…'
         : status === 'error' ? loadError || 'Catalogue indisponible. Réessayez le chargement.'

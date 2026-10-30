@@ -133,7 +133,7 @@ def run_case(browser, case, width=1366, height=768):
         expect(page.locator('#meter-slide-stack img')).to_have_count(2)
         expect(page.locator('#default-mood-meter')).to_have_count(0)
         assert not errors, errors
-        print(f'PASS remote stacked mood loading: {case} {width}x{height}', flush=True)
+        print(f'PASS remote flip mood loading: {case} {width}x{height}', flush=True)
     finally:
         context.close()
 
