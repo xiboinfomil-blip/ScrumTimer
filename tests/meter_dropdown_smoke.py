@@ -30,6 +30,16 @@ def mood_contrast(button):
     }''')
 
 
+def mood_color_family(value, colors):
+    red, green, blue = colors['backgroundColor']
+    return {
+        1: red > 150 and red > green * 1.5 and red > blue * 1.5,
+        2: red > 200 and green > 150 and blue < 100,
+        3: blue > 150 and blue > red * 1.5 and blue > green,
+        4: green > 100 and green > red * 1.5 and green > blue * 1.2,
+    }[value]
+
+
 def remote_geometry(page, width, height):
     stack = page.locator('#meter-slide-stack')
     expect(stack.locator('img')).to_have_count(2)
@@ -177,10 +187,11 @@ with sync_playwright() as p:
             assert box['width'] >= 44 and box['height'] >= 44
             assert box['x'] >= 0 and box['x'] + box['width'] <= width + 1
         mood_buttons = page.get_by_role('group', name='Humeur de Alice : choisissez de 1 à 4').get_by_role('button')
-        for button in mood_buttons.all():
+        for value, button in enumerate(mood_buttons.all(), start=1):
             button.evaluate('async element => { await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {}))); }')
             colors = mood_contrast(button)
-            assert colors['ratio'] >= 4.5, ('unselected mood button contrast', colors)
+            assert mood_color_family(value, colors), ('unselected mood color family', value, colors)
+            assert colors['ratio'] >= 4.5, ('unselected mood button contrast', value, colors)
         for value in (1, 2, 3, 4, 2):
             button = page.get_by_role('button', name=f'Humeur {value} pour Alice', exact=True)
             button.click()
@@ -188,14 +199,7 @@ with sync_playwright() as p:
             page.wait_for_function("document.querySelector('.site-header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
             button.evaluate('async element => { await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {}))); }')
             colors = mood_contrast(button)
-            red, green, blue = colors['backgroundColor']
-            expected_color = {
-                1: red > 150 and red > green * 1.5 and red > blue * 1.5,
-                2: red > 200 and green > 150 and blue < 100,
-                3: blue > 150 and blue > red * 1.5 and blue > green,
-                4: green > 100 and green > red * 1.5 and green > blue * 1.2,
-            }[value]
-            assert expected_color, (value, colors)
+            assert mood_color_family(value, colors), (value, colors)
             assert colors['ratio'] >= 4.5, (value, colors)
         if width in [320, 1366]:
             page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-mood-design-vote-{width}.png'))

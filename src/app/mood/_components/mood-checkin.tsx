@@ -10,10 +10,10 @@ import type { Mood } from '@/types/team';
 import { MoodIcon } from './mood-icon';
 
 const moodChoices: { value: Mood; description: string; tone: string }[] = [
-  { value: 1, description: 'Mauvaise humeur, énergie élevée', tone: 'border-red-300 bg-red-100 text-red-950 hover:bg-red-200 aria-pressed:border-red-800 aria-pressed:bg-red-700 aria-pressed:text-white' },
-  { value: 2, description: 'Mauvaise humeur, énergie basse', tone: 'border-yellow-500 bg-yellow-200 text-yellow-950 hover:bg-yellow-300 aria-pressed:border-yellow-700 aria-pressed:bg-yellow-400 aria-pressed:text-yellow-950' },
-  { value: 3, description: 'Bonne humeur, énergie basse', tone: 'border-blue-300 bg-blue-100 text-blue-950 hover:bg-blue-200 aria-pressed:border-blue-800 aria-pressed:bg-blue-700 aria-pressed:text-white' },
-  { value: 4, description: 'Bonne humeur, énergie élevée', tone: 'border-green-300 bg-green-100 text-green-950 hover:bg-green-200 aria-pressed:border-green-800 aria-pressed:bg-green-700 aria-pressed:text-white' },
+  { value: 1, description: 'Mauvaise humeur, énergie élevée', tone: 'border-red-500 bg-red-400 text-red-950 hover:bg-red-300 aria-pressed:border-red-800 aria-pressed:bg-red-700 aria-pressed:text-white' },
+  { value: 2, description: 'Mauvaise humeur, énergie basse', tone: 'border-yellow-600 bg-yellow-300 text-yellow-950 hover:bg-yellow-400 aria-pressed:border-yellow-700 aria-pressed:bg-yellow-500 aria-pressed:text-yellow-950' },
+  { value: 3, description: 'Bonne humeur, énergie basse', tone: 'border-blue-500 bg-blue-400 text-blue-950 hover:bg-blue-300 aria-pressed:border-blue-800 aria-pressed:bg-blue-700 aria-pressed:text-white' },
+  { value: 4, description: 'Bonne humeur, énergie élevée', tone: 'border-green-500 bg-green-400 text-green-950 hover:bg-green-300 aria-pressed:border-green-800 aria-pressed:bg-green-700 aria-pressed:text-white' },
 ];
 
 export function MoodCheckin({ className = '' }: { className?: string }) {
