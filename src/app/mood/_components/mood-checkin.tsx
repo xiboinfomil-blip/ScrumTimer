@@ -48,17 +48,30 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
     const timestamp = new Date().toISOString();
     if (updateTeam(current => ({ ...current, session: [], postponed: current.postponed?.filter(id => id !== person.id), usedMoodMeters: removing ? current.usedMoodMeters ?? [] : [...new Set([...(current.usedMoodMeters ?? []), ...(current.currentMoodSlide?.meterId ? [current.currentMoodSlide.meterId] : [])])], roster: current.roster.map(p => p.id === person.id ? { ...p, mood: removing ? null : value, moodUpdatedAt: removing ? null : timestamp, moodSlide: removing ? null : current.currentMoodSlide ?? null } : p) }))) notify(removing ? `${person.name} : humeur annulée.` : `${person.name} : humeur ${value} enregistrée.`);
   }
+  function togglePostpone(personId: string) {
+    if (!dailyReady || resuming) return;
+    updateTeam(current => ({ ...current, session: [], postponed: current.postponed?.includes(personId)
+      ? current.postponed.filter(id => id !== personId) : [...(current.postponed ?? []), personId] }));
+  }
   useRemotePage({
     page: 'mood', speaker: remotePerson?.name ?? '', nextSpeaker: displayed[remoteIndex + 1]?.name ?? '', teamName: '',
-    activeId: remotePerson?.id ?? null, participantPresent: remotePerson?.present ?? false, participantMood: remotePerson?.mood ?? null,
+    activeId: remotePerson?.id ?? null, participants: displayed.map((person, index) => ({
+      name: person.name, present: person.present, mood: person.mood, done: false,
+      postponed: Boolean(state.postponed?.includes(person.id)), active: index === remoteIndex,
+    })), participantPresent: remotePerson?.present ?? false, participantMood: remotePerson?.mood ?? null,
     participantIndex: remotePerson ? remoteIndex : 0, participantCount: displayed.length,
-    canVote: dailyReady, canContinue: dailyReady && (resuming || canStartSession(state)),
+    canVote: dailyReady, canPostpone: dailyReady && !resuming, canContinue: dailyReady && (resuming || canStartSession(state)),
     running: false, remaining: 0, deadline: 0, completed: 0, total: displayed.length,
     blocked: false,
-  }, action => {
+  }, (action, targetIndex) => {
     if (action === 'participant-previous' && displayed.length > 1) setRemoteId(displayed[(remoteIndex - 1 + displayed.length) % displayed.length].id);
     else if (action === 'participant-next' && displayed.length > 1) setRemoteId(displayed[(remoteIndex + 1) % displayed.length].id);
-    else if (action.startsWith('mood-') && action !== 'mood-continue' && remotePerson) chooseMood(remotePerson.id, Number(action.slice(5)) as Mood);
+    else if (action.startsWith('mood-') && action !== 'mood-continue' && targetIndex !== undefined && displayed[targetIndex]) {
+      const person = displayed[targetIndex];
+      setRemoteId(person.id);
+      if (action === 'mood-postpone') togglePostpone(person.id);
+      else chooseMood(person.id, Number(action.slice(5)) as Mood);
+    }
     else if (action === 'mood-continue') start();
   });
   return (

@@ -36,7 +36,7 @@ export function TimerPage() {
   const [sharing, setSharing] = useState(false);
   const [blackScreen, setBlackScreen] = useState(false);
   const panels = useViewMotion(`${view}-${timer.focusMode}`);
-  const { activeTeamId, activeTeamName, teams } = useTeam();
+  const { activeTeamId, activeTeamName, state, teams } = useTeam();
   const isSprint = teams.find(team => team.id === activeTeamId)?.kind === 'sprint';
   const notes = useDailyHints(activeTeamId);
   const refreshNotes = notes.retry;
@@ -51,8 +51,12 @@ export function TimerPage() {
   const presentation = usePresentation(target);
   const index = timer.people.findIndex(person => person.id === timer.activeId);
   const following = [...timer.people.slice(index + 1), ...timer.people.slice(0, Math.max(0, index))].find(person => !person.done && !person.postponed);
+  const moodById = new Map(state.roster.map(person => [person.id, person.mood]));
   useRemotePage({
-    page: 'timer', participantPresent: false, participantMood: null, participantIndex: 0, participantCount: 0, canVote: false, canContinue: false,
+    page: 'timer', participants: timer.people.map((person, personIndex) => ({
+      name: person.name, present: true, mood: moodById.get(person.id) ?? null,
+      done: person.done, postponed: person.postponed, active: person.id === timer.activeId,
+    })), participantPresent: false, participantMood: null, participantIndex: Math.max(0, index), participantCount: timer.people.length, canVote: false, canPostpone: false, canContinue: false,
     speaker: timer.person?.name ?? '', nextSpeaker: following?.name ?? '', teamName: activeTeamName,
     activeId: timer.activeId, running: timer.running, remaining: timer.remaining, deadline: timer.deadline,
     completed: timer.people.filter(person => person.done).length, total: timer.people.length,

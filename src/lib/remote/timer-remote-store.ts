@@ -78,7 +78,8 @@ elseif op=='command' then
     if input.action=='participant-continue' then
       if not s.canContinue then return cjson.encode({error=409}) end
     elseif input.action=='attendance-toggle' then
-      if not has(s.activeId) or s.activeId=='' then return cjson.encode({error=409}) end
+      local person=s.participants[input.targetIndex+1]
+      if not has(s.activeId) or s.activeId=='' or input.targetIndex<0 or not person then return cjson.encode({error=409}) end
     elseif (input.action=='participant-previous' or input.action=='participant-next') and s.participantCount>1 then
       if not has(s.activeId) or s.activeId=='' then return cjson.encode({error=409}) end
     else return cjson.encode({error=409}) end
@@ -87,12 +88,17 @@ elseif op=='command' then
       if not s.canContinue then return cjson.encode({error=409}) end
     elseif input.action=='participant-previous' or input.action=='participant-next' then
       if not has(s.activeId) or s.activeId=='' or s.participantCount<=1 then return cjson.encode({error=409}) end
-    elseif input.action=='mood-1' or input.action=='mood-2' or input.action=='mood-3' or input.action=='mood-4' then
-      if not has(s.activeId) or s.activeId=='' or not s.participantPresent or not s.canVote then return cjson.encode({error=409}) end
+    elseif input.action=='mood-1' or input.action=='mood-2' or input.action=='mood-3' or input.action=='mood-4' or input.action=='mood-postpone' then
+      local person=s.participants[input.targetIndex+1]
+      if not has(s.activeId) or s.activeId=='' or input.targetIndex<0 or not person or not person.present then return cjson.encode({error=409}) end
+      if input.action=='mood-postpone' and not s.canPostpone then return cjson.encode({error=409}) end
+      if input.action~='mood-postpone' and not s.canVote then return cjson.encode({error=409}) end
     else return cjson.encode({error=409}) end
   else return cjson.encode({error=409}) end
   if has(pending()) or e.lastCommandId==input.requestId or e.lastCommandVersion==input.version then return cjson.encode({error=409}) end
   e.pending={id=input.requestId,action=input.action,version=input.version,createdAt=now}
+  if input.targetIndex~=nil then e.pending.targetIndex=input.targetIndex end
+  if input.targetIndex~=nil then e.pending.targetIndex=input.targetIndex end
   e.lastCommandId=input.requestId
   e.lastCommandVersion=input.version
 end

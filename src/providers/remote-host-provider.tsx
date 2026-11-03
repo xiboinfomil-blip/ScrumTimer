@@ -8,7 +8,7 @@ import { useTeam } from './team-provider';
 import { usePathname } from 'next/navigation';
 
 export type RemotePageSnapshot = Omit<RemoteSnapshot, 'version'>;
-type RemotePageDispatch = (action: RemoteAction) => void;
+type RemotePageDispatch = (action: RemoteAction, targetIndex?: number) => void;
 interface RemotePageView { snapshot: RemotePageSnapshot; dispatch: RemotePageDispatch }
 interface RemoteHostContextValue {
   remote: ReturnType<typeof useTimerRemote>;
@@ -19,7 +19,7 @@ interface RemoteHostContextValue {
 const RemoteHostContext = createContext<RemoteHostContextValue | null>(null);
 const idleSnapshot: RemotePageSnapshot = {
   page: 'idle', speaker: '', nextSpeaker: '', teamName: '', activeId: null,
-  participantPresent: false, participantMood: null, participantIndex: 0, participantCount: 0, canVote: false, canContinue: false,
+  participants: [], participantPresent: false, participantMood: null, participantIndex: 0, participantCount: 0, canVote: false, canPostpone: false, canContinue: false,
   running: false, remaining: 0, deadline: 0, completed: 0, total: 0, blocked: true,
 };
 
@@ -47,7 +47,7 @@ export function RemoteHostProvider({ children }: { children: ReactNode }) {
       setView(idle);
     };
   }, [publish]);
-  const dispatch = useCallback((action: RemoteAction) => viewRef.current.dispatch(action), []);
+  const dispatch = useCallback((action: RemoteAction, targetIndex?: number) => viewRef.current.dispatch(action, targetIndex), []);
   const remote = useTimerRemote(teamId, { ...view.snapshot, blocked: view.snapshot.blocked || pairingOpen }, { dispatch });
   const openPairing = useCallback(() => setPairingOpen(true), []);
   const closePairing = useCallback(() => setPairingOpen(false), []);
@@ -60,10 +60,13 @@ export function RemoteHostProvider({ children }: { children: ReactNode }) {
 export function useRemotePage(snapshot: RemotePageSnapshot, dispatch: RemotePageDispatch) {
   const context = useContext(RemoteHostContext);
   if (!context) throw new Error('RemoteHostProvider is missing.');
+  const { registerPage } = context;
   const dispatchRef = useRef(dispatch);
-  dispatchRef.current = dispatch;
+  const snapshotRef = useRef(snapshot);
   const signature = JSON.stringify(snapshot);
-  useEffect(() => context.registerPage({ snapshot, dispatch: action => dispatchRef.current(action) }), [context.registerPage, signature]);
+  useEffect(() => { dispatchRef.current = dispatch; }, [dispatch]);
+  useEffect(() => { snapshotRef.current = snapshot; }, [snapshot]);
+  useEffect(() => registerPage({ snapshot: snapshotRef.current, dispatch: (action, targetIndex) => dispatchRef.current(action, targetIndex) }), [registerPage, signature]);
 }
 
 export function useRemoteHost() {

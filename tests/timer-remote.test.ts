@@ -15,10 +15,13 @@ import type { RemoteCommandPayload, RemoteEntry, RemoteSnapshot } from '../src/l
 const now = 100_000;
 const requestId = '12345678-1234-4234-8234-123456789abc';
 const snapshot: RemoteSnapshot = { page: 'timer', speaker: '<Alice>', nextSpeaker: 'Bob', teamName: 'Équipe', activeId: 'alice',
-  participantPresent: false, participantMood: null, participantIndex: 0, participantCount: 0, canVote: false, canContinue: false,
+  participants: [
+    { name: '<Alice>', present: true, mood: null, done: false, postponed: false, active: true },
+    { name: 'Bob', present: true, mood: 2, done: false, postponed: false, active: false },
+  ], participantPresent: false, participantMood: null, participantIndex: 0, participantCount: 2, canVote: false, canPostpone: false, canContinue: false,
   running: false, remaining: 30, deadline: 0, completed: 0, total: 2, version: 'v1', blocked: false };
 const payload: RemoteCommandPayload = { requestId, action: 'start', version: 'v1' };
-const actions = ['start', 'pause', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-continue'] as const;
+const actions = ['start', 'pause', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-postpone', 'mood-continue'] as const;
 function entry(): RemoteEntry {
   return { teamId: 'a'.repeat(64), ownerHash: 'a'.repeat(64), controlHash: 'b'.repeat(64), expiresAt: now + REMOTE_PAIR_TTL,
     hostSeenAt: now, leaseUntil: now + REMOTE_HOST_LEASE, snapshot: { ...snapshot }, pending: null,
@@ -47,7 +50,7 @@ test('remote snapshots are exact, finite, bounded, safe text contracts without l
   }
   for (const value of [null, [], false, 'snapshot']) rejectsStatus(() => validateRemoteSnapshot(value), 400);
   assert.equal(validateRemoteSnapshot({ ...snapshot, remaining: -100 }).remaining, -100);
-  assert.equal(validateRemoteSnapshot({ ...snapshot, activeId: null, completed: 2 }).activeId, null);
+  assert.equal(validateRemoteSnapshot({ ...snapshot, activeId: null, participants: snapshot.participants.map(person => ({ ...person, active: false })), completed: 2 }).activeId, null);
 });
 
 test('optional black-screen and manual penalty snapshot fields preserve legacy wire compatibility', () => {
@@ -110,16 +113,21 @@ test('actions respect expected version, running, blocked, active speaker and com
   }
 });
 
-test('all six actions have strict envelopes; caller-controlled amounts and targets are forbidden', () => {
+test('all remote actions have strict envelopes; person-targeted commands require bounded indexes', () => {
   const id = 'i'.repeat(43);
   for (const action of actions) {
-    const command = { ...payload, action };
+    const targetsPerson = action === 'attendance-toggle' || /^mood-[1-4]$/.test(action) || action === 'mood-postpone';
+    const command = { ...payload, action, ...(targetsPerson ? { targetIndex: 0 } : {}) };
     assert.deepEqual(validateRemoteCommand(command), command);
     assert.deepEqual(validateRemotePost({ operation: 'command', id, command }), { operation: 'command', id, command });
-    for (const extra of [{ amount: 50 }, { manualPenalty: 0 }, { activeId: 'bob' }, { blackScreen: false }]) {
+    for (const extra of [{ amount: 50 }, { manualPenalty: 0 }, { activeId: 'bob' }, { blackScreen: false }, ...(!targetsPerson ? [{ targetIndex: 0 }] : [])]) {
       rejectsStatus(() => validateRemoteCommand({ ...command, ...extra }), 400);
     }
   }
+  for (const targetIndex of [-1, 1.5, 100, '0', null]) {
+    rejectsStatus(() => validateRemoteCommand({ ...payload, action: 'mood-1', targetIndex }), 400);
+  }
+  rejectsStatus(() => validateRemoteCommand({ ...payload, action: 'mood-postpone' }), 400);
   for (const action of ['reset', 'restore', 'blackScreen', 'Restart', '', null, 50]) {
     rejectsStatus(() => validateRemoteCommand({ ...payload, action }), 400);
   }
@@ -540,11 +548,13 @@ test('route/store security invariants: bounded JSON, no-store, selected-team cre
   assert.match(commandBranch, /input\.action=='penalty' and \(s\.manualPenalty or 0\)>999950/);
   assert.match(commandBranch, /s\.version~=input\.version/);
   assert.match(commandBranch, /has\(pending\(\)\) or e\.lastCommandId==input\.requestId or e\.lastCommandVersion==input\.version/);
-  for (const action of ['start', 'pause', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-continue']) assert.ok(commandBranch.includes(`input.action=='${action}'`) || commandBranch.includes(`input.action~='${action}'`), action);
+  for (const action of ['start', 'pause', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-postpone', 'mood-continue']) assert.ok(commandBranch.includes(`input.action=='${action}'`) || commandBranch.includes(`input.action~='${action}'`), action);
   assert.match(commandBranch, /s\.page=='participants'/);
   assert.match(commandBranch, /s\.page=='mood'/);
   assert.match(commandBranch, /s\.page=='timer'/);
   assert.match(commandBranch, /not s\.canContinue/);
+  assert.match(commandBranch, /input\.targetIndex<0/);
+  assert.match(commandBranch, /e\.pending\.targetIndex=input\.targetIndex/);
   const pendingWrite = commandBranch.indexOf('e.pending={');
   assert.ok(pendingWrite > commandBranch.indexOf('s.blackScreen==true'));
   assert.ok(pendingWrite > commandBranch.indexOf("input.action=='penalty'"));
@@ -556,21 +566,26 @@ test('route/store security invariants: bounded JSON, no-store, selected-team cre
 
 test('workflow remote actions are constrained to the active page and participant', () => {
   const participants = { ...snapshot, page: 'participants' as const, participantPresent: true, participantIndex: 0, participantCount: 2, canContinue: true };
-  const mood = { ...participants, page: 'mood' as const, participantMood: 2, canVote: true };
+  const mood = { ...participants, page: 'mood' as const, participantMood: 2, canVote: true, canPostpone: true };
   for (const action of ['participant-previous', 'participant-next'] as const) {
     assert.equal(isCommandAllowed(participants, { action, version: 'v1' }), true);
     assert.equal(isCommandAllowed(mood, { action, version: 'v1' }), true);
   }
-  assert.equal(isCommandAllowed(participants, { action: 'attendance-toggle', version: 'v1' }), true);
-  assert.equal(isCommandAllowed(mood, { action: 'attendance-toggle', version: 'v1' }), false);
+  assert.equal(isCommandAllowed(participants, { action: 'attendance-toggle', targetIndex: 1, version: 'v1' }), true);
+  assert.equal(isCommandAllowed(participants, { action: 'attendance-toggle', targetIndex: 2, version: 'v1' }), false);
+  assert.equal(isCommandAllowed(mood, { action: 'attendance-toggle', targetIndex: 0, version: 'v1' }), false);
   assert.equal(isCommandAllowed(participants, { action: 'participant-continue', version: 'v1' }), true);
   assert.equal(isCommandAllowed(mood, { action: 'participant-continue', version: 'v1' }), false);
   for (const action of ['mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-continue'] as const) {
-    assert.equal(isCommandAllowed(mood, { action, version: 'v1' }), action === 'mood-continue' || mood.participantPresent);
+    assert.equal(isCommandAllowed(mood, { action, version: 'v1', ...(action === 'mood-continue' ? {} : { targetIndex: 0 }) }), action === 'mood-continue' || mood.participantPresent);
     assert.equal(isCommandAllowed(participants, { action, version: 'v1' }), false);
   }
-  assert.equal(isCommandAllowed({ ...mood, participantPresent: false }, { action: 'mood-1', version: 'v1' }), false);
-  assert.equal(isCommandAllowed({ ...mood, canVote: false }, { action: 'mood-1', version: 'v1' }), false);
+  assert.equal(isCommandAllowed(mood, { action: 'mood-postpone', targetIndex: 1, version: 'v1' }), true);
+  assert.equal(isCommandAllowed(mood, { action: 'mood-postpone', targetIndex: 2, version: 'v1' }), false);
+  const absentMood = { ...mood, participants: mood.participants.map((person, index) => ({ ...person, present: index !== 0 })) };
+  assert.equal(isCommandAllowed(absentMood, { action: 'mood-1', targetIndex: 0, version: 'v1' }), false);
+  assert.equal(isCommandAllowed({ ...mood, canVote: false }, { action: 'mood-1', targetIndex: 0, version: 'v1' }), false);
+  assert.equal(isCommandAllowed({ ...mood, canPostpone: false }, { action: 'mood-postpone', targetIndex: 1, version: 'v1' }), false);
   assert.equal(isCommandAllowed({ ...participants, participantCount: 1 }, { action: 'participant-next', version: 'v1' }), false);
   assert.equal(isCommandAllowed({ ...participants, canContinue: false }, { action: 'participant-continue', version: 'v1' }), false);
   assert.equal(isCommandAllowed({ ...mood, canContinue: false }, { action: 'mood-continue', version: 'v1' }), false);

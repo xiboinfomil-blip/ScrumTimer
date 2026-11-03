@@ -25,7 +25,7 @@ REMOTE_URL = f'{BASE}/remote#{PAIR_ID}.{CONTROL}'
 MAX_COMMAND_MS = 2500
 COMMAND_ACTIONS = ('start', 'pause', 'next', 'restart', 'penalty', 'black-screen',
                    'participant-previous', 'participant-next', 'attendance-toggle',
-                   'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-continue')
+                   'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-postpone', 'mood-continue')
 
 
 def dismiss_install(phone):
@@ -112,9 +112,8 @@ def measured_command(host, phone, action, label, measurements):
             'Pause' if running else re.compile('Démarrer|Reprendre'), timeout=budget())
         host_ms = (time.perf_counter() - started) * 1000
         expect(confirmed).to_be_enabled(timeout=budget())
-        expect(phone.get_by_text(
-            'Le passage est en cours' if running else 'Prêt à votre rythme',
-            exact=True)).to_be_visible(timeout=budget())
+        expect(phone.get_by_role('region', name='Passage en cours').get_by_text(
+            'En cours' if running else 'En pause', exact=True)).to_be_visible(timeout=budget())
         phone_ms = (time.perf_counter() - started) * 1000
         assert host_ms <= MAX_COMMAND_MS and phone_ms <= MAX_COMMAND_MS, (
             label, action, host_ms, phone_ms, MAX_COMMAND_MS)
@@ -167,14 +166,21 @@ class MockAPIs:
             if action == 'participant-continue':
                 return snapshot['canContinue']
             if action == 'attendance-toggle':
-                return bool(snapshot['activeId'])
+                index = command.get('targetIndex', -1)
+                return isinstance(index, int) and 0 <= index < len(snapshot['participants'])
             return action in ('participant-previous', 'participant-next') and bool(snapshot['activeId']) and snapshot['participantCount'] > 1
         if snapshot['page'] == 'mood':
             if action == 'mood-continue':
                 return snapshot['canContinue']
             if action in ('participant-previous', 'participant-next'):
                 return bool(snapshot['activeId']) and snapshot['participantCount'] > 1
-            return action in ('mood-1', 'mood-2', 'mood-3', 'mood-4') and bool(snapshot['activeId']) and snapshot['participantPresent']
+            index = command.get('targetIndex', -1)
+            if not isinstance(index, int) or not 0 <= index < len(snapshot['participants']):
+                return False
+            person = snapshot['participants'][index]
+            if action == 'mood-postpone':
+                return person['present'] and snapshot['canPostpone']
+            return action in ('mood-1', 'mood-2', 'mood-3', 'mood-4') and person['present'] and snapshot['canVote']
         if snapshot['page'] != 'timer' or not snapshot['activeId'] or snapshot['completed'] >= snapshot['total']:
             return False
         if snapshot.get('blackScreen', False):
@@ -261,7 +267,11 @@ class MockAPIs:
                     entry['pending'] = None
         elif operation == 'command':
             command = body['command']
-            assert set(command) == {'requestId', 'action', 'version'}, command
+            required = {'requestId', 'action', 'version'}
+            targets_person = command.get('action') == 'attendance-toggle' or command.get('action', '').startswith('mood-') and command.get('action') != 'mood-continue'
+            assert set(command) == required | ({'targetIndex'} if targets_person else set()), command
+            if targets_person:
+                assert type(command['targetIndex']) is int and 0 <= command['targetIndex'] < 100
             assert command['action'] in COMMAND_ACTIONS, command
             assert re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', command['requestId'])
             if (self.status(entry, now) != 'online' or not self.allowed(entry['snapshot'], command)
@@ -270,7 +280,8 @@ class MockAPIs:
                 reply({'error': 'Télécommande indisponible.'}, 409)
                 return
             entry['pending'] = {'id': command['requestId'], 'action': command['action'],
-                                'version': command['version'], 'createdAt': now}
+                                'version': command['version'], 'createdAt': now,
+                                **({'targetIndex': command['targetIndex']} if targets_person else {})}
             entry.update(lastCommandId=command['requestId'], lastCommandVersion=command['version'])
             self.commands.append(deepcopy(entry['pending']))
             reply({'accepted': True, 'command': entry['pending'], 'serverNow': now, 'transport': 'shared'})
@@ -452,28 +463,31 @@ def main():
                 expect(pairing.locator('[data-testid="remote-qr"] svg')).to_be_visible()
                 qr_path = pairing.locator('[data-testid="remote-qr"] svg').inner_html()
                 open_phone(phone, REMOTE_URL)
-                expect(phone.get_by_text('Connectée', exact=True)).to_be_visible()
-                expect(phone.get_by_role('heading', level=2)).to_have_text('Alice <safe>')
-                expect(phone.get_by_role('button', name='Marquer absent(e)', exact=True)).to_be_disabled()
+                expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
+                attendance_list = phone.get_by_role('list', name='Présences de l’équipe')
+                expect(attendance_list.get_by_role('listitem')).to_have_count(3)
+                for name in ('Alice <safe>', 'Bob', 'Charlie'):
+                    expect(attendance_list.get_by_text(name, exact=True)).to_be_visible()
+                alice_absent = phone.get_by_role('button', name='Marquer absent(e) · Alice <safe>', exact=True)
+                expect(alice_absent).to_be_disabled()
                 pairing.get_by_role('button', name='Fermer', exact=True).click()
-                expect(phone.get_by_role('button', name='Marquer absent(e)', exact=True)).to_be_enabled()
-                phone.get_by_role('button', name='Marquer absent(e)', exact=True).click()
-                expect(phone.get_by_text('Absent(e)', exact=False)).to_be_visible()
+                expect(alice_absent).to_be_enabled()
+                alice_absent.click()
+                alice_present = phone.get_by_role('button', name='Marquer présent(e) · Alice <safe>', exact=True)
+                expect(alice_present).to_be_enabled()
                 expect(host.locator('#attendance-absent')).to_contain_text('Alice <safe>')
-                phone.get_by_role('button', name='Suivant', exact=True).click()
-                expect(phone.get_by_role('heading', level=2)).to_have_text('Bob')
-                phone.get_by_role('button', name='Marquer absent(e)', exact=True).click()
-                expect(phone.get_by_text('Absent(e)', exact=False)).to_be_visible()
-                phone.get_by_role('button', name='Marquer présent(e)', exact=True).click()
-                expect(phone.get_by_text('Présent(e)', exact=False)).to_be_visible()
-                phone.get_by_role('button', name='Précédent', exact=True).click()
-                expect(phone.get_by_role('heading', level=2)).to_have_text('Alice <safe>')
-                phone.get_by_role('button', name='Marquer présent(e)', exact=True).click()
-                expect(phone.get_by_text('Présent(e)', exact=False)).to_be_visible()
+                bob_absent = phone.get_by_role('button', name='Marquer absent(e) · Bob', exact=True)
+                bob_absent.click()
+                bob_present = phone.get_by_role('button', name='Marquer présent(e) · Bob', exact=True)
+                bob_present.click()
+                alice_present.click()
+                assert [command.get('targetIndex') for command in api.commands] == [0, 0, 2, 2], api.commands
                 phone.get_by_role('button', name='Continuer vers les humeurs', exact=True).click()
                 expect(host.locator('#mood-page')).to_be_visible(timeout=10000)
-                mood_controls = phone.get_by_role('region', name='Humeur du participant sélectionné')
-                mood_four = mood_controls.locator('button[aria-label^="Humeur 4 pour "]')
+                mood_list = phone.get_by_role('list', name='Humeurs de l’équipe')
+                expect(mood_list.get_by_role('listitem')).to_have_count(3)
+                bob_mood = mood_list.get_by_role('listitem').filter(has_text='Bob')
+                mood_four = bob_mood.get_by_role('button', name='Humeur 4 pour Bob', exact=True)
                 expect(mood_four).to_be_enabled()
                 mood_four.click()
                 phone.wait_for_timeout(1000)
@@ -483,8 +497,8 @@ def main():
                 }
                 mood_four.click()
                 expect(mood_four).to_have_attribute('aria-pressed', 'false')
-                expect(phone.get_by_text('Humeur à renseigner', exact=False)).to_be_visible()
-                mood_three = mood_controls.locator('button[aria-label^="Humeur 3 pour "]')
+                expect(mood_list.get_by_text('Humeur à renseigner', exact=False)).to_be_visible()
+                mood_three = bob_mood.get_by_role('button', name='Humeur 3 pour Bob', exact=True)
                 mood_three.click()
                 expect(mood_three).to_have_attribute('aria-pressed', 'true')
                 phone.get_by_role('button', name='Continuer vers le minuteur', exact=True).click()
@@ -492,7 +506,7 @@ def main():
                 expect(host.locator('#speaker-name')).to_be_visible()
                 first = host.locator('#speaker-name').inner_text()
                 expect(phone.get_by_role('region', name='Passage en cours')).to_be_visible()
-                expect(phone.get_by_role('heading', level=2)).to_have_text(first)
+                expect(phone.get_by_role('region', name='Passage en cours').get_by_role('heading', level=2)).to_have_text(first)
                 start = phone.get_by_role('button', name='Démarrer / reprendre', exact=True)
                 expect(start).to_be_enabled()
                 expect(phone.get_by_role('navigation')).to_have_count(0)
@@ -688,8 +702,8 @@ def main():
                 expect(next_button).to_be_visible()
                 expect(host.locator('#speaker-name')).to_have_text(first)
                 assert [c['action'] for c in api.commands] == [
-                    'attendance-toggle', 'participant-next', 'attendance-toggle',
-                    'attendance-toggle', 'participant-previous', 'attendance-toggle',
+                    'attendance-toggle', 'attendance-toggle',
+                    'attendance-toggle', 'attendance-toggle',
                     'participant-continue', 'mood-4', 'mood-4', 'mood-3', 'mood-continue',
                     'start', 'pause', 'penalty', 'restart', 'start', 'black-screen',
                     'black-screen', 'start', 'restart', 'black-screen'], api.commands
@@ -697,7 +711,7 @@ def main():
                 phone.get_by_role('button', name='Confirmer', exact=True).click()
                 expect(host.locator('#speaker-name')).not_to_have_text(first)
                 second = host.locator('#speaker-name').inner_text()
-                expect(phone.get_by_role('heading', level=2)).to_have_text(second)
+                expect(phone.get_by_role('region', name='Passage en cours').get_by_role('heading', level=2)).to_have_text(second)
                 expect(pause).to_be_enabled()
                 expect(host.locator('#start-button')).to_contain_text('Pause')
                 assert current_person(checkpoint(host))['manualPenalty'] == 0, 'Penalty must not follow the next speaker'
@@ -721,14 +735,14 @@ def main():
                 expect(black).to_be_disabled()
                 expect(phone.get_by_label('Temps restant', exact=True)).to_have_text('—:—')
                 api.drop_sync = False
-                expect(phone.get_by_text('Connectée', exact=True)).to_be_visible()
+                expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
                 expect(pause).to_be_enabled()
 
                 phone.set_viewport_size({'width': phone_size[0], 'height': phone_size[1]})
                 host.get_by_role('button', name='Télécommande mobile', exact=True).click()
                 pairing.get_by_role('button', name='Désactiver', exact=True).click()
                 expect(phone.get_by_text('Hors ligne', exact=True)).to_be_visible()
-                expect(phone.get_by_role('status')).to_contain_text('Votre équipe est associée')
+                expect(phone.locator('p[role="status"]')).to_contain_text('Votre équipe est associée')
                 expect(phone.get_by_role('button', name='Démarrer / reprendre', exact=True)).to_have_count(0)
                 expect(next_button).to_have_count(0)
                 expect(restart).to_have_count(0)
@@ -760,7 +774,7 @@ def main():
                 }""", old)
                 assert rejected == 401, 'Old host owner must not revoke the new lease'
                 pairing.get_by_role('button', name='Fermer', exact=True).click()
-                expect(phone.get_by_text('Connectée', exact=True)).to_be_visible()
+                expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
                 expect(pause).to_be_enabled()
                 assert phone.evaluate('performance.timeOrigin') == phone_document
                 measured_command(host, phone, 'pause', label + ' re-enabled', measurements)
@@ -769,25 +783,25 @@ def main():
                 saved = phone.evaluate("localStorage.getItem('standup.companion.team.v1')")
                 assert saved == f'{PAIR_ID}.{CONTROL}'
                 open_phone(phone, BASE + '/remote')
-                expect(phone.get_by_text('Connectée', exact=True)).to_be_visible()
+                expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
                 assert not urlsplit(phone.url).fragment
                 expect(start).to_be_enabled()
                 measured_command(host, phone, 'start', label + ' remembered', measurements)
                 expect(pause).to_be_enabled()
 
                 open_phone(phone, BASE + '/remote#invalid.link')
-                expect(phone.get_by_role('status')).to_contain_text('Ce lien est incomplet')
-                expect(phone.get_by_role('button', name='Démarrer / reprendre', exact=True)).to_be_disabled()
+                expect(phone.locator('p[role="status"]')).to_contain_text('Ce lien est incomplet')
+                expect(phone.get_by_role('button', name='Démarrer / reprendre', exact=True)).to_have_count(0)
                 before = len(phone_calls)
                 phone.wait_for_timeout(1200)  # Include at least one normal polling period.
                 assert len(phone_calls) == before, 'Malformed fragment must not call remote API'
                 assert phone.evaluate("localStorage.getItem('standup.companion.team.v1')") == saved
                 open_phone(phone, BASE + '/remote')
-                expect(phone.get_by_text('Connectée', exact=True)).to_be_visible()
+                expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
                 expect(pause).to_be_enabled()
                 phone.get_by_role('button', name='Oublier cette équipe sur ce téléphone', exact=True).click()
                 dismiss_install(phone)
-                expect(phone.get_by_role('status')).to_contain_text('Ce lien est incomplet')
+                expect(phone.locator('p[role="status"]')).to_contain_text('Ce lien est incomplet')
                 assert phone.evaluate("localStorage.getItem('standup.companion.team.v1')") is None
                 assert urlsplit(phone.url).path == '/remote' and not urlsplit(phone.url).fragment, phone.url
                 after_forget = len(phone_calls)
@@ -795,10 +809,10 @@ def main():
                 assert len(phone_calls) == after_forget, 'Forgotten pairing must stop polling'
                 expect(phone.get_by_role('button', name='Oublier cette équipe sur ce téléphone', exact=True)).to_have_count(0)
                 open_phone(phone, BASE + '/remote')
-                expect(phone.get_by_role('status')).to_contain_text('Ce lien est incomplet')
+                expect(phone.locator('p[role="status"]')).to_contain_text('Ce lien est incomplet')
                 assert [c['action'] for c in api.commands] == [
-                    'attendance-toggle', 'participant-next', 'attendance-toggle',
-                    'attendance-toggle', 'participant-previous', 'attendance-toggle',
+                    'attendance-toggle', 'attendance-toggle',
+                    'attendance-toggle', 'attendance-toggle',
                     'participant-continue', 'mood-4', 'mood-4', 'mood-3', 'mood-continue',
                     'start', 'pause', 'penalty', 'restart', 'start', 'black-screen',
                     'black-screen', 'start', 'restart', 'black-screen', 'next',
@@ -807,7 +821,7 @@ def main():
                 while not all(c['id'] in api.acks for c in api.commands) and time.monotonic() < deadline:
                     host.wait_for_timeout(100)
                 assert all(c['id'] in api.acks for c in api.commands), (api.commands, api.acks)
-                assert len({c['version'] for c in api.commands}) == len(api.commands) == 24, api.commands
+                assert len({c['version'] for c in api.commands}) == len(api.commands) == 22, api.commands
                 # Complete with native host controls after forgetting the phone.
                 # Archived score is derived from preserved speaking time, retries
                 # and the -50 deduction, without adding score UI to the timer.

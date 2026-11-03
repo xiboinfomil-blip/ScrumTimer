@@ -6,7 +6,7 @@ import { isCommandAllowed, type RemoteAction, type RemoteCommand, type RemoteSna
 interface Pair { id: string; owner: string; control: string; expiresAt: number; transport: RemoteTransport }
 type HostSnapshot = Omit<RemoteSnapshot, 'version'>;
 
-export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, actions: { dispatch: (action: RemoteAction) => void }) {
+export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, actions: { dispatch: (action: RemoteAction, targetIndex?: number) => void }) {
   const [enabled, setEnabled] = useState(false);
   const activationTeam = useRef<string | null>(null);
   const [pair, setPair] = useState<Pair | null>(null);
@@ -70,7 +70,7 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
             handled.add(command.id);
             // Lock this version synchronously: an in-flight duplicate cannot act twice.
             live.snapshot = { ...live.snapshot, blocked: true };
-            live.actions.dispatch(command.action);
+            live.actions.dispatch(command.action, command.targetIndex);
           }
           // Even a locally rejected command consumes its version. A dialog or
           // visibility race must not leave the recovered remote permanently locked.

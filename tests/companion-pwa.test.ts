@@ -8,6 +8,20 @@ import { GET as workerGET } from '../src/app/remote/sw.js/route.ts';
 const source = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const component = source('src/components/remote/companion-install.tsx');
 
+test('global favicon and Apple touch icon use the Infomil brand', () => {
+  const favicon = source('src/app/icon.svg');
+  const appleIcon = source('src/app/apple-icon.tsx');
+  assert.match(favicon, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+  assert.match(favicon, /viewBox="0 0 64 64"/);
+  for (const color of ['#205f9d', '#ec8b23', '#fff']) assert.ok(favicon.includes(color));
+  assert.match(appleIcon, /import \{ ImageResponse \} from 'next\/og'/);
+  assert.match(appleIcon, /export const size = \{ width: 180, height: 180 \}/);
+  assert.match(appleIcon, /new ImageResponse\(/);
+  assert.match(appleIcon, /#205f9d/);
+  assert.match(appleIcon, /#ec8b23/);
+  assert.match(source('src/app/layout.tsx'), /themeColor: '#205f9d'/);
+});
+
 test('remote manifest has stable credential-free identity, scope and PNG icons', async () => {
   const response = manifestGET();
   assert.match(response.headers.get('content-type')!, /application\/manifest\+json/);

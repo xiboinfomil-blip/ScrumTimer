@@ -7,11 +7,13 @@ export interface RemoteSnapshot {
   nextSpeaker: string;
   teamName: string;
   activeId: string | null;
+  participants: RemoteParticipant[];
   participantPresent: boolean;
   participantMood: Mood | null;
   participantIndex: number;
   participantCount: number;
   canVote: boolean;
+  canPostpone: boolean;
   canContinue: boolean;
   running: boolean;
   remaining: number;
@@ -24,18 +26,28 @@ export interface RemoteSnapshot {
   manualPenalty?: number;
 }
 
+export interface RemoteParticipant {
+  name: string;
+  present: boolean;
+  mood: Mood | null;
+  done: boolean;
+  postponed: boolean;
+  active: boolean;
+}
+
 export interface RemoteCommand {
   id: string;
   action: RemoteAction;
+  targetIndex?: number;
   version: string;
   createdAt: number;
 }
 
 export type RemoteAction = 'start' | 'pause' | 'next' | 'restart' | 'penalty' | 'black-screen'
   | 'participant-previous' | 'participant-next' | 'attendance-toggle' | 'participant-continue'
-  | 'mood-1' | 'mood-2' | 'mood-3' | 'mood-4' | 'mood-continue';
+  | 'mood-1' | 'mood-2' | 'mood-3' | 'mood-4' | 'mood-postpone' | 'mood-continue';
 
-export type RemoteCommandPayload = Pick<RemoteCommand, 'action' | 'version'> & { requestId: string };
+export type RemoteCommandPayload = Pick<RemoteCommand, 'action' | 'targetIndex' | 'version'> & { requestId: string };
 export type RemoteTransport = 'shared' | 'instance';
 export type RemoteStatus = 'waiting' | 'online' | 'stale';
 export const REMOTE_PAIR_TTL = 4 * 60 * 60 * 1000;
@@ -43,7 +55,7 @@ export const REMOTE_HOST_LEASE = 10_000;
 export const REMOTE_HOST_FRESH = 6_000;
 export const REMOTE_COMMAND_TTL = 5_000;
 export const REMOTE_MAX_ENTRIES = 512;
-export const REMOTE_MAX_BODY_BYTES = 8_192;
+export const REMOTE_MAX_BODY_BYTES = 32_768;
 
 /** Only hashes of bearer capabilities belong in transport state. */
 export interface RemoteEntry {
@@ -105,17 +117,36 @@ function version(value: unknown): value is string {
 }
 
 export function validateRemoteSnapshot(value: unknown): RemoteSnapshot {
-  const data = remoteObject(value, ['page', 'speaker', 'nextSpeaker', 'teamName', 'activeId', 'participantPresent', 'participantMood', 'participantIndex', 'participantCount', 'canVote', 'canContinue', 'running', 'remaining', 'deadline', 'completed', 'total', 'version', 'blocked', 'blackScreen', 'manualPenalty']);
+  const data = remoteObject(value, ['page', 'speaker', 'nextSpeaker', 'teamName', 'activeId', 'participants', 'participantPresent', 'participantMood', 'participantIndex', 'participantCount', 'canVote', 'canPostpone', 'canContinue', 'running', 'remaining', 'deadline', 'completed', 'total', 'version', 'blocked', 'blackScreen', 'manualPenalty']);
+  const participants = Array.isArray(data.participants) ? data.participants : null;
+  const validParticipants = participants?.every(person => {
+    if (!person || typeof person !== 'object' || Array.isArray(person)) return false;
+    const item = person as Record<string, unknown>;
+    return Object.keys(item).length === 6
+      && Object.keys(item).every(key => ['name', 'present', 'mood', 'done', 'postponed', 'active'].includes(key))
+      && text(item.name, 100, false)
+      && typeof item.present === 'boolean'
+      && (item.mood === null || [1, 2, 3, 4].includes(item.mood as number))
+      && typeof item.done === 'boolean'
+      && typeof item.postponed === 'boolean'
+      && typeof item.active === 'boolean';
+  }) ?? false;
   if ((data.blackScreen !== undefined && typeof data.blackScreen !== 'boolean') || (data.manualPenalty !== undefined && (!finite(data.manualPenalty) || !Number.isInteger(data.manualPenalty) || data.manualPenalty < 0 || data.manualPenalty > 1_000_000))) throw new RemoteError(400);
   if (!['participants', 'mood', 'timer', 'idle'].includes(data.page as string)
     || !text(data.speaker, 100) || !text(data.nextSpeaker, 100) || !text(data.teamName, 100)
     || !(data.activeId === null || text(data.activeId, 128, false))
+    || !participants || participants.length > 100 || !validParticipants
     || typeof data.participantPresent !== 'boolean'
     || !(data.participantMood === null || [1, 2, 3, 4].includes(data.participantMood as number))
     || !Number.isInteger(data.participantIndex) || (data.participantIndex as number) < 0 || (data.participantIndex as number) > 99
     || !Number.isInteger(data.participantCount) || (data.participantCount as number) < 0 || (data.participantCount as number) > 100
     || typeof data.canVote !== 'boolean'
+    || typeof data.canPostpone !== 'boolean'
     || typeof data.canContinue !== 'boolean'
+    || data.participantCount !== participants.length
+    || (data.activeId !== null && ((participants[data.participantIndex as number] as Record<string, unknown> | undefined)?.active !== true
+      || participants.filter(person => (person as Record<string, unknown>).active === true).length !== 1))
+    || (data.activeId === null && participants.some(person => (person as Record<string, unknown>).active === true))
     || ((data.page === 'participants' || data.page === 'mood') && (data.participantCount === 0
       ? data.activeId !== null || data.participantIndex !== 0
       : data.activeId === null || (data.participantIndex as number) >= (data.participantCount as number)))
@@ -137,10 +168,13 @@ export function validateRemoteRequestId(value: unknown): string {
 }
 
 export function validateRemoteCommand(value: unknown): RemoteCommandPayload {
-  const data = remoteObject(value, ['requestId', 'action', 'version']);
+  const data = remoteObject(value, ['requestId', 'action', 'targetIndex', 'version']);
   const requestId = validateRemoteRequestId(data.requestId);
-  if (!version(data.version) || !['start', 'pause', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-continue'].includes(data.action as string)) throw new RemoteError(400);
-  return { requestId, action: data.action as RemoteCommand['action'], version: data.version };
+  if (!version(data.version) || !['start', 'pause', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-postpone', 'mood-continue'].includes(data.action as string)) throw new RemoteError(400);
+  const targetsPerson = data.action === 'attendance-toggle' || /^mood-[1-4]$/.test(data.action as string) || data.action === 'mood-postpone';
+  if (targetsPerson ? !Number.isInteger(data.targetIndex) || (data.targetIndex as number) < 0 || (data.targetIndex as number) > 99 : data.targetIndex !== undefined) throw new RemoteError(400);
+  return { requestId, action: data.action as RemoteCommand['action'], version: data.version,
+    ...(targetsPerson ? { targetIndex: data.targetIndex as number } : {}) };
 }
 
 export type RemotePost = { operation: 'create' }
@@ -169,15 +203,21 @@ export function normalizeRemoteSnapshot(snapshot: RemoteSnapshot, now: number): 
   return { ...snapshot, deadline: snapshot.running ? now + snapshot.remaining * 1_000 : 0 };
 }
 
-export function isCommandAllowed(snapshot: RemoteSnapshot | null, command: Pick<RemoteCommand, 'action' | 'version'>): boolean {
+function validTargetIndex(snapshot: RemoteSnapshot, targetIndex: number | undefined): targetIndex is number {
+  return Number.isInteger(targetIndex) && targetIndex! >= 0 && targetIndex! < snapshot.participants.length;
+}
+
+export function isCommandAllowed(snapshot: RemoteSnapshot | null, command: Pick<RemoteCommand, 'action' | 'targetIndex' | 'version'>): boolean {
   if (!snapshot || snapshot.blocked || snapshot.version !== command.version) return false;
   if (snapshot.page === 'participants') return command.action === 'participant-continue' ? snapshot.canContinue
-    : Boolean(snapshot.activeId) && (command.action === 'attendance-toggle'
-      || (['participant-previous', 'participant-next'].includes(command.action) && snapshot.participantCount > 1));
+    : command.action === 'attendance-toggle' ? validTargetIndex(snapshot, command.targetIndex)
+      : Boolean(snapshot.activeId) && ['participant-previous', 'participant-next'].includes(command.action) && snapshot.participantCount > 1;
   if (snapshot.page === 'mood') return command.action === 'mood-continue' ? snapshot.canContinue
     : Boolean(snapshot.activeId) && (['participant-previous', 'participant-next'].includes(command.action)
       ? snapshot.participantCount > 1
-      : snapshot.participantPresent && snapshot.canVote && /^mood-[1-4]$/.test(command.action));
+      : validTargetIndex(snapshot, command.targetIndex)
+        && snapshot.participants[command.targetIndex!].present && snapshot.canVote
+        && (/^mood-[1-4]$/.test(command.action) || (command.action === 'mood-postpone' && snapshot.canPostpone)));
   if (snapshot.page !== 'timer' || !snapshot.activeId || snapshot.completed >= snapshot.total) return false;
   if (snapshot.blackScreen) return command.action === 'black-screen';
   switch (command.action) {
@@ -217,7 +257,8 @@ export function syncRemoteEntry(entry: RemoteEntry, snapshot: RemoteSnapshot, ac
 export function commandRemoteEntry(entry: RemoteEntry, payload: RemoteCommandPayload, now: number): RemoteEntry {
   if (remoteStatus(entry, now) !== 'online' || !isCommandAllowed(entry.snapshot, payload)) throw new RemoteError(409);
   if (pendingRemoteCommand(entry, now) || entry.lastCommandId === payload.requestId || entry.lastCommandVersion === payload.version) throw new RemoteError(409);
-  const command: RemoteCommand = { id: payload.requestId, action: payload.action, version: payload.version, createdAt: now };
+  const command: RemoteCommand = { id: payload.requestId, action: payload.action, version: payload.version, createdAt: now,
+    ...(payload.targetIndex === undefined ? {} : { targetIndex: payload.targetIndex }) };
   return { ...entry, pending: command, lastCommandId: command.id, lastCommandVersion: command.version };
 }
 

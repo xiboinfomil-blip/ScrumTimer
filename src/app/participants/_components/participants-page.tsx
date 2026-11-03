@@ -30,7 +30,9 @@ export function ParticipantsPage() {
   const remotePeople = [...present, ...absent];
   const [remoteId, setRemoteId] = useState<string | null>(null);
   useEffect(() => {
-    if (!state.roster.some(person => person.id === remoteId)) setRemoteId(remotePeople[0]?.id ?? null);
+    if (!state.roster.some(person => person.id === remoteId)) {
+      setRemoteId(state.roster.find(person => person.present)?.id ?? state.roster.find(person => !person.present)?.id ?? null);
+    }
   }, [state.roster, remoteId]);
   const remoteIndex = remotePeople.findIndex(person => person.id === remoteId);
   const remotePerson = remoteIndex >= 0 ? remotePeople[remoteIndex] : null;
@@ -51,15 +53,21 @@ export function ParticipantsPage() {
   }
   useRemotePage({
     page: 'participants', speaker: remotePerson?.name ?? '', nextSpeaker: remotePeople[remoteIndex + 1]?.name ?? '',
-    teamName: '', activeId: remotePerson?.id ?? null, participantPresent: remotePerson?.present ?? false,
+    teamName: '', activeId: remotePerson?.id ?? null, participants: remotePeople.map((person, index) => ({
+      name: person.name, present: person.present, mood: person.mood, done: false, postponed: false, active: index === remoteIndex,
+    })), participantPresent: remotePerson?.present ?? false,
     participantMood: remotePerson?.mood ?? null, participantIndex: Math.max(0, remoteIndex), participantCount: remotePeople.length,
-    canVote: false, canContinue: present.length > 0 && !todayRound && !reveal,
+    canVote: false, canPostpone: false, canContinue: present.length > 0 && !todayRound && !reveal,
     running: false, remaining: 0, deadline: 0, completed: 0, total: remotePeople.length,
     blocked: Boolean(todayRound) || Boolean(reveal),
-  }, action => {
+  }, (action, targetIndex) => {
     if (action === 'participant-previous' && remotePeople.length > 1) setRemoteId(remotePeople[(remoteIndex - 1 + remotePeople.length) % remotePeople.length].id);
     else if (action === 'participant-next' && remotePeople.length > 1) setRemoteId(remotePeople[(remoteIndex + 1) % remotePeople.length].id);
-    else if (action === 'attendance-toggle' && remotePerson) toggleAttendance(remotePerson.id);
+    else if (action === 'attendance-toggle' && targetIndex !== undefined && remotePeople[targetIndex]) {
+      const person = remotePeople[targetIndex];
+      setRemoteId(person.id);
+      toggleAttendance(person.id);
+    }
     else if (action === 'participant-continue') continueToMood();
   });
   return <div id="participants-page" className={`mx-auto flex min-h-0 w-full flex-1 flex-col gap-4 max-[650px]:gap-2 [@media(max-height:650px)]:gap-2 ${todayRound ? 'overflow-y-auto [&>.participants-panel]:min-h-96 [&>.participants-panel]:shrink-0' : ''}`}>
