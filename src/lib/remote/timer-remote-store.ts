@@ -67,11 +67,30 @@ if op=='sync' then
 elseif op=='command' then
   local input=cjson.decode(ARGV[3])
   local s=e.snapshot
-  if status()~='online' or not has(s) or s.blocked or not has(s.activeId) or s.activeId=='' or s.completed>=s.total or s.version~=input.version then return cjson.encode({error=409}) end
-  if (input.action=='start' and s.running) or (input.action=='pause' and not s.running) then return cjson.encode({error=409}) end
-  if s.blackScreen==true and input.action~='black-screen' then return cjson.encode({error=409}) end
-  if input.action=='penalty' and (s.manualPenalty or 0)>999950 then return cjson.encode({error=409}) end
-  if input.action~='start' and input.action~='pause' and input.action~='next' and input.action~='restart' and input.action~='penalty' and input.action~='black-screen' then return cjson.encode({error=409}) end
+  if status()~='online' or not has(s) or s.blocked or s.version~=input.version then return cjson.encode({error=409}) end
+  if s.page=='timer' then
+    if not has(s.activeId) or s.activeId=='' or s.completed>=s.total then return cjson.encode({error=409}) end
+    if (input.action=='start' and s.running) or (input.action=='pause' and not s.running) then return cjson.encode({error=409}) end
+    if s.blackScreen==true and input.action~='black-screen' then return cjson.encode({error=409}) end
+    if input.action=='penalty' and (s.manualPenalty or 0)>999950 then return cjson.encode({error=409}) end
+    if input.action~='start' and input.action~='pause' and input.action~='next' and input.action~='restart' and input.action~='penalty' and input.action~='black-screen' then return cjson.encode({error=409}) end
+  elseif s.page=='participants' then
+    if input.action=='participant-continue' then
+      if not s.canContinue then return cjson.encode({error=409}) end
+    elseif input.action=='attendance-toggle' then
+      if not has(s.activeId) or s.activeId=='' then return cjson.encode({error=409}) end
+    elseif (input.action=='participant-previous' or input.action=='participant-next') and s.participantCount>1 then
+      if not has(s.activeId) or s.activeId=='' then return cjson.encode({error=409}) end
+    else return cjson.encode({error=409}) end
+  elseif s.page=='mood' then
+    if input.action=='mood-continue' then
+      if not s.canContinue then return cjson.encode({error=409}) end
+    elseif input.action=='participant-previous' or input.action=='participant-next' then
+      if not has(s.activeId) or s.activeId=='' or s.participantCount<=1 then return cjson.encode({error=409}) end
+    elseif input.action=='mood-1' or input.action=='mood-2' or input.action=='mood-3' or input.action=='mood-4' then
+      if not has(s.activeId) or s.activeId=='' or not s.participantPresent or not s.canVote then return cjson.encode({error=409}) end
+    else return cjson.encode({error=409}) end
+  else return cjson.encode({error=409}) end
   if has(pending()) or e.lastCommandId==input.requestId or e.lastCommandVersion==input.version then return cjson.encode({error=409}) end
   e.pending={id=input.requestId,action=input.action,version=input.version,createdAt=now}
   e.lastCommandId=input.requestId

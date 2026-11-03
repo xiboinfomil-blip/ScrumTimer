@@ -23,7 +23,9 @@ SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1
 PAIR_ID, OWNER, CONTROL = 'i' * 43, 'o' * 43, 'c' * 43
 REMOTE_URL = f'{BASE}/remote#{PAIR_ID}.{CONTROL}'
 MAX_COMMAND_MS = 2500
-COMMAND_ACTIONS = ('start', 'pause', 'next', 'restart', 'penalty', 'black-screen')
+COMMAND_ACTIONS = ('start', 'pause', 'next', 'restart', 'penalty', 'black-screen',
+                   'participant-previous', 'participant-next', 'attendance-toggle',
+                   'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-continue')
 
 
 def dismiss_install(phone):
@@ -158,11 +160,23 @@ class MockAPIs:
 
     @staticmethod
     def allowed(snapshot, command):
-        if (not snapshot or snapshot['blocked'] or not snapshot['activeId']
-                or snapshot['completed'] >= snapshot['total']
-                or snapshot['version'] != command['version']):
+        if not snapshot or snapshot['blocked'] or snapshot['version'] != command['version']:
             return False
         action = command['action']
+        if snapshot['page'] == 'participants':
+            if action == 'participant-continue':
+                return snapshot['canContinue']
+            if action == 'attendance-toggle':
+                return bool(snapshot['activeId'])
+            return action in ('participant-previous', 'participant-next') and bool(snapshot['activeId']) and snapshot['participantCount'] > 1
+        if snapshot['page'] == 'mood':
+            if action == 'mood-continue':
+                return snapshot['canContinue']
+            if action in ('participant-previous', 'participant-next'):
+                return bool(snapshot['activeId']) and snapshot['participantCount'] > 1
+            return action in ('mood-1', 'mood-2', 'mood-3', 'mood-4') and bool(snapshot['activeId']) and snapshot['participantPresent']
+        if snapshot['page'] != 'timer' or not snapshot['activeId'] or snapshot['completed'] >= snapshot['total']:
+            return False
         if snapshot.get('blackScreen', False):
             return action == 'black-screen'
         if action == 'start':
@@ -314,9 +328,9 @@ class MockAPIs:
         context.route('**/api/mood-meters/catalog', lambda route: readonly(route, []))
 
 
-def geometry(page, label, failures, *, host=False):
+def geometry(page, label, failures, *, host=False, timer=True):
     # Wait for responsive layout and finite entrance/tap animations, not ambient loops.
-    if not host:
+    if not host and timer:
         expect(page.get_by_label('Temps restant', exact=True)).to_be_visible()
         expect(page.get_by_role('region', name='Passage en cours').locator('svg circle')).to_have_count(0)
         expect(page.get_by_role('region', name='Commandes à distance')).to_be_visible()
@@ -431,24 +445,55 @@ def main():
             for page in (host, phone):
                 page.on('pageerror', lambda error: errors.append(str(error)))
             try:
-                host.goto(BASE + '/mood')
-                host.get_by_role('button', name='Continuer vers le minuteur', exact=False).click()
-                expect(host.locator('#speaker-name')).to_be_visible()
-                first = host.locator('#speaker-name').inner_text()
+                host.goto(BASE + '/participants')
+                expect(host.locator('#participants-page')).to_be_visible()
                 host.get_by_role('button', name='Télécommande mobile', exact=True).click()
-                pairing = host.get_by_role('dialog', name='Votre téléphone, aux commandes', exact=True)
+                pairing = host.get_by_role('dialog', name='Télécommande mobile', exact=True)
                 expect(pairing.locator('[data-testid="remote-qr"] svg')).to_be_visible()
                 qr_path = pairing.locator('[data-testid="remote-qr"] svg').inner_html()
-                expect(pairing.locator('[data-testid="remote-qr"] svg title')).to_have_text('Scanner pour ouvrir la télécommande')
-                # react-qr-code's SVG title is an accessible label, not the URL.
-                assert len(PAIR_ID) == len(CONTROL) == 43
                 open_phone(phone, REMOTE_URL)
                 expect(phone.get_by_text('Connectée', exact=True)).to_be_visible()
+                expect(phone.get_by_role('heading', level=2)).to_have_text('Alice <safe>')
+                expect(phone.get_by_role('button', name='Marquer absent(e)', exact=True)).to_be_disabled()
+                pairing.get_by_role('button', name='Fermer', exact=True).click()
+                expect(phone.get_by_role('button', name='Marquer absent(e)', exact=True)).to_be_enabled()
+                phone.get_by_role('button', name='Marquer absent(e)', exact=True).click()
+                expect(phone.get_by_text('Absent(e)', exact=False)).to_be_visible()
+                expect(host.locator('#attendance-absent')).to_contain_text('Alice <safe>')
+                phone.get_by_role('button', name='Suivant', exact=True).click()
+                expect(phone.get_by_role('heading', level=2)).to_have_text('Bob')
+                phone.get_by_role('button', name='Marquer absent(e)', exact=True).click()
+                expect(phone.get_by_text('Absent(e)', exact=False)).to_be_visible()
+                phone.get_by_role('button', name='Marquer présent(e)', exact=True).click()
+                expect(phone.get_by_text('Présent(e)', exact=False)).to_be_visible()
+                phone.get_by_role('button', name='Précédent', exact=True).click()
+                expect(phone.get_by_role('heading', level=2)).to_have_text('Alice <safe>')
+                phone.get_by_role('button', name='Marquer présent(e)', exact=True).click()
+                expect(phone.get_by_text('Présent(e)', exact=False)).to_be_visible()
+                phone.get_by_role('button', name='Continuer vers les humeurs', exact=True).click()
+                expect(host.locator('#mood-page')).to_be_visible(timeout=10000)
+                mood_controls = phone.get_by_role('region', name='Humeur du participant sélectionné')
+                mood_four = mood_controls.locator('button[aria-label^="Humeur 4 pour "]')
+                expect(mood_four).to_be_enabled()
+                mood_four.click()
+                phone.wait_for_timeout(1000)
+                assert mood_four.get_attribute('aria-pressed') == 'true', {
+                    'commands': api.commands[-3:], 'snapshot': api.entries[PAIR_ID]['snapshot'],
+                    'roster': api.team['roster'], 'phoneStatus': phone.get_by_role('status').all_text_contents(),
+                }
+                mood_four.click()
+                expect(mood_four).to_have_attribute('aria-pressed', 'false')
+                expect(phone.get_by_text('Humeur à renseigner', exact=False)).to_be_visible()
+                mood_three = mood_controls.locator('button[aria-label^="Humeur 3 pour "]')
+                mood_three.click()
+                expect(mood_three).to_have_attribute('aria-pressed', 'true')
+                phone.get_by_role('button', name='Continuer vers le minuteur', exact=True).click()
+                expect(host.locator('#timer-page')).to_be_visible(timeout=10000)
+                expect(host.locator('#speaker-name')).to_be_visible()
+                first = host.locator('#speaker-name').inner_text()
+                expect(phone.get_by_role('region', name='Passage en cours')).to_be_visible()
                 expect(phone.get_by_role('heading', level=2)).to_have_text(first)
                 start = phone.get_by_role('button', name='Démarrer / reprendre', exact=True)
-                expect(start).to_be_disabled()  # Pairing dialog blocks remote commands.
-                pairing.get_by_role('button', name='Revenir au minuteur', exact=True).click()
-                expect(pairing).not_to_be_visible()
                 expect(start).to_be_enabled()
                 expect(phone.get_by_role('navigation')).to_have_count(0)
                 expect(phone.get_by_role('list', name='Progression du point quotidien')).to_have_count(0)
@@ -643,6 +688,9 @@ def main():
                 expect(next_button).to_be_visible()
                 expect(host.locator('#speaker-name')).to_have_text(first)
                 assert [c['action'] for c in api.commands] == [
+                    'attendance-toggle', 'participant-next', 'attendance-toggle',
+                    'attendance-toggle', 'participant-previous', 'attendance-toggle',
+                    'participant-continue', 'mood-4', 'mood-4', 'mood-3', 'mood-continue',
                     'start', 'pause', 'penalty', 'restart', 'start', 'black-screen',
                     'black-screen', 'start', 'restart', 'black-screen'], api.commands
                 next_button.click()
@@ -679,20 +727,24 @@ def main():
                 phone.set_viewport_size({'width': phone_size[0], 'height': phone_size[1]})
                 host.get_by_role('button', name='Télécommande mobile', exact=True).click()
                 pairing.get_by_role('button', name='Désactiver', exact=True).click()
-                expect(phone.get_by_text('En attente de connexion', exact=True)).to_be_visible()
+                expect(phone.get_by_text('Hors ligne', exact=True)).to_be_visible()
                 expect(phone.get_by_role('status')).to_contain_text('Votre équipe est associée')
-                expect(phone.get_by_role('button', name='Démarrer / reprendre', exact=True)).to_be_disabled()
-                expect(next_button).to_be_disabled()
-                expect(restart).to_be_disabled()
-                expect(penalty).to_be_disabled()
-                expect(black).to_be_disabled()
+                expect(phone.get_by_role('button', name='Démarrer / reprendre', exact=True)).to_have_count(0)
+                expect(next_button).to_have_count(0)
+                expect(restart).to_have_count(0)
+                expect(penalty).to_have_count(0)
+                expect(black).to_have_count(0)
                 assert api.deletes == [PAIR_ID], api.deletes
                 assert not api.entries
                 assert api.reads[-1] == {'status': 'waiting', 'snapshot': None, 'http': 200}
-                geometry(phone, (motion, phone_size, 'disabled-waiting'), failures)
+                geometry(phone, (motion, phone_size, 'disabled-waiting'), failures, timer=False)
                 # Keep the same phone document open: polling must recover unaided.
                 phone_document = phone.evaluate('performance.timeOrigin')
                 pairing.get_by_role('button', name='Activer le QR de l’équipe', exact=True).click()
+                assert len(api.creates) == 2, {
+                    'pairCreations': len(api.creates),
+                    'status': pairing.get_by_role('status').all_text_contents(),
+                }
                 expect(pairing.locator('[data-testid="remote-qr"] svg')).to_be_visible()
                 assert pairing.locator('[data-testid="remote-qr"] svg').inner_html() == qr_path
                 assert len(api.creates) == 2
@@ -707,7 +759,7 @@ def main():
                     return response.status;
                 }""", old)
                 assert rejected == 401, 'Old host owner must not revoke the new lease'
-                pairing.get_by_role('button', name='Revenir au minuteur', exact=True).click()
+                pairing.get_by_role('button', name='Fermer', exact=True).click()
                 expect(phone.get_by_text('Connectée', exact=True)).to_be_visible()
                 expect(pause).to_be_enabled()
                 assert phone.evaluate('performance.timeOrigin') == phone_document
@@ -745,6 +797,9 @@ def main():
                 open_phone(phone, BASE + '/remote')
                 expect(phone.get_by_role('status')).to_contain_text('Ce lien est incomplet')
                 assert [c['action'] for c in api.commands] == [
+                    'attendance-toggle', 'participant-next', 'attendance-toggle',
+                    'attendance-toggle', 'participant-previous', 'attendance-toggle',
+                    'participant-continue', 'mood-4', 'mood-4', 'mood-3', 'mood-continue',
                     'start', 'pause', 'penalty', 'restart', 'start', 'black-screen',
                     'black-screen', 'start', 'restart', 'black-screen', 'next',
                     'pause', 'start'], api.commands
@@ -752,7 +807,7 @@ def main():
                 while not all(c['id'] in api.acks for c in api.commands) and time.monotonic() < deadline:
                     host.wait_for_timeout(100)
                 assert all(c['id'] in api.acks for c in api.commands), (api.commands, api.acks)
-                assert len({c['version'] for c in api.commands}) == len(api.commands) == 13, api.commands
+                assert len({c['version'] for c in api.commands}) == len(api.commands) == 24, api.commands
                 # Complete with native host controls after forgetting the phone.
                 # Archived score is derived from preserved speaking time, retries
                 # and the -50 deduction, without adding score UI to the timer.
@@ -772,7 +827,7 @@ def main():
                 assert not errors, errors
                 host_guard.assert_no_unexpected_api()
                 phone_guard.assert_no_unexpected_api()
-                print(f'PASS {motion} {phone_size}: six commands, state-bound restart Yes/No, retained metrics/retries/manual score, black-screen guards and remote/local restore without resume, stale/expired recovery, permanent QR waiting/re-enable/fresh owner, remembered pairing/invalid explicit/forget', flush=True)
+                print(f'PASS {motion} {phone_size}: route-aware pairing/actions, state-bound restart Yes/No, retained metrics/retries/manual score, black-screen guards and remote/local restore without resume, stale/expired recovery, permanent QR waiting/re-enable/fresh owner, remembered pairing/invalid explicit/forget', flush=True)
             except Exception:
                 for label, page in (('host', host), ('phone', phone)):
                     image = screenshots / f'failure-{motion}-{label}.png'

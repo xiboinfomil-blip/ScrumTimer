@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTeam } from '@/providers/team-provider';
@@ -14,6 +14,7 @@ import { ParticipantLinkButton } from '@/components/ui/participant-link-button';
 import { shuffle } from '@/lib/team/shuffle';
 import { useViewMotion } from '@/hooks/motion/use-view-motion';
 import { freshRound, toggleAttendance as toggleTeamAttendance } from '@/lib/team/attendance';
+import { useRemotePage } from '@/providers/remote-host-provider';
 
 export function ParticipantsPage() {
   const { state, activeTeamId, todayRound, updateTeam, participantOrder, setParticipantOrder } = useTeam();
@@ -26,6 +27,13 @@ export function ParticipantsPage() {
   const [query, setQuery] = useState('');
   const present = state.roster.filter(person => person.present);
   const absent = state.roster.filter(person => !person.present);
+  const remotePeople = [...present, ...absent];
+  const [remoteId, setRemoteId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!state.roster.some(person => person.id === remoteId)) setRemoteId(remotePeople[0]?.id ?? null);
+  }, [state.roster, remoteId]);
+  const remoteIndex = remotePeople.findIndex(person => person.id === remoteId);
+  const remotePerson = remoteIndex >= 0 ? remotePeople[remoteIndex] : null;
   const searchable = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr-FR');
   const matches = (name: string) => searchable(name).includes(searchable(query.trim()));
   function toggleAttendance(id: string) {
@@ -35,6 +43,25 @@ export function ParticipantsPage() {
       notify(`${person.name} : ${person.present ? 'absent(e)' : 'présent(e)'}.`);
     }
   }
+  function continueToMood() {
+    if (reveal || !present.length) return;
+    const ids = present.map(person => person.id);
+    const previous = participantOrder.length === ids.length && ids.every(id => participantOrder.includes(id)) ? participantOrder : ids;
+    setReveal({ people: previous.map(id => ({ id, name: present.find(person => person.id === id)!.name, postponed: false })), order: shuffle(previous, true) });
+  }
+  useRemotePage({
+    page: 'participants', speaker: remotePerson?.name ?? '', nextSpeaker: remotePeople[remoteIndex + 1]?.name ?? '',
+    teamName: '', activeId: remotePerson?.id ?? null, participantPresent: remotePerson?.present ?? false,
+    participantMood: remotePerson?.mood ?? null, participantIndex: Math.max(0, remoteIndex), participantCount: remotePeople.length,
+    canVote: false, canContinue: present.length > 0 && !todayRound && !reveal,
+    running: false, remaining: 0, deadline: 0, completed: 0, total: remotePeople.length,
+    blocked: Boolean(todayRound) || Boolean(reveal),
+  }, action => {
+    if (action === 'participant-previous' && remotePeople.length > 1) setRemoteId(remotePeople[(remoteIndex - 1 + remotePeople.length) % remotePeople.length].id);
+    else if (action === 'participant-next' && remotePeople.length > 1) setRemoteId(remotePeople[(remoteIndex + 1) % remotePeople.length].id);
+    else if (action === 'attendance-toggle' && remotePerson) toggleAttendance(remotePerson.id);
+    else if (action === 'participant-continue') continueToMood();
+  });
   return <div id="participants-page" className={`mx-auto flex min-h-0 w-full flex-1 flex-col gap-4 max-[650px]:gap-2 [@media(max-height:650px)]:gap-2 ${todayRound ? 'overflow-y-auto [&>.participants-panel]:min-h-96 [&>.participants-panel]:shrink-0' : ''}`}>
     <ParticipantsHeading total={state.roster.length} present={present.length} onFresh={() => setFresh(true)} />
     {todayRound && <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 rounded-xl border border-green-200 bg-success-soft px-3 text-xs text-success"><p>Point quotidien déjà terminé aujourd’hui.</p><Link href={`/timer?team=${activeTeamId}`} className="inline-flex min-h-11 items-center rounded-lg font-semibold hover:underline">Voir le bilan ou réinitialiser</Link></div>}
@@ -56,12 +83,7 @@ export function ParticipantsPage() {
       {state.roster.length ? <div ref={panels} className="attendance-columns grid min-h-0 flex-1 grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-5 px-4 py-2 max-[650px]:grid-cols-1 max-[650px]:px-3 min-[651px]:[&>section+section]:border-l min-[651px]:[&>section+section]:border-line min-[651px]:[&>section+section]:pl-5">{[true, false].map(attendance => <AttendanceList key={`${attendance}-${query}`} people={(attendance ? present : absent).filter(person => matches(person.name))} total={(attendance ? present : absent).length} searching={!!query.trim()} present={attendance} mobileVisible={attendanceView === attendance} onToggle={toggleAttendance} />)}</div> : <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 py-3 text-center">
         <span aria-hidden="true" className="grid size-10 place-items-center rounded-2xl bg-blue-50 text-brand [@media(max-height:650px)]:hidden"><ParticipantIcon name="people" /></span><p className="text-sm font-semibold text-ink">Votre équipe vous attend.</p><p className="max-w-72 text-xs leading-relaxed text-muted">Ajoutez vos membres dans Gérer l’équipe, puis retrouvez-les ici pour les présences.</p>
       </div>}
-      <ParticipantsActions present={present.length} onContinue={() => {
-        if (reveal || !present.length) return;
-        const ids = present.map(person => person.id);
-        const previous = participantOrder.length === ids.length && ids.every(id => participantOrder.includes(id)) ? participantOrder : ids;
-        setReveal({ people: previous.map(id => ({ id, name: present.find(person => person.id === id)!.name, postponed: false })), order: shuffle(previous, true) });
-      }} />
+      <ParticipantsActions present={present.length} onContinue={continueToMood} />
     </section>
     {reveal && <LineupRevealDialog people={reveal.people} order={reveal.order} onCancel={() => setReveal(null)} onComplete={() => {
       setReveal(null);

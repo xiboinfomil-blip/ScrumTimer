@@ -1,19 +1,20 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Fragment, useRef } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { PaginatedList } from '@/components/ui/paginated-list';
 import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
 import { canStartSession } from '@/lib/team/team-storage';
 import type { Mood } from '@/types/team';
 import { MoodIcon } from './mood-icon';
+import { useRemotePage } from '@/providers/remote-host-provider';
 
 const moodChoices: { value: Mood; description: string; tone: string }[] = [
-  { value: 1, description: 'Mauvaise humeur, énergie élevée', tone: 'border-red-600 bg-white text-red-900 hover:bg-red-50 aria-pressed:border-red-800 aria-pressed:bg-red-700 aria-pressed:text-white' },
-  { value: 2, description: 'Mauvaise humeur, énergie basse', tone: 'border-blue-700 bg-white text-blue-900 hover:bg-blue-50 aria-pressed:border-blue-800 aria-pressed:bg-blue-700 aria-pressed:text-white' },
-  { value: 3, description: 'Bonne humeur, énergie basse', tone: 'border-green-700 bg-white text-green-900 hover:bg-green-50 aria-pressed:border-green-800 aria-pressed:bg-green-700 aria-pressed:text-white' },
-  { value: 4, description: 'Bonne humeur, énergie élevée', tone: 'border-yellow-600 bg-white text-yellow-950 hover:bg-yellow-50 aria-pressed:border-yellow-700 aria-pressed:bg-yellow-400 aria-pressed:text-yellow-950' },
+  { value: 1, description: 'Mauvaise humeur, énergie élevée. Cliquer de nouveau annule le choix.', tone: 'border-red-600 bg-white text-red-900 hover:bg-red-50 aria-pressed:border-red-800 aria-pressed:bg-red-700 aria-pressed:text-white' },
+  { value: 2, description: 'Mauvaise humeur, énergie basse. Cliquer de nouveau annule le choix.', tone: 'border-blue-700 bg-white text-blue-900 hover:bg-blue-50 aria-pressed:border-blue-800 aria-pressed:bg-blue-700 aria-pressed:text-white' },
+  { value: 3, description: 'Bonne humeur, énergie basse. Cliquer de nouveau annule le choix.', tone: 'border-green-700 bg-white text-green-900 hover:bg-green-50 aria-pressed:border-green-800 aria-pressed:bg-green-700 aria-pressed:text-white' },
+  { value: 4, description: 'Bonne humeur, énergie élevée. Cliquer de nouveau annule le choix.', tone: 'border-yellow-600 bg-white text-yellow-950 hover:bg-yellow-50 aria-pressed:border-yellow-700 aria-pressed:bg-yellow-400 aria-pressed:text-yellow-950' },
 ];
 
 export function MoodCheckin({ className = '' }: { className?: string }) {
@@ -29,6 +30,9 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
     return rank(a.id) - rank(b.id);
   });
   const displayed = resuming ? present.filter(person => checkpoint!.timer.people.some(candidate => candidate.id === person.id && !candidate.done && candidate.postponed)) : present;
+  const [remoteId, setRemoteId] = useState<string | null>(null);
+  const remoteIndex = Math.max(0, displayed.findIndex(person => person.id === remoteId));
+  const remotePerson = displayed[remoteIndex] ?? null;
   const checked = present.filter(person => person.mood).length;
   const postponed = present.filter(person => state.postponed?.includes(person.id)).length;
   function start() {
@@ -36,6 +40,27 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
     if (!dailyReady || !canStartSession(state)) return;
     if (updateTeam(current => ({ ...current, session: present.map(person => person.id) }))) router.push('/timer');
   }
+  function chooseMood(personId: string, value: Mood) {
+    const person = displayed.find(candidate => candidate.id === personId);
+    if (!person || !dailyReady) return;
+    if (resuming) { if (rejoinLateParticipant(person.id, value)) notify(`${person.name} rejoint la fin du tour. Son humeur est enregistrée.`); return; }
+    const removing = person.mood === value;
+    const timestamp = new Date().toISOString();
+    if (updateTeam(current => ({ ...current, session: [], postponed: current.postponed?.filter(id => id !== person.id), usedMoodMeters: removing ? current.usedMoodMeters ?? [] : [...new Set([...(current.usedMoodMeters ?? []), ...(current.currentMoodSlide?.meterId ? [current.currentMoodSlide.meterId] : [])])], roster: current.roster.map(p => p.id === person.id ? { ...p, mood: removing ? null : value, moodUpdatedAt: removing ? null : timestamp, moodSlide: removing ? null : current.currentMoodSlide ?? null } : p) }))) notify(removing ? `${person.name} : humeur annulée.` : `${person.name} : humeur ${value} enregistrée.`);
+  }
+  useRemotePage({
+    page: 'mood', speaker: remotePerson?.name ?? '', nextSpeaker: displayed[remoteIndex + 1]?.name ?? '', teamName: '',
+    activeId: remotePerson?.id ?? null, participantPresent: remotePerson?.present ?? false, participantMood: remotePerson?.mood ?? null,
+    participantIndex: remotePerson ? remoteIndex : 0, participantCount: displayed.length,
+    canVote: dailyReady, canContinue: dailyReady && (resuming || canStartSession(state)),
+    running: false, remaining: 0, deadline: 0, completed: 0, total: displayed.length,
+    blocked: false,
+  }, action => {
+    if (action === 'participant-previous' && displayed.length > 1) setRemoteId(displayed[(remoteIndex - 1 + displayed.length) % displayed.length].id);
+    else if (action === 'participant-next' && displayed.length > 1) setRemoteId(displayed[(remoteIndex + 1) % displayed.length].id);
+    else if (action.startsWith('mood-') && action !== 'mood-continue' && remotePerson) chooseMood(remotePerson.id, Number(action.slice(5)) as Mood);
+    else if (action === 'mood-continue') start();
+  });
   return (
     <section className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-white ${className}`} aria-labelledby="mood-team-title">
       <div className="shrink-0 border-b border-line px-4 py-3 max-[650px]:px-3">
@@ -55,7 +80,7 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
               <Fragment key={choice.value}>
               <button type="button" className={`relative grid size-11 shrink-0 place-items-center rounded-md border-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink aria-pressed:ring-2 aria-pressed:ring-brand/15 aria-pressed:ring-offset-1 motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-45 ${choice.tone}`}
                 disabled={!dailyReady} aria-label={`Humeur ${choice.value} pour ${person.name}`} aria-describedby={`mood-choice-${person.id}-${choice.value}`} aria-pressed={person.mood === choice.value}
-                onClick={() => { if (resuming) { if (rejoinLateParticipant(person.id, choice.value)) notify(`${person.name} rejoint la fin du tour. Son humeur est enregistrée.`); return; } const timestamp = new Date().toISOString(); if (updateTeam(current => ({ ...current, session: [], postponed: current.postponed?.filter(id => id !== person.id), usedMoodMeters: [...new Set([...(current.usedMoodMeters ?? []), ...(current.currentMoodSlide?.meterId ? [current.currentMoodSlide.meterId] : [])])], roster: current.roster.map(p => p.id === person.id ? { ...p, mood: choice.value, moodUpdatedAt: timestamp, moodSlide: current.currentMoodSlide ?? null } : p) }))) notify(`${person.name} : humeur ${choice.value} enregistrée.`); }}>
+                onClick={() => chooseMood(person.id, choice.value)}>
                 {choice.value}
               </button>
               <span id={`mood-choice-${person.id}-${choice.value}`} className="sr-only">{choice.description}</span>

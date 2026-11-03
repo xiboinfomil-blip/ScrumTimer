@@ -93,7 +93,7 @@ export function TimerRemotePage() {
   const seconds = Math.ceil(Math.abs(remaining));
   const time = `${remaining < 0 ? '+' : ''}${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
   const finished = Boolean(snapshot && snapshot.completed === snapshot.total && snapshot.total > 0);
-  const stateLabel = invalid ? 'Lien indisponible' : !fresh ? 'En attente de connexion' : finished ? 'Point terminé' : snapshot?.blocked ? 'Action sur l’ordinateur' : snapshot?.running ? 'Le passage est en cours' : 'Prêt à votre rythme';
+  const stateLabel = invalid ? 'Lien indisponible' : !fresh ? 'En attente de connexion' : snapshot?.page === 'participants' ? 'Présences du jour' : snapshot?.page === 'mood' ? 'Humeurs du jour' : finished ? 'Point terminé' : snapshot?.blocked ? 'Action sur l’ordinateur' : snapshot?.running ? 'Le passage est en cours' : 'Prêt à votre rythme';
 
   useEffect(() => {
     if (!pending) return;
@@ -132,7 +132,7 @@ export function TimerRemotePage() {
     <div className="flex min-h-fit w-full max-w-md flex-col gap-3 py-1 sm:gap-4 sm:py-4">
       <header className="flex shrink-0 items-center justify-between gap-3 px-1"><div className="flex items-center gap-2.5"><span className="grid size-10 place-items-center rounded-2xl border border-brand/10 bg-white text-brand"><SmartphoneRounded fontSize="small" /></span><div><p className="text-sm font-extrabold tracking-tight text-brand">infomil<span className="text-accent">.</span></p><h1 className="text-xs font-medium text-slate-600">Télécommande</h1></div></div><span className={`flex items-center gap-2 rounded-full px-3 py-2 text-[11px] font-semibold ${fresh ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}><span className={`size-1.5 rounded-full ${fresh ? 'bg-emerald-600' : 'bg-slate-400'}`} />{fresh ? 'Connectée' : 'Hors ligne'}</span></header>
       <div className="grid shrink-0 gap-5 border-y border-line py-5 sm:gap-6 sm:py-6">
-        <section className="flex min-w-0 flex-col items-center text-center" aria-label="Passage en cours">
+        {snapshot?.page === 'timer' && <section className="flex min-w-0 flex-col items-center text-center" aria-label="Passage en cours">
           <div className="min-w-0 w-full">
             <p className="mx-auto flex w-fit max-w-full items-center gap-1.5 rounded-full border border-slate-100 bg-slate-50 px-3 py-1.5 text-[10px] font-semibold text-slate-600"><span className={`size-1.5 shrink-0 rounded-full ${fresh ? 'bg-brand' : 'bg-slate-400'}`} /><span className="truncate">{snapshot?.teamName || 'Votre point quotidien'}{fresh ? ' · Session active' : ''}</span></p>
             <p className="mt-4 text-[10px] font-bold tracking-[.12em] text-brand uppercase">{finished ? 'Merci à toute l’équipe' : 'La parole est à'}</p>
@@ -144,23 +144,47 @@ export function TimerRemotePage() {
             </div>
             <p className={`mx-auto mt-3 w-fit max-w-full rounded-lg border px-2.5 py-1 text-[10px] font-semibold ${fresh && snapshot?.running && !snapshot.blocked ? 'border-emerald-100 bg-emerald-50 text-emerald-800' : 'border-slate-100 bg-slate-50 text-slate-600'}`}>{stateLabel}</p>
           </div>
-        </section>
-        <section className="flex min-w-0 flex-col gap-3" aria-label="Commandes à distance">
+        </section>}
+        {(snapshot?.page === 'participants' || snapshot?.page === 'mood') && <section className="flex min-w-0 flex-col items-center gap-3 text-center" aria-label={snapshot.page === 'participants' ? 'Présence du participant sélectionné' : 'Humeur du participant sélectionné'}>
+          <p className="text-[10px] font-bold uppercase text-brand">{snapshot.page === 'participants' ? 'Présences du jour' : 'Humeurs du jour'}</p>
+          <h2 className="wrap-anywhere text-2xl font-bold text-ink">{snapshot.speaker || (snapshot.page === 'participants' ? 'Aucun participant' : 'Aucune personne présente')}</h2>
+          {snapshot.activeId && <p className="text-xs font-medium text-slate-600">{snapshot.page === 'participants' ? snapshot.participantPresent ? 'Présent(e)' : 'Absent(e)' : snapshot.participantMood ? `Humeur ${snapshot.participantMood} sur 4` : 'Humeur à renseigner'} · {snapshot.participantIndex + 1} / {snapshot.participantCount}</p>}
+          <div className="grid w-full grid-cols-2 gap-2">
+            <button type="button" disabled={!usable || snapshot.participantCount < 2 || pending} onClick={() => void command('participant-previous')} className="min-h-12 rounded-lg border border-slate-500 bg-white px-2 text-sm font-semibold text-brand focus-visible:outline-3 focus-visible:outline-brand disabled:bg-slate-100 disabled:text-slate-600">Précédent</button>
+            <button type="button" disabled={!usable || snapshot.participantCount < 2 || pending} onClick={() => void command('participant-next')} className="min-h-12 rounded-lg border border-slate-500 bg-white px-2 text-sm font-semibold text-brand focus-visible:outline-3 focus-visible:outline-brand disabled:bg-slate-100 disabled:text-slate-600">Suivant</button>
+          </div>
+          {snapshot.page === 'participants' ? <>
+            <button type="button" disabled={!usable || !snapshot.activeId || pending} aria-pressed={snapshot.participantPresent} onClick={() => void command('attendance-toggle')} className={`min-h-14 w-full rounded-lg border px-3 text-sm font-bold focus-visible:outline-3 focus-visible:outline-brand disabled:bg-slate-100 disabled:text-slate-600 ${snapshot.participantPresent ? 'border-slate-500 bg-white text-ink' : 'border-green-700 bg-green-700 text-white'}`}>
+              {snapshot.participantPresent ? 'Marquer absent(e)' : 'Marquer présent(e)'}
+            </button>
+            <button type="button" disabled={!usable || !snapshot.canContinue || pending} onClick={() => void command('participant-continue')} className="min-h-14 w-full rounded-lg bg-brand px-3 text-sm font-bold text-white focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:bg-slate-200 disabled:text-slate-600">Continuer vers les humeurs</button>
+          </> : <>
+            <div className="grid w-full grid-cols-4 gap-2" role="group" aria-label={`Choisir l’humeur de ${snapshot.speaker}`}>
+              {([1, 2, 3, 4] as const).map(value => {
+                const selected = snapshot.participantMood === value;
+                const colors = ['border-red-700 text-red-900 aria-pressed:bg-red-700 aria-pressed:text-white', 'border-blue-700 text-blue-900 aria-pressed:bg-blue-700 aria-pressed:text-white', 'border-green-700 text-green-900 aria-pressed:bg-green-700 aria-pressed:text-white', 'border-yellow-600 text-yellow-950 aria-pressed:bg-yellow-400'];
+                return <button key={value} type="button" aria-label={`Humeur ${value} pour ${snapshot.speaker}`} aria-pressed={selected} disabled={!usable || !snapshot.participantPresent || !snapshot.canVote || pending} onClick={() => void command(`mood-${value}`)} className={`min-h-14 rounded-lg border-2 bg-white text-lg font-bold focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:bg-slate-100 disabled:text-slate-600 ${colors[value - 1]}`}>{value}</button>;
+              })}
+            </div>
+            <button type="button" disabled={!usable || !snapshot.canContinue || pending} onClick={() => void command('mood-continue')} className="min-h-14 w-full rounded-lg bg-brand px-3 text-sm font-bold text-white focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:bg-slate-200 disabled:text-slate-600">Continuer vers le minuteur</button>
+          </>}
+        </section>}
+        {snapshot?.page === 'timer' && <section className="flex min-w-0 flex-col gap-3" aria-label="Commandes à distance">
           <motion.button whileTap={reducedMotion ? undefined : { scale: .98 }} type="button" disabled={!usable || snapshot?.blackScreen} aria-label={pending ? 'Transmission…' : snapshot?.running ? 'Mettre en pause' : 'Démarrer / reprendre'} onClick={() => void command(snapshot?.running ? 'pause' : 'start')} className="flex min-h-36 w-full flex-col items-center justify-center gap-2 rounded-lg border border-brand/30 bg-white text-ink transition-colors hover:bg-blue-50 focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-brand disabled:border-line disabled:bg-slate-100 disabled:text-slate-600 sm:min-h-44">
             <span className="mb-1 grid size-11 place-items-center rounded-2xl border border-slate-200/80 bg-white text-brand">{snapshot?.running ? <PauseRounded /> : <PlayArrowRounded />}</span>
             <span className="text-lg font-extrabold tracking-tight sm:text-xl">{pending ? 'Transmission…' : snapshot?.running ? 'Mettre en pause' : 'Démarrer / reprendre'}</span>
             <span className="text-[10px] font-medium text-slate-600">{pending ? 'En attente de l’ordinateur' : snapshot?.running ? 'Une pause, puis on reprend' : 'À vous de donner le rythme'}</span>
           </motion.button>
           {confirmNext && confirmNext === snapshot?.version && usable && !snapshot?.blackScreen ? <div className="rounded-2xl border border-orange-200 bg-orange-50 p-3 text-ink"><p className="text-sm font-bold">Terminer ce passage ?</p><p className="mt-1 break-words text-xs leading-relaxed text-slate-600">{snapshot?.nextSpeaker ? `${snapshot.nextSpeaker} prendra la parole immédiatement.` : 'Ce passage sera terminé sur l’ordinateur.'}</p><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => setConfirmNext(null)} className="min-h-12 rounded-xl border border-slate-500 bg-white text-sm font-semibold text-brand focus-visible:outline-3 focus-visible:outline-brand">Annuler</button><button type="button" onClick={() => void command('next')} className="min-h-12 rounded-xl bg-brand text-sm font-bold text-white focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand">Confirmer</button></div></div> : <button type="button" disabled={!usable || snapshot?.blackScreen} onClick={() => setConfirmNext(snapshot?.version ?? null)} className="flex min-h-20 w-full items-center justify-between gap-3 rounded-[20px] border border-orange-700 bg-orange-700 px-4 py-3 text-left text-white shadow-[0_4px_10px_-5px_#c2410c80] transition-colors hover:bg-orange-800 focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-brand disabled:border-slate-100 disabled:bg-slate-100 disabled:text-slate-600 disabled:shadow-none" aria-label="Passage suivant"><span className="min-w-0"><span className="block text-lg font-extrabold tracking-tight">Passage suivant</span><span className="mt-1 block truncate text-xs font-medium">{snapshot?.nextSpeaker ? `Prochain : ${snapshot.nextSpeaker}` : finished ? 'Point terminé' : 'Terminer le passage'}</span></span><span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-black/10"><SkipNextRounded /></span></button>}
-        </section>
-        <section aria-label="Autres commandes" className="grid grid-cols-3 gap-2">
+        </section>}
+        {snapshot?.page === 'timer' && <section aria-label="Autres commandes" className="grid grid-cols-3 gap-2">
           <button type="button" disabled={!usable || snapshot?.blackScreen} onClick={() => setConfirmRestart(snapshot?.version ?? null)} className="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border border-slate-500 bg-slate-50 px-1 text-[10px] font-semibold text-brand focus-visible:outline-3 focus-visible:outline-brand disabled:text-slate-600"><RestartAltRounded fontSize="small" />Redémarrer</button>
           <button type="button" disabled={!usable || snapshot?.blackScreen || (snapshot?.manualPenalty ?? 0) > 999_950} onClick={() => setConfirmPenalty(snapshot?.version ?? null)} className="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border border-amber-700 bg-amber-50 px-1 text-[10px] font-semibold text-amber-900 focus-visible:outline-3 focus-visible:outline-brand disabled:text-slate-600" aria-label="Pénalité de 50 points"><span className="flex items-center gap-1"><WarningAmberRounded fontSize="small" /><span>−50</span></span>Pénalité</button>
           <button type="button" disabled={!usable} onClick={() => void command('black-screen')} aria-pressed={snapshot?.blackScreen ?? false} className="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border border-slate-500 bg-slate-50 px-1 text-[10px] font-semibold text-brand focus-visible:outline-3 focus-visible:outline-brand disabled:text-slate-600"><DesktopWindowsRounded fontSize="small" />{snapshot?.blackScreen ? 'Rétablir l’écran' : 'Écran noir'}</button>
-        </section>
-        {(snapshot?.manualPenalty ?? 0) > 0 && <p className="text-center text-xs font-semibold text-amber-900">Pénalités manuelles : −{snapshot?.manualPenalty} points</p>}
-        {snapshot?.blackScreen && <p className="text-center text-xs text-slate-600">Écran masqué · minuteur en pause. Rétablissez l’écran avant de reprendre.</p>}
-        <p className="border-t border-slate-100 pt-3 text-center text-[10px] leading-relaxed text-slate-600">Le minutage reste synchronisé sur l’ordinateur principal.</p>
+        </section>}
+        {snapshot?.page === 'timer' && (snapshot.manualPenalty ?? 0) > 0 && <p className="text-center text-xs font-semibold text-amber-900">Pénalités manuelles : −{snapshot.manualPenalty} points</p>}
+        {snapshot?.page === 'timer' && snapshot.blackScreen && <p className="text-center text-xs text-slate-600">Écran masqué · minuteur en pause. Rétablissez l’écran avant de reprendre.</p>}
+        {snapshot?.page === 'timer' ? <p className="border-t border-slate-100 pt-3 text-center text-[10px] leading-relaxed text-slate-600">Le minutage reste synchronisé sur l’ordinateur principal.</p> : snapshot?.page === 'idle' && <p className="text-center text-xs text-slate-600">Ouvrez Participants, Humeurs ou Minuteur sur l’ordinateur.</p>}
       </div>
       <p role="status" aria-live="polite" className="px-2 text-center text-xs leading-relaxed text-slate-600">{invalid && <LinkOffRounded className="mr-1" fontSize="inherit" />}{message || (snapshot?.blocked ? 'Fermez la fenêtre sur l’ordinateur pour reprendre le contrôle.' : 'Vous pilotez. L’ordinateur affiche.')}</p>
       <CompanionInstall />

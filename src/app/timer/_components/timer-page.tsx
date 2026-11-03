@@ -5,7 +5,6 @@ import { motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
 import { Button, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
-import { RemotePairingCard, RemotePairingDialog } from './remote-pairing-dialog';
 import { useLiveBroadcast } from '@/hooks/live/use-live-broadcast';
 import { usePresentation } from '@/hooks/timer/use-presentation';
 import { ScreenTabs } from '@/components/ui/screen-tabs';
@@ -21,7 +20,7 @@ import { useViewMotion } from '@/hooks/motion/use-view-motion';
 import { useDailyHints } from '@/hooks/meeting/use-daily-hints';
 import { roundSpeakers } from '@/lib/timer/timer-completion';
 import { LateCheckinDialog } from './late-checkin-dialog';
-import { useTimerRemote } from '@/hooks/remote/use-timer-remote';
+import { useRemotePage } from '@/providers/remote-host-provider';
 import SmartphoneRounded from '@mui/icons-material/SmartphoneRounded';
 import ScreenShareRounded from '@mui/icons-material/ScreenShareRounded';
 import { WorkflowHeading } from '@/components/ui/workflow-heading';
@@ -35,7 +34,6 @@ export function TimerPage() {
   const [view, setView] = useState<'timer' | 'queue' | 'prompts'>('timer');
   const [lineupOpen, setLineupOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const [remoteOpen, setRemoteOpen] = useState(false);
   const [blackScreen, setBlackScreen] = useState(false);
   const panels = useViewMotion(`${view}-${timer.focusMode}`);
   const { activeTeamId, activeTeamName, teams } = useTeam();
@@ -53,16 +51,22 @@ export function TimerPage() {
   const presentation = usePresentation(target);
   const index = timer.people.findIndex(person => person.id === timer.activeId);
   const following = [...timer.people.slice(index + 1), ...timer.people.slice(0, Math.max(0, index))].find(person => !person.done && !person.postponed);
-  const remote = useTimerRemote(allowed ? activeTeamId : null, {
+  useRemotePage({
+    page: 'timer', participantPresent: false, participantMood: null, participantIndex: 0, participantCount: 0, canVote: false, canContinue: false,
     speaker: timer.person?.name ?? '', nextSpeaker: following?.name ?? '', teamName: activeTeamName,
     activeId: timer.activeId, running: timer.running, remaining: timer.remaining, deadline: timer.deadline,
     completed: timer.people.filter(person => person.done).length, total: timer.people.length,
-    blocked: timer.managing || timer.lateChecking || lineupOpen || remoteOpen || sharing,
+    blocked: timer.managing || timer.lateChecking || lineupOpen || sharing,
     blackScreen, manualPenalty: timer.person?.manualPenalty ?? 0,
-  }, { toggle: timer.toggle, next: timer.next, restart: timer.restartCurrent, penalty: timer.penalize, blackScreen: () => {
-    if (timer.running) timer.toggle();
-    setBlackScreen(value => !value);
-  } });
+  }, action => {
+    switch (action) {
+      case 'start': case 'pause': timer.toggle(); break;
+      case 'next': timer.next(); break;
+      case 'restart': timer.restartCurrent(); break;
+      case 'penalty': timer.penalize(); break;
+      case 'black-screen': if (timer.running) timer.toggle(); setBlackScreen(value => !value); break;
+    }
+  });
   const broadcast = useLiveBroadcast(allowed ? activeTeamId : null, {
     speaker: timer.person?.name ?? '', nextSpeaker: following?.name ?? '', teamName: activeTeamName,
     running: timer.running, remaining: timer.remaining, deadline: timer.deadline,
@@ -78,7 +82,6 @@ export function TimerPage() {
 
   return (
     <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-1 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh max-w-none! bg-slate-50 p-3 sm:p-6' : 'mx-auto w-full'} overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
-      <RemotePairingDialog open={remoteOpen} onClose={() => setRemoteOpen(false)} remote={remote} />
       {blackScreen && <button type="button" autoFocus onClick={() => setBlackScreen(false)} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setBlackScreen(false); } }} aria-label="Rétablir l’écran" className="fixed inset-0 z-[3000] h-dvh w-screen bg-black text-transparent focus-visible:outline-2 focus-visible:outline-white">Rétablir l’écran</button>}
       <Dialog open={lineupOpen && !timer.lateChecking} onClose={() => setLineupOpen(false)} aria-labelledby="lineup-dialog-title" fullWidth maxWidth="sm" slotProps={{ paper: { sx: { height: 'min(640px, calc(100dvh - 32px))', m: 2, width: 'calc(100% - 32px)', borderRadius: '14px', border: '1px solid #dce3e9' } } }}>
         <DialogTitle id="lineup-dialog-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Le tour de parole</DialogTitle>
@@ -106,7 +109,6 @@ export function TimerPage() {
         <button type="button" onClick={() => { if (timer.running) timer.toggle(); setLineupOpen(true); }} title="Voir le tour de parole" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand" aria-label="Voir le tour de parole"><span className="max-[650px]:hidden">Participants</span><span className="tabular-nums">{timer.people.filter(person => person.done).length}/{timer.people.length}</span></button>
         <button type="button" onClick={() => presentation.presenting ? void presentation.toggle() : setSharing(true)} aria-label={presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'} title={presentation.presenting ? 'Quitter la présentation' : 'Diffusion'} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand hover:border-brand/30 hover:bg-blue-50 max-[650px]:size-11 max-[650px]:px-0">{broadcast.enabled && <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-success" />}<ScreenShareRounded fontSize="small" /><span className="max-[650px]:sr-only">{presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'}</span></button>
         </div>} />
-      <RemotePairingCard remote={remote} onDetails={() => setRemoteOpen(true)} />
       {!presentation.presenting && !timer.focusMode && <ScreenTabs
         className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 max-[1359px]:flex min-[1360px]:hidden [@media(max-height:650px)]:flex [@media(max-height:650px)]:h-11 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0`}
         label="Espace du point quotidien"

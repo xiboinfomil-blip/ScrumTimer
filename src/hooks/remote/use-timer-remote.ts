@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { isCommandAllowed, type RemoteCommand, type RemoteSnapshot, type RemoteTransport } from '@/lib/remote/timer-remote';
+import { isCommandAllowed, type RemoteAction, type RemoteCommand, type RemoteSnapshot, type RemoteTransport } from '@/lib/remote/timer-remote';
 
 interface Pair { id: string; owner: string; control: string; expiresAt: number; transport: RemoteTransport }
 type HostSnapshot = Omit<RemoteSnapshot, 'version'>;
 
-export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, actions: { toggle: () => void; next: () => void; restart: () => void; penalty: () => void; blackScreen: () => void }) {
+export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, actions: { dispatch: (action: RemoteAction) => void }) {
   const [enabled, setEnabled] = useState(false);
   const activationTeam = useRef<string | null>(null);
   const [pair, setPair] = useState<Pair | null>(null);
@@ -29,7 +29,7 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
 
   useEffect(() => {
     // A tick must not invalidate a button; every semantic timer change must.
-    const signature = JSON.stringify([snapshot.activeId, snapshot.running, snapshot.deadline, snapshot.completed, snapshot.total, snapshot.blocked, snapshot.speaker, snapshot.nextSpeaker, snapshot.running ? null : snapshot.remaining, snapshot.blackScreen, snapshot.manualPenalty]);
+    const signature = JSON.stringify({ ...snapshot, remaining: snapshot.running ? null : snapshot.remaining });
     const changed = signature !== latest.current.signature;
     if (changed) latest.current.revision++;
     latest.current = { snapshot: { ...snapshot, version: String(latest.current.revision) }, actions, signature, revision: latest.current.revision };
@@ -70,13 +70,7 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
             handled.add(command.id);
             // Lock this version synchronously: an in-flight duplicate cannot act twice.
             live.snapshot = { ...live.snapshot, blocked: true };
-            switch (command.action) {
-              case 'next': live.actions.next(); break;
-              case 'restart': live.actions.restart(); break;
-              case 'penalty': live.actions.penalty(); break;
-              case 'black-screen': live.actions.blackScreen(); break;
-              default: live.actions.toggle();
-            }
+            live.actions.dispatch(command.action);
           }
           // Even a locally rejected command consumes its version. A dialog or
           // visibility race must not leave the recovered remote permanently locked.

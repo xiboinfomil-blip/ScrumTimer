@@ -12,6 +12,7 @@ import { PageSkeleton, skeletonVariantForPath } from '@/components/ui/page-skele
 import { DailyRound } from './daily-round';
 import { DesktopFullscreenGate } from './desktop-fullscreen-gate';
 import { WelcomeEntrance } from './welcome-entrance';
+import { RemoteHostProvider } from '@/providers/remote-host-provider';
 
 const WELCOME_DAY_KEY = 'standup.welcome.day.v1';
 
@@ -61,7 +62,7 @@ export function AppShell({ children, modal }: { children: ReactNode; modal: Reac
   // The phone pairs by capability, not by the desktop's Neon/team hydration.
   // It must remain usable even if the unrelated team provider is unavailable.
   if (pathname === '/remote') return <MotionConfig reducedMotion="user"><main id="main-content" className="flex min-h-0 flex-1 flex-col">{children}</main></MotionConfig>;
-  return <MotionConfig reducedMotion="user" transition={{ type: 'spring', stiffness: 420, damping: 28 }}>
+  return <RemoteHostProvider><MotionConfig reducedMotion="user" transition={{ type: 'spring', stiffness: 420, damping: 28 }}>
     {introOpen && pathname !== '/spectator' && <WelcomeEntrance onClose={closeIntro} />}
     <div className="contents" inert={introOpen && pathname !== '/spectator'} aria-hidden={introOpen && pathname !== '/spectator' ? true : undefined}>
     {introChecked && !introOpen && pathname !== '/spectator' && <DesktopFullscreenGate />}
@@ -73,5 +74,5 @@ export function AppShell({ children, modal }: { children: ReactNode; modal: Reac
     </main>
     {ready && modal}
     </div>
-  </MotionConfig>;
+  </MotionConfig></RemoteHostProvider>;
 }

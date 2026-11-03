@@ -14,10 +14,11 @@ import type { RemoteCommandPayload, RemoteEntry, RemoteSnapshot } from '../src/l
 
 const now = 100_000;
 const requestId = '12345678-1234-4234-8234-123456789abc';
-const snapshot: RemoteSnapshot = { speaker: '<Alice>', nextSpeaker: 'Bob', teamName: 'Équipe', activeId: 'alice',
+const snapshot: RemoteSnapshot = { page: 'timer', speaker: '<Alice>', nextSpeaker: 'Bob', teamName: 'Équipe', activeId: 'alice',
+  participantPresent: false, participantMood: null, participantIndex: 0, participantCount: 0, canVote: false, canContinue: false,
   running: false, remaining: 30, deadline: 0, completed: 0, total: 2, version: 'v1', blocked: false };
 const payload: RemoteCommandPayload = { requestId, action: 'start', version: 'v1' };
-const actions = ['start', 'pause', 'next', 'restart', 'penalty', 'black-screen'] as const;
+const actions = ['start', 'pause', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-continue'] as const;
 function entry(): RemoteEntry {
   return { teamId: 'a'.repeat(64), ownerHash: 'a'.repeat(64), controlHash: 'b'.repeat(64), expiresAt: now + REMOTE_PAIR_TTL,
     hostSeenAt: now, leaseUntil: now + REMOTE_HOST_LEASE, snapshot: { ...snapshot }, pending: null,
@@ -32,7 +33,8 @@ test('remote snapshots are exact, finite, bounded, safe text contracts without l
   assert.notEqual(validateRemoteSnapshot(snapshot), snapshot);
   for (const change of [
     { speaker: 'a'.repeat(101) }, { nextSpeaker: '\nBob' }, { teamName: '\u007f' }, { activeId: '' },
-    { activeId: 1 }, { running: 'yes' }, { blocked: 0 }, { version: '' }, { version: 'x'.repeat(129) },
+    { activeId: 1 }, { page: 'other' }, { participantMood: 5 }, { participantPresent: 1 },
+    { participantIndex: 100 }, { participantCount: 101 }, { canVote: 1 }, { canContinue: 1 }, { running: 'yes' }, { blocked: 0 }, { version: '' }, { version: 'x'.repeat(129) },
     { remaining: Infinity }, { remaining: NaN }, { remaining: 86_401 }, { remaining: -86_401 },
     { deadline: -1 }, { deadline: Number.MAX_VALUE }, { completed: -1 }, { completed: 0.5 },
     { total: 0 }, { total: 1001 }, { total: 0.5 }, { mood: 1 }, { owner: 'secret' },
@@ -95,8 +97,9 @@ test('operation envelopes and command requestId are strict; timestamps and token
 });
 
 test('actions respect expected version, running, blocked, active speaker and completion', () => {
+  const timerActions = ['start', 'pause', 'next', 'restart', 'penalty', 'black-screen'] as const;
   for (const running of [false, true]) {
-    for (const action of actions) {
+    for (const action of timerActions) {
       const command = { action, version: 'v1' };
       assert.equal(isCommandAllowed({ ...snapshot, running }, command), action === 'start' ? !running : action === 'pause' ? running : true);
       for (const change of [{ blocked: true }, { activeId: null }, { completed: 2 }, { version: 'v2' }]) {
@@ -530,14 +533,18 @@ test('route/store security invariants: bounded JSON, no-store, selected-team cre
   assert.match(store, /if op=='read' then return cjson.encode\(\{snapshot=cjson.null,status='waiting',serverNow=now\}\)/);
   assert.match(store, /if op=='command' then return cjson.encode\(\{error=409\}\)/);
   assert.match(store, /op=='read' and e\.leaseUntil<=now/);
-  // The shared Lua transport must enforce the same six-action guard as the pure
+  // The shared Lua transport must enforce the same page-scoped action guard as the pure
   // instance transition BEFORE writing the pending slot (no live Redis required).
   const commandBranch = store.slice(store.indexOf("elseif op=='command' then"), store.indexOf("if op=='sync' or op=='command' then redis.call"));
   assert.match(commandBranch, /s\.blackScreen==true and input\.action~='black-screen'/);
   assert.match(commandBranch, /input\.action=='penalty' and \(s\.manualPenalty or 0\)>999950/);
   assert.match(commandBranch, /s\.version~=input\.version/);
   assert.match(commandBranch, /has\(pending\(\)\) or e\.lastCommandId==input\.requestId or e\.lastCommandVersion==input\.version/);
-  for (const action of actions) assert.ok(commandBranch.includes(`input.action~='${action}'`), action);
+  for (const action of ['start', 'pause', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-continue']) assert.ok(commandBranch.includes(`input.action=='${action}'`) || commandBranch.includes(`input.action~='${action}'`), action);
+  assert.match(commandBranch, /s\.page=='participants'/);
+  assert.match(commandBranch, /s\.page=='mood'/);
+  assert.match(commandBranch, /s\.page=='timer'/);
+  assert.match(commandBranch, /not s\.canContinue/);
   const pendingWrite = commandBranch.indexOf('e.pending={');
   assert.ok(pendingWrite > commandBranch.indexOf('s.blackScreen==true'));
   assert.ok(pendingWrite > commandBranch.indexOf("input.action=='penalty'"));
@@ -545,4 +552,27 @@ test('route/store security invariants: bounded JSON, no-store, selected-team cre
   assert.doesNotMatch(commandBranch, /s\.manualPenalty\s*=|s\.blackScreen\s*=\s*[^=]|s\.remaining\s*=/);
   assert.ok(store.indexOf('authorizeTimerRemoteControl(id, token') < store.indexOf('const hash = hashRemoteToken(token)'));
   assert.doesNotMatch(store, /live-session|@\/lib\/database|drizzle|neon/i);
+});
+
+test('workflow remote actions are constrained to the active page and participant', () => {
+  const participants = { ...snapshot, page: 'participants' as const, participantPresent: true, participantIndex: 0, participantCount: 2, canContinue: true };
+  const mood = { ...participants, page: 'mood' as const, participantMood: 2, canVote: true };
+  for (const action of ['participant-previous', 'participant-next'] as const) {
+    assert.equal(isCommandAllowed(participants, { action, version: 'v1' }), true);
+    assert.equal(isCommandAllowed(mood, { action, version: 'v1' }), true);
+  }
+  assert.equal(isCommandAllowed(participants, { action: 'attendance-toggle', version: 'v1' }), true);
+  assert.equal(isCommandAllowed(mood, { action: 'attendance-toggle', version: 'v1' }), false);
+  assert.equal(isCommandAllowed(participants, { action: 'participant-continue', version: 'v1' }), true);
+  assert.equal(isCommandAllowed(mood, { action: 'participant-continue', version: 'v1' }), false);
+  for (const action of ['mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-continue'] as const) {
+    assert.equal(isCommandAllowed(mood, { action, version: 'v1' }), action === 'mood-continue' || mood.participantPresent);
+    assert.equal(isCommandAllowed(participants, { action, version: 'v1' }), false);
+  }
+  assert.equal(isCommandAllowed({ ...mood, participantPresent: false }, { action: 'mood-1', version: 'v1' }), false);
+  assert.equal(isCommandAllowed({ ...mood, canVote: false }, { action: 'mood-1', version: 'v1' }), false);
+  assert.equal(isCommandAllowed({ ...participants, participantCount: 1 }, { action: 'participant-next', version: 'v1' }), false);
+  assert.equal(isCommandAllowed({ ...participants, canContinue: false }, { action: 'participant-continue', version: 'v1' }), false);
+  assert.equal(isCommandAllowed({ ...mood, canContinue: false }, { action: 'mood-continue', version: 'v1' }), false);
+  assert.equal(isCommandAllowed({ ...snapshot, page: 'idle' }, { action: 'start', version: 'v1' }), false);
 });

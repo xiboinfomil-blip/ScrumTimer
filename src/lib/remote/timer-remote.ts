@@ -1,9 +1,18 @@
+import type { Mood } from '@/types/team';
+
 /** Pure wire contracts and state transitions; no browser, database or transport dependencies. */
 export interface RemoteSnapshot {
+  page: 'participants' | 'mood' | 'timer' | 'idle';
   speaker: string;
   nextSpeaker: string;
   teamName: string;
   activeId: string | null;
+  participantPresent: boolean;
+  participantMood: Mood | null;
+  participantIndex: number;
+  participantCount: number;
+  canVote: boolean;
+  canContinue: boolean;
   running: boolean;
   remaining: number;
   deadline: number;
@@ -17,10 +26,14 @@ export interface RemoteSnapshot {
 
 export interface RemoteCommand {
   id: string;
-  action: 'start' | 'pause' | 'next' | 'restart' | 'penalty' | 'black-screen';
+  action: RemoteAction;
   version: string;
   createdAt: number;
 }
+
+export type RemoteAction = 'start' | 'pause' | 'next' | 'restart' | 'penalty' | 'black-screen'
+  | 'participant-previous' | 'participant-next' | 'attendance-toggle' | 'participant-continue'
+  | 'mood-1' | 'mood-2' | 'mood-3' | 'mood-4' | 'mood-continue';
 
 export type RemoteCommandPayload = Pick<RemoteCommand, 'action' | 'version'> & { requestId: string };
 export type RemoteTransport = 'shared' | 'instance';
@@ -92,17 +105,28 @@ function version(value: unknown): value is string {
 }
 
 export function validateRemoteSnapshot(value: unknown): RemoteSnapshot {
-  const data = remoteObject(value, ['speaker', 'nextSpeaker', 'teamName', 'activeId', 'running', 'remaining', 'deadline', 'completed', 'total', 'version', 'blocked', 'blackScreen', 'manualPenalty']);
+  const data = remoteObject(value, ['page', 'speaker', 'nextSpeaker', 'teamName', 'activeId', 'participantPresent', 'participantMood', 'participantIndex', 'participantCount', 'canVote', 'canContinue', 'running', 'remaining', 'deadline', 'completed', 'total', 'version', 'blocked', 'blackScreen', 'manualPenalty']);
   if ((data.blackScreen !== undefined && typeof data.blackScreen !== 'boolean') || (data.manualPenalty !== undefined && (!finite(data.manualPenalty) || !Number.isInteger(data.manualPenalty) || data.manualPenalty < 0 || data.manualPenalty > 1_000_000))) throw new RemoteError(400);
-  if (!text(data.speaker, 100) || !text(data.nextSpeaker, 100) || !text(data.teamName, 100)
+  if (!['participants', 'mood', 'timer', 'idle'].includes(data.page as string)
+    || !text(data.speaker, 100) || !text(data.nextSpeaker, 100) || !text(data.teamName, 100)
     || !(data.activeId === null || text(data.activeId, 128, false))
+    || typeof data.participantPresent !== 'boolean'
+    || !(data.participantMood === null || [1, 2, 3, 4].includes(data.participantMood as number))
+    || !Number.isInteger(data.participantIndex) || (data.participantIndex as number) < 0 || (data.participantIndex as number) > 99
+    || !Number.isInteger(data.participantCount) || (data.participantCount as number) < 0 || (data.participantCount as number) > 100
+    || typeof data.canVote !== 'boolean'
+    || typeof data.canContinue !== 'boolean'
+    || ((data.page === 'participants' || data.page === 'mood') && (data.participantCount === 0
+      ? data.activeId !== null || data.participantIndex !== 0
+      : data.activeId === null || (data.participantIndex as number) >= (data.participantCount as number)))
     || typeof data.running !== 'boolean' || typeof data.blocked !== 'boolean' || !version(data.version)
     || !finite(data.remaining) || Math.abs(data.remaining) > 86_400
     || !finite(data.deadline) || data.deadline < 0 || data.deadline > Number.MAX_SAFE_INTEGER
     || !finite(data.completed) || !Number.isInteger(data.completed) || data.completed < 0
     || !finite(data.total) || !Number.isInteger(data.total) || data.total < data.completed || data.total > 1_000
-    || (data.activeId !== null && data.completed >= data.total)
-    || (data.running && (data.activeId === null || data.blocked))) throw new RemoteError(400);
+    || (data.page === 'timer' && data.activeId !== null && data.completed >= data.total)
+    || (data.page === 'timer' && data.running && (data.activeId === null || data.blocked))
+    || (data.page !== 'timer' && data.running)) throw new RemoteError(400);
   return { ...data } as unknown as RemoteSnapshot;
 }
 
@@ -115,7 +139,7 @@ export function validateRemoteRequestId(value: unknown): string {
 export function validateRemoteCommand(value: unknown): RemoteCommandPayload {
   const data = remoteObject(value, ['requestId', 'action', 'version']);
   const requestId = validateRemoteRequestId(data.requestId);
-  if (!version(data.version) || !['start', 'pause', 'next', 'restart', 'penalty', 'black-screen'].includes(data.action as string)) throw new RemoteError(400);
+  if (!version(data.version) || !['start', 'pause', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-continue'].includes(data.action as string)) throw new RemoteError(400);
   return { requestId, action: data.action as RemoteCommand['action'], version: data.version };
 }
 
@@ -146,7 +170,15 @@ export function normalizeRemoteSnapshot(snapshot: RemoteSnapshot, now: number): 
 }
 
 export function isCommandAllowed(snapshot: RemoteSnapshot | null, command: Pick<RemoteCommand, 'action' | 'version'>): boolean {
-  if (!snapshot || snapshot.blocked || !snapshot.activeId || snapshot.completed >= snapshot.total || snapshot.version !== command.version) return false;
+  if (!snapshot || snapshot.blocked || snapshot.version !== command.version) return false;
+  if (snapshot.page === 'participants') return command.action === 'participant-continue' ? snapshot.canContinue
+    : Boolean(snapshot.activeId) && (command.action === 'attendance-toggle'
+      || (['participant-previous', 'participant-next'].includes(command.action) && snapshot.participantCount > 1));
+  if (snapshot.page === 'mood') return command.action === 'mood-continue' ? snapshot.canContinue
+    : Boolean(snapshot.activeId) && (['participant-previous', 'participant-next'].includes(command.action)
+      ? snapshot.participantCount > 1
+      : snapshot.participantPresent && snapshot.canVote && /^mood-[1-4]$/.test(command.action));
+  if (snapshot.page !== 'timer' || !snapshot.activeId || snapshot.completed >= snapshot.total) return false;
   if (snapshot.blackScreen) return command.action === 'black-screen';
   switch (command.action) {
     case 'start': return !snapshot.running;

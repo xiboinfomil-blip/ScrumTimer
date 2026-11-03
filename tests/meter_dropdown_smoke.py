@@ -207,6 +207,17 @@ with sync_playwright() as p:
             colors = mood_contrast(button)
             assert mood_color_family(value, colors), (value, colors)
             assert colors['ratio'] >= 4.5, (value, colors)
+        selected_mood = page.get_by_role('button', name='Humeur 2 pour Alice', exact=True)
+        selected_mood.click()
+        expect(selected_mood).to_have_attribute('aria-pressed', 'false')
+        expect(page.get_by_role('button', name='Continuer vers le minuteur', exact=True)).to_be_disabled()
+        page.wait_for_function("document.querySelector('.site-header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
+        assert team['roster'][0]['mood'] is None
+        assert team['roster'][0]['moodUpdatedAt'] is None
+        assert team['roster'][0]['moodSlide'] is None
+        selected_mood.click()
+        expect(selected_mood).to_have_attribute('aria-pressed', 'true')
+        page.wait_for_function("document.querySelector('.site-header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
         if width in [320, 1366]:
             page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-mood-design-vote-{width}.png'))
         page.reload()
