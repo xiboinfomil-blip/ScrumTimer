@@ -34,9 +34,9 @@ def mood_color_family(value, colors):
     red, green, blue = colors['backgroundColor']
     return {
         1: red > 150 and red > green * 1.5 and red > blue * 1.5,
-        2: red > 150 and green > 80 and blue < 100 and red > green,
-        3: blue > 150 and blue > red * 1.5 and blue > green,
-        4: green > 100 and green > red * 1.5 and green > blue * 1.2,
+        2: blue > 150 and blue > red * 1.5 and blue > green,
+        3: green > 100 and green > red * 1.5 and green > blue * 1.2,
+        4: red > 150 and green > 80 and blue < 100 and red > green,
     }[value]
 
 
@@ -160,6 +160,11 @@ with sync_playwright() as p:
         expect(select).to_have_value('-2')
         expect(page.locator('#default-mood-meter')).to_be_visible()
         assert page.locator('#default-mood-meter article').evaluate_all("nodes => nodes.map(e => e.querySelector('span').textContent)") == ['1', '4', '2', '3']
+        for article in page.locator('#default-mood-meter article').all():
+            value = int(article.locator('span').first.text_content())
+            badge = mood_contrast(article.locator('span').first)
+            assert mood_color_family(value, badge), ('fallback meter number color', value, badge)
+            assert badge['ratio'] >= 4.5, ('fallback meter number contrast', value, badge)
         page.evaluate('async () => { for (let i=0; i<3; i++) await new Promise(requestAnimationFrame); }')
         meter_size = page.locator('#default-mood-meter').evaluate('e => ({height: e.clientHeight, scroll: e.scrollHeight})')
         assert meter_size['scroll'] <= meter_size['height'] + 2, (width, height, meter_size)
