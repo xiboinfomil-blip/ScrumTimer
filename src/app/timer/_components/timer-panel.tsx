@@ -15,7 +15,6 @@ import { timerUrgency } from '@/lib/timer/timer';
 import type { StandupTimer } from './timer-page';
 import { SpeakerSlider } from './speaker-slider';
 import { TimerIcon } from './timer-icon';
-import { SpeakerMoodPicture } from './speaker-mood-picture';
 
 export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTimer; notes: ReturnType<typeof useDailyHints>; className?: string }) {
   const { people, person, remaining, turnTotal, running, ended, warning, turnStarted } = timer;
@@ -39,15 +38,6 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
   const panelColor = ended || critical ? 'border-red-200! bg-red-50/30' : nearly ? 'border-orange-200! bg-orange-50/30' : complete ? 'border-green-200! bg-success-soft' : running ? 'border-brand/40! bg-white' : 'border-slate-200/80';
   const pulse = running && critical ? 'motion-safe:animate-critical-glow' : running && nearly ? 'motion-safe:animate-warning-glow' : '';
   const FeedbackIcon = complete ? CheckIcon : ended ? ErrorOutlineIcon : nearly ? AccessTimeIcon : running ? RadioButtonCheckedIcon : NorthEastIcon;
-  const moodCopy = person?.mood ? [
-    null,
-    ['Mauvaise humeur', 'Énergie élevée', 'border-red-200 bg-red-50 text-red-800'],
-    ['Mauvaise humeur', 'Énergie basse', 'border-amber-200 bg-amber-50 text-amber-900'],
-    ['Bonne humeur', 'Énergie basse', 'border-blue-200 bg-blue-50 text-blue-900'],
-    ['Bonne humeur', 'Énergie élevée', 'border-green-200 bg-green-50 text-green-900'],
-  ][person.mood] : null;
-  const moodFace = person?.mood ? ['😣', '😞', '😌', '😊'][person.mood - 1] : '';
-
   return (
     <Paper component="section" elevation={0} className={`timer-panel relative isolate grid min-h-0 min-w-0 grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-3 overflow-hidden rounded-lg border border-line bg-white p-5 text-center max-[650px]:gap-2 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-3 ${timer.focusMode ? '[@media(max-height:650px)]:grid-rows-[auto_auto_minmax(0,1fr)_auto]' : ''} ${panelColor} ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
       <div className="col-span-full flex min-w-0 items-center justify-between gap-2 self-start border-b border-line pb-2">
@@ -70,18 +60,6 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
             <span className={`block text-[11px] font-bold uppercase [@media(max-height:650px)]:text-[9px] ${ended || critical ? 'text-red-200' : nearly ? 'text-orange-200' : 'text-blue-100'}`}>{timer.ended ? 'Merci de passer la parole' : timer.running ? 'À TOI DE PARLER !' : timer.turnStarted ? 'TON TOUR EST EN PAUSE' : 'La parole est à'}</span>
             <h2 id="speaker-name" className="mt-1 break-words text-2xl font-bold leading-tight text-white sm:text-3xl [@media(max-height:650px)]:text-sm" title={speakerName}>{speakerName}</h2>
           </div>
-          {person?.mood && moodCopy && <div id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${person.mood} sur 4`} className={`mt-2 flex min-w-0 items-center gap-2 rounded-md border p-1.5 text-left [@media(max-height:650px)]:mt-1 [@media(max-height:650px)]:gap-1.5 [@media(max-height:650px)]:p-1 ${moodCopy[2]}`}>
-            <div className="relative grid size-14 shrink-0 place-items-center overflow-hidden rounded border border-white/80 bg-white text-2xl max-[650px]:size-12 [@media(max-height:650px)]:size-10" aria-hidden="true">
-              <span>{moodFace}</span>
-              {person.moodSlide && <SpeakerMoodPicture key={`${person.id}:${person.moodSlide.image}:${person.mood}`} context={person.moodSlide} mood={person.mood} card />}
-              <span className="absolute right-0.5 top-0.5 z-10 grid size-5 place-items-center rounded bg-white/95 text-[11px] font-black tabular-nums text-ink shadow-sm">{person.mood}</span>
-            </div>
-            <div className="min-w-0">
-              <span className="block text-[9px] font-bold uppercase leading-tight text-muted">Humeur du jour</span>
-              <span className="block truncate text-[11px] font-bold leading-tight">{moodCopy[0]}</span>
-              <span className="block truncate text-[9px] leading-tight opacity-80">{moodCopy[1]}</span>
-            </div>
-          </div>}
         </div>
         <div className="flex min-w-0 flex-col items-center gap-2 [@media(max-height:650px)]:items-end [@media(max-height:650px)]:gap-0">
           <span className={`text-[11px] font-semibold uppercase [@media(max-height:650px)]:text-[8px] ${ended || critical ? 'text-red-200' : nearly ? 'text-orange-200' : 'text-blue-100'}`} id="timer-label">{ended ? 'Dépassement · passez la parole' : critical ? 'Concluez maintenant' : nearly ? 'Préparez la conclusion' : running ? 'Temps restant' : 'Temps par personne'}</span>
