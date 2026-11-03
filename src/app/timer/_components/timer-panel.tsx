@@ -39,6 +39,14 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
   const panelColor = ended || critical ? 'border-red-200! bg-red-50/30' : nearly ? 'border-orange-200! bg-orange-50/30' : complete ? 'border-green-200! bg-success-soft' : running ? 'border-brand/40! bg-white' : 'border-slate-200/80';
   const pulse = running && critical ? 'motion-safe:animate-critical-glow' : running && nearly ? 'motion-safe:animate-warning-glow' : '';
   const FeedbackIcon = complete ? CheckIcon : ended ? ErrorOutlineIcon : nearly ? AccessTimeIcon : running ? RadioButtonCheckedIcon : NorthEastIcon;
+  const moodCopy = person?.mood ? [
+    null,
+    ['Mauvaise humeur', 'Énergie élevée', 'border-red-200 bg-red-50 text-red-800'],
+    ['Mauvaise humeur', 'Énergie basse', 'border-amber-200 bg-amber-50 text-amber-900'],
+    ['Bonne humeur', 'Énergie basse', 'border-blue-200 bg-blue-50 text-blue-900'],
+    ['Bonne humeur', 'Énergie élevée', 'border-green-200 bg-green-50 text-green-900'],
+  ][person.mood] : null;
+  const moodFace = person?.mood ? ['😣', '😞', '😌', '😊'][person.mood - 1] : '';
 
   return (
     <Paper component="section" elevation={0} className={`timer-panel relative isolate grid min-h-0 min-w-0 grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-3 overflow-hidden rounded-lg border border-line bg-white p-5 text-center max-[650px]:gap-2 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-3 ${timer.focusMode ? '[@media(max-height:650px)]:grid-rows-[auto_auto_minmax(0,1fr)_auto]' : ''} ${panelColor} ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
@@ -53,7 +61,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
         </div>
       </div>
       <div className="min-w-0 overflow-hidden">
-        <SpeakerSlider timer={timer} />
+        <SpeakerSlider timer={timer} className="max-[650px]:hidden [@media(max-height:650px)]:hidden" />
         {ended ? <p id="time-up-alert" role="alert" className="text-[11px] font-semibold text-danger"><span className="sr-only">{person?.name}, </span>Temps utilisé. Merci de passer la parole.</p> : <span className="sr-only" id="speaker-mood-description" hidden={!person}>{person ? `Humeur ${person.mood} / 4 · ${running ? 'Parle maintenant' : 'À vous la parole'}` : ''}</span>}
       </div>
       <div id="timer-stage" key={`${timer.activeId}-${timer.focusMode}`} className={`row-start-3 grid min-h-0 min-w-0 grid-cols-1 content-center justify-items-center gap-3 self-stretch overflow-hidden rounded-lg bg-brand-dark px-4 py-5 text-white transition-colors motion-reduce:transition-none max-[650px]:gap-2 max-[650px]:py-3 [@media(max-height:650px)]:grid-cols-[minmax(0,1fr)_auto] [@media(max-height:650px)]:grid-rows-[auto_auto_auto] [@media(max-height:650px)]:gap-x-2 [@media(max-height:650px)]:gap-y-1 [@media(max-height:650px)]:px-2 [@media(max-height:650px)]:py-1 ${pulse}`}>
@@ -62,9 +70,17 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
             <span className={`block text-[11px] font-bold uppercase [@media(max-height:650px)]:text-[9px] ${ended || critical ? 'text-red-200' : nearly ? 'text-orange-200' : 'text-blue-100'}`}>{timer.ended ? 'Merci de passer la parole' : timer.running ? 'À TOI DE PARLER !' : timer.turnStarted ? 'TON TOUR EST EN PAUSE' : 'La parole est à'}</span>
             <h2 id="speaker-name" className="mt-1 break-words text-2xl font-bold leading-tight text-white sm:text-3xl [@media(max-height:650px)]:text-sm" title={speakerName}>{speakerName}</h2>
           </div>
-          {person?.mood && <div id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${person.mood} sur 4`} className="mt-2 flex items-center justify-center gap-2 text-xs font-semibold text-blue-100 [@media(max-height:650px)]:mt-1 [@media(max-height:650px)]:justify-start [@media(max-height:650px)]:text-[10px]">
-            <span>Humeur <strong className="text-white">{person.mood}</strong> / 4</span>
-            {person.moodSlide && <SpeakerMoodPicture key={`${person.id}:${person.moodSlide.image}:${person.mood}`} context={person.moodSlide} mood={person.mood} />}
+          {person?.mood && moodCopy && <div id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${person.mood} sur 4`} className={`mt-2 flex min-w-0 items-center gap-2 rounded-md border p-1.5 text-left [@media(max-height:650px)]:mt-1 [@media(max-height:650px)]:gap-1.5 [@media(max-height:650px)]:p-1 ${moodCopy[2]}`}>
+            <div className="relative grid size-14 shrink-0 place-items-center overflow-hidden rounded border border-white/80 bg-white text-2xl max-[650px]:size-12 [@media(max-height:650px)]:size-10" aria-hidden="true">
+              <span>{moodFace}</span>
+              {person.moodSlide && <SpeakerMoodPicture key={`${person.id}:${person.moodSlide.image}:${person.mood}`} context={person.moodSlide} mood={person.mood} card />}
+              <span className="absolute right-0.5 top-0.5 z-10 grid size-5 place-items-center rounded bg-white/95 text-[11px] font-black tabular-nums text-ink shadow-sm">{person.mood}</span>
+            </div>
+            <div className="min-w-0">
+              <span className="block text-[9px] font-bold uppercase leading-tight text-muted">Humeur du jour</span>
+              <span className="block truncate text-[11px] font-bold leading-tight">{moodCopy[0]}</span>
+              <span className="block truncate text-[9px] leading-tight opacity-80">{moodCopy[1]}</span>
+            </div>
           </div>}
         </div>
         <div className="flex min-w-0 flex-col items-center gap-2 [@media(max-height:650px)]:items-end [@media(max-height:650px)]:gap-0">
@@ -91,7 +107,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
         <FeedbackIcon id="feedback-icon" className={`size-4 shrink-0 ${complete ? 'text-success' : ended ? 'text-danger' : nearly ? 'text-amber-700' : 'text-brand'}`} fontSize="inherit" aria-hidden="true" />
         <span id="feedback-text">{feedback}</span>
       </div>
-      <div className={`flex min-h-11 min-w-0 items-center justify-between gap-2 border-t border-line text-[11px] text-muted ${timer.focusMode ? '[@media(max-height:650px)]:hidden' : ''}`}><span className="flex min-w-0 items-center gap-1.5"><TimerIcon name={timer.focusMode ? 'lock' : 'timer'} className="size-3.5 shrink-0" />{timer.focusMode ? 'Réglages verrouillés' : `${Math.floor(timer.duration / 60)} min ${timer.duration % 60 ? `${timer.duration % 60} s` : ''} par personne`}</span>{!timer.focusMode && <IconButton size="small" sx={{ width: 44, height: 44 }} type="button" id="reset-button" aria-label="Réinitialiser le minuteur de la personne qui parle" title="Réinitialiser le minuteur (R)" onClick={timer.reset} aria-keyshortcuts="R"><TimerIcon name="reset" /></IconButton>}</div>
+      <div className={`flex min-h-11 min-w-0 items-center justify-between gap-2 border-t border-line text-[11px] text-muted [@media(max-height:650px)]:hidden`}><span className="flex min-w-0 items-center gap-1.5"><TimerIcon name={timer.focusMode ? 'lock' : 'timer'} className="size-3.5 shrink-0" />{timer.focusMode ? 'Réglages verrouillés' : `${Math.floor(timer.duration / 60)} min ${timer.duration % 60 ? `${timer.duration % 60} s` : ''} par personne`}</span>{!timer.focusMode && <IconButton size="small" sx={{ width: 44, height: 44 }} type="button" id="reset-button" aria-label="Réinitialiser le minuteur de la personne qui parle" title="Réinitialiser le minuteur (R)" onClick={timer.reset} aria-keyshortcuts="R"><TimerIcon name="reset" /></IconButton>}</div>
       <Dialog open={readingNote} onClose={() => setReadingNote(false)} aria-labelledby="speaker-note-title" maxWidth="sm" fullWidth slotProps={{ paper: { sx: { maxHeight: 'calc(100dvh - 24px)', border: '1px solid #dce3e9', borderRadius: '14px' } } }}>
         <DialogTitle id="speaker-note-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Le pense-bête de {person?.name ?? 'ce participant'}</DialogTitle>
         <DialogContent dividers>

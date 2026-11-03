@@ -144,34 +144,24 @@ with sync_playwright() as p:
         expect(cue).to_contain_text('À TOI DE PARLER !')
         first = page.locator('#speaker-name').inner_text()
         if page.locator('.team-panel').is_visible():
-            queue = page.locator('.workspace .team-panel')
-            expect(queue.get_by_role('button', name=f'Donner la parole à {first}', exact=True)).to_be_disabled()
-            expect(queue.get_by_role('button', name=f'Reporter le passage de {first}', exact=True)).to_be_disabled()
+            raise AssertionError('Focus mode must hide the persistent queue panel.')
+        expect(page.locator('.workspace .team-panel')).to_be_hidden()
+        expect(page.locator('.workspace .daily-prompts')).to_be_hidden()
+        expect(page.locator('button[aria-label="Espace du point quotidien"]')).to_have_count(0)
+        expect(page.locator('[data-testid="remote-pairing-card"]')).to_be_visible()
         assert first in ['Alice <safe>', 'Bob', 'Charlie']
         chosen = next(person['mood'] for person in team['roster'] if person['name'] == first)
-        expect(page.locator('#speaker-mood')).to_contain_text(f'Humeur {chosen} / 4')
+        expect(page.locator('#speaker-mood')).to_have_attribute('aria-label', f'Humeur de {first} : {chosen} sur 4')
         expect(page.locator('#speaker-mood [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
         mood_picture = page.locator('#speaker-mood [data-mood-picture]')
         expect(mood_picture).to_have_count(1)
         mood_box = mood_picture.bounding_box()
-        assert mood_box and mood_box['width'] <= 44 and mood_box['height'] <= 44, mood_box
+        assert mood_box and mood_box['width'] <= 64 and mood_box['height'] <= 64, mood_box
         expect(page.locator('#timer-stage #speaker-name')).to_have_text(first)
         expect(page.locator('#timer-stage [data-mood-picture] span')).to_have_count(0)
         assert page.locator('#timer-display').evaluate('el => Number(getComputedStyle(el).fontWeight)') >= 700
         assert page.locator('#timer-display').evaluate('el => getComputedStyle(el).color') == 'rgb(255, 255, 255)'
         assert page.locator('#timer-stage').evaluate('el => getComputedStyle(el).backgroundColor') == 'rgb(22, 75, 128)'
-        note = page.locator('[data-speaker-hint]')
-        expect(note.locator('strong')).to_have_text('Avancement')
-        expect(note.locator('em')).to_have_text('Tests')
-        expect(note.locator('del')).to_have_text('Ancien')
-        expect(note.locator('ul')).to_have_count(1)
-        expect(note.locator('ol')).to_have_count(1)
-        expect(note.locator('script, img, a, iframe, input')).to_have_count(0)
-        assert note.locator('ul').evaluate("el => getComputedStyle(el).listStyleType") == 'disc'
-        assert note.locator('ol').evaluate("el => getComputedStyle(el).listStyleType") == 'decimal'
-        expect(page.locator('.timer-panel [data-speaker-hint]')).to_have_count(0)
-        expect(page.locator('[data-speaker-sidebar]')).to_contain_text(first)
-        expect(page.locator('[data-speaker-sidebar] #prompts-title')).to_have_count(0)
         page.get_by_role('button', name=f'Lire la note de {first}', exact=True).click()
         note_dialog = page.get_by_role('dialog', name=f'Le pense-bête de {first}', exact=True)
         expect(note_dialog).to_be_visible()
@@ -195,6 +185,7 @@ with sync_playwright() as p:
         page.wait_for_function("getComputedStyle(document.querySelector('#speaker-turn-cue')).opacity === '1' && ['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(getComputedStyle(document.querySelector('#speaker-turn-cue')).transform)")
         for width, height in SIZES:
             page.set_viewport_size({'width': width, 'height': height})
+            page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
             page.wait_for_function("document.documentElement.scrollWidth <= innerWidth")
             box = cue.bounding_box()
             assert box and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (motion, width, box)
@@ -202,17 +193,17 @@ with sync_playwright() as p:
             assert stage and stage['width'] >= 90 and stage['height'] >= 90, (motion, width, stage)
             workspace = page.locator('.workspace').bounding_box()
             assert workspace and stage['x'] >= workspace['x'] and stage['x'] + stage['width'] <= workspace['x'] + workspace['width'] + 1, (motion, width, stage, workspace)
-            if width >= 1360:
-                expect(page.locator('.team-panel')).to_be_visible()
-                expect(page.locator('.daily-prompts')).to_be_visible()
-            elif width <= 800:
-                page.get_by_role('button', name='Tour · 3').click()
-                expect(page.locator('.team-panel')).to_be_visible()
-                expect(page.locator('.timer-panel')).to_be_hidden()
-                page.get_by_role('button', name='Minuteur', exact=True).click()
-            expect(page.locator('#upcoming-speaker')).to_be_visible()
+            expect(page.locator('.team-panel')).to_be_hidden()
+            expect(page.locator('.daily-prompts')).to_be_hidden()
+            expect(page.locator('[data-testid="remote-pairing-card"]')).to_be_visible()
+            expect(page.locator('[data-motion-tabs]')).to_have_count(0)
+            if width > 650 and height > 650:
+                expect(page.locator('#upcoming-speaker')).to_be_visible()
             for selector in ['#speaker-name', '#timer-display']:
                 text = page.locator(selector).bounding_box()
+                if width == 1366 and selector == '#speaker-name':
+                    print('LAYOUT_DEBUG', page.locator(selector).evaluate("el => { const stage = document.querySelector('#timer-stage'); return { name: el.getBoundingClientRect().toJSON(), parent: el.parentElement?.getBoundingClientRect().toJSON(), stage: stage?.getBoundingClientRect().toJSON(), container: stage?.parentElement?.getBoundingClientRect().toJSON(), transform: getComputedStyle(el).transform }; }"))
+                    page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), 'scrum-timer-layout-debug.png'))
                 assert text and text['x'] >= stage['x'] and text['x'] + text['width'] <= stage['x'] + stage['width'] + 1, (width, selector, text, stage)
                 assert text['y'] >= stage['y'] and text['y'] + text['height'] <= stage['y'] + stage['height'] + 1, (width, selector, text, stage)
             for selector in ['#previous-button', '#start-button', '#next-button', '#manage-timer-button']:
@@ -220,12 +211,10 @@ with sync_playwright() as p:
                 assert button and button['height'] >= 44 and button['y'] + button['height'] <= height + 1, (motion, width, selector, button)
                 assert button['x'] >= 0 and button['x'] + button['width'] <= width + 1, (motion, width, selector, button)
             if width <= 800:
-                page.get_by_role('button', name='Pense-bête', exact=True).click()
-                expect(page.locator('[data-speaker-sidebar]')).to_be_visible()
-                expect(page.locator('[data-speaker-hint] strong')).to_have_text('Avancement')
-                expect(page.get_by_role('button', name='Revenir au minuteur', exact=True)).to_be_visible()
-                page.get_by_role('button', name='Revenir au minuteur', exact=True).click()
+                page.get_by_role('button', name=f'Lire la note de {first}', exact=True).click()
+                expect(page.get_by_role('dialog', name=f'Le pense-bête de {first}', exact=True)).to_be_visible()
                 expect(page.locator('#start-button')).to_contain_text('Pause')
+                page.get_by_role('dialog', name=f'Le pense-bête de {first}', exact=True).get_by_role('button', name='Fermer', exact=True).click()
             if motion == 'reduce' and width in [320, 1366]:
                 page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-timer-focus-{width}.png'))
 
@@ -261,9 +250,8 @@ with sync_playwright() as p:
         expect(page.locator('#speaker-name')).not_to_have_text(first)
         next_name = page.locator('#speaker-name').inner_text()
         chosen = next(person['mood'] for person in team['roster'] if person['name'] == next_name)
-        expect(page.locator('#speaker-mood')).to_contain_text(f'Humeur {chosen} / 4')
+        expect(page.locator('#speaker-mood')).to_have_attribute('aria-label', f'Humeur de {next_name} : {chosen} sur 4')
         expect(page.locator('#speaker-mood [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
-        expect(page.locator('[data-speaker-hint] strong')).to_have_text('Avancement')
         expect(cue).to_contain_text('À TOI DE PARLER !')
         expect(page.locator('#start-button')).to_contain_text('Pause')
         expect(page.locator('#previous-button')).to_be_enabled()
@@ -293,9 +281,7 @@ with sync_playwright() as p:
         hints.clear()
         page.set_viewport_size({'width': 1366, 'height': 768})
         page.locator('#next-button').click()
-        expect(page.locator('[data-speaker-sidebar] #prompts-title')).to_be_visible()
-        expect(page.locator('[data-speaker-sidebar]')).to_contain_text('Qu’avez-vous fait hier ?')
-        expect(page.locator('[data-speaker-sidebar] [data-speaker-hint]')).to_have_count(0)
+        expect(page.locator('[data-speaker-sidebar]')).to_have_count(0)
 
         current = page.locator('#speaker-name').inner_text()
         page.evaluate("""() => {

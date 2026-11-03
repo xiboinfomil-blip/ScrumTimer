@@ -9,7 +9,7 @@ import { AnimatedImage } from '@/app/mood/_components/animated-image';
 
 const cache = new Map<string, (string | null)[]>();
 
-export function SpeakerMoodPicture({ context, mood }: { context: MoodSlideContext; mood: Mood }) {
+export function SpeakerMoodPicture({ context, mood, card = false }: { context: MoodSlideContext; mood: Mood; card?: boolean }) {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [playbackDuration, setPlaybackDuration] = useState<number | null>(null);
@@ -69,7 +69,7 @@ export function SpeakerMoodPicture({ context, mood }: { context: MoodSlideContex
     return () => clearTimeout(timeout);
   }, [src, playbackDuration, paused]);
   if (!src || failed) return null;
-  return <div className="pointer-events-none relative size-[clamp(28px,10cqw,42px)] shrink-0 overflow-hidden rounded-md border border-white/50 bg-white" data-mood-picture={mood} aria-hidden="true">
+  return <div className={`pointer-events-none ${card ? 'absolute inset-0 size-full' : 'relative size-[clamp(28px,10cqw,42px)]'} shrink-0 overflow-hidden rounded-md border border-white/50 bg-white`} data-mood-picture={mood} aria-hidden="true">
     <AnimatedImage src={src} alt="" animated={/^data:image\/gif;/i.test(src) || /\.gif$/i.test(src)} paused={paused} className="absolute inset-0 size-full object-cover" onError={() => setFailed(true)} />
   </div>;
 }

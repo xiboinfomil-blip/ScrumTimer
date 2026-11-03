@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
 import { Button, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
+import { RemotePairingCard, RemotePairingDialog } from './remote-pairing-dialog';
 import { useLiveBroadcast } from '@/hooks/live/use-live-broadcast';
 import { usePresentation } from '@/hooks/timer/use-presentation';
 import { ScreenTabs } from '@/components/ui/screen-tabs';
@@ -21,7 +22,6 @@ import { useDailyHints } from '@/hooks/meeting/use-daily-hints';
 import { roundSpeakers } from '@/lib/timer/timer-completion';
 import { LateCheckinDialog } from './late-checkin-dialog';
 import { useTimerRemote } from '@/hooks/remote/use-timer-remote';
-import { RemotePairingDialog } from './remote-pairing-dialog';
 import SmartphoneRounded from '@mui/icons-material/SmartphoneRounded';
 import ScreenShareRounded from '@mui/icons-material/ScreenShareRounded';
 import { WorkflowHeading } from '@/components/ui/workflow-heading';
@@ -102,12 +102,12 @@ export function TimerPage() {
         <span role="status" className="text-xs text-muted">{broadcast.enabled ? broadcast.status : presentation.notice}</span>
         </div></DialogContent><DialogActions><Button onClick={() => setSharing(false)}>Fermer</Button></DialogActions>
       </Dialog>
-      <WorkflowHeading step={3} title="Minuteur" description={<><span id="overview-people" className="max-[360px]:sr-only">{timer.people.length} personnes · {perPerson} chacun</span><span aria-hidden="true" className="hidden max-[360px]:inline">{timer.people.length} · {Math.floor(timer.duration / 60)} min/pers.</span></>} action={<div className="flex shrink-0 items-center gap-2 max-[360px]:gap-1">
-        <button type="button" onClick={() => setRemoteOpen(true)} aria-label="Télécommande mobile" title="Télécommande mobile" aria-pressed={remote.enabled} className={`inline-flex size-11 shrink-0 items-center justify-center rounded-xl border ${remote.enabled ? 'border-brand bg-blue-50 text-brand' : 'border-line bg-white text-brand'} hover:bg-blue-50`}><SmartphoneRounded fontSize="small" /></button>
+      <WorkflowHeading step={3} title="Minuteur" description={timer.focusMode ? 'Mode concentré · les commandes essentielles restent à portée.' : <><span id="overview-people" className="max-[360px]:sr-only">{timer.people.length} personnes · {perPerson} chacun</span><span aria-hidden="true" className="hidden max-[360px]:inline">{timer.people.length} · {Math.floor(timer.duration / 60)} min/pers.</span></>} action={<div className="flex shrink-0 items-center gap-2 max-[360px]:gap-1">
         <button type="button" onClick={() => { if (timer.running) timer.toggle(); setLineupOpen(true); }} title="Voir le tour de parole" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand" aria-label="Voir le tour de parole"><span className="max-[650px]:hidden">Participants</span><span className="tabular-nums">{timer.people.filter(person => person.done).length}/{timer.people.length}</span></button>
         <button type="button" onClick={() => presentation.presenting ? void presentation.toggle() : setSharing(true)} aria-label={presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'} title={presentation.presenting ? 'Quitter la présentation' : 'Diffusion'} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand hover:border-brand/30 hover:bg-blue-50 max-[650px]:size-11 max-[650px]:px-0">{broadcast.enabled && <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-success" />}<ScreenShareRounded fontSize="small" /><span className="max-[650px]:sr-only">{presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'}</span></button>
         </div>} />
-      {!presentation.presenting && <ScreenTabs
+      <RemotePairingCard remote={remote} onDetails={() => setRemoteOpen(true)} />
+      {!presentation.presenting && !timer.focusMode && <ScreenTabs
         className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 max-[1359px]:flex min-[1360px]:hidden [@media(max-height:650px)]:flex [@media(max-height:650px)]:h-11 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0`}
         label="Espace du point quotidien"
         value={view}
@@ -118,10 +118,10 @@ export function TimerPage() {
           { value: 'prompts', label: isSprint ? 'Tickets & notes' : note ? 'Pense-bête' : 'Notes' },
         ]}
       />}
-      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'grid-rows-1' : 'grid-rows-1 min-[1360px]:grid-cols-[minmax(230px,.78fr)_minmax(420px,1.38fr)_minmax(300px,.9fr)] [@media(max-height:650px)]:grid-cols-1'}`} data-view={presentation.presenting ? 'timer' : view}>
-        {!presentation.presenting && <TeamLineup timer={timer} idPrefix="queue" className={`min-[1360px]:col-start-1 [@media(max-height:650px)]:col-start-1 ${view !== 'queue' ? 'max-[1359px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />}
-        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`${presentation.presenting ? 'col-start-1' : 'min-[1360px]:col-start-2 [@media(max-height:650px)]:col-start-1'} ${!presentation.presenting && view !== 'timer' ? 'max-[1359px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
-        {!presentation.presenting && <DailyPrompts speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => setView('timer')} className={`min-[1360px]:col-start-3 [@media(max-height:650px)]:col-start-1 ${view !== 'prompts' ? 'max-[1359px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />}
+      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 ${presentation.presenting || timer.focusMode ? 'grid-rows-1' : 'grid-rows-1 min-[1360px]:grid-cols-[minmax(230px,.78fr)_minmax(420px,1.38fr)_minmax(300px,.9fr)] [@media(max-height:650px)]:grid-cols-1'}`} data-view={presentation.presenting || timer.focusMode ? 'timer' : view}>
+        {!presentation.presenting && !timer.focusMode && <TeamLineup timer={timer} idPrefix="queue" className={`min-[1360px]:col-start-1 [@media(max-height:650px)]:col-start-1 ${view !== 'queue' ? 'max-[1359px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />}
+        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`${presentation.presenting || timer.focusMode ? 'col-start-1 mx-auto w-full max-w-6xl' : 'min-[1360px]:col-start-2 [@media(max-height:650px)]:col-start-1'} ${!presentation.presenting && !timer.focusMode && view !== 'timer' ? 'max-[1359px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
+        {!presentation.presenting && !timer.focusMode && <DailyPrompts speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => setView('timer')} className={`min-[1360px]:col-start-3 [@media(max-height:650px)]:col-start-1 ${view !== 'prompts' ? 'max-[1359px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />}
       </div>
       <TimerManagementDialog timer={timer} />
       <LateCheckinDialog timer={timer} />
