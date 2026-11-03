@@ -24,7 +24,8 @@ const payload: RemoteCommandPayload = { requestId, action: 'start', version: 'v1
 const actions = ['start', 'pause', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-postpone', 'mood-continue'] as const;
 function entry(): RemoteEntry {
   return { teamId: 'a'.repeat(64), ownerHash: 'a'.repeat(64), controlHash: 'b'.repeat(64), expiresAt: now + REMOTE_PAIR_TTL,
-    hostSeenAt: now, leaseUntil: now + REMOTE_HOST_LEASE, snapshot: { ...snapshot }, pending: null,
+    hostSeenAt: now, leaseUntil: now + REMOTE_HOST_LEASE, phoneHash: null, phoneLeaseUntil: 0, phoneEnabled: true,
+    snapshot: { ...snapshot }, pending: null,
     lastCommandId: null, lastCommandVersion: null };
 }
 function rejectsStatus(action: () => unknown, status: number) {
@@ -86,6 +87,9 @@ test('opaque capabilities only come from Authorization and require the 32-byte b
 test('operation envelopes and command requestId are strict; timestamps and tokens cannot be injected', () => {
   assert.deepEqual(validateRemotePost({ operation: 'create' }), { operation: 'create' });
   const id = 'i'.repeat(43);
+  for (const operation of ['phone-enable', 'phone-disconnect', 'phone-leave'] as const) {
+    assert.deepEqual(validateRemotePost({ operation, id }), { operation, id });
+  }
   assert.deepEqual(validateRemotePost({ operation: 'sync', id, snapshot, ack: requestId }), { operation: 'sync', id, snapshot, ack: requestId });
   assert.deepEqual(validateRemotePost({ operation: 'command', id, command: payload }), { operation: 'command', id, command: payload });
   assert.deepEqual(validateRemoteCommand({ ...payload, requestId: requestId.toUpperCase() }), payload);
@@ -262,6 +266,8 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
     const map = globalThis.__standupTimerRemote;
     const snapshot = ${JSON.stringify(snapshot)};
     const command = ${JSON.stringify(payload)};
+    const phoneA = 'p'.repeat(43);
+    const phoneB = 'q'.repeat(43);
     const teamA = 'a'.repeat(64);
     const teamB = 'b'.repeat(64);
     const a = await store.createTimerRemote(teamA);
@@ -278,17 +284,23 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
     assert.equal(serialized.includes(a.control), false);
     assert.match(map.get(a.id).ownerHash, /^[a-f0-9]{64}$/);
     assert.equal((await store.readTimerRemote(a.id, a.control)).status, 'waiting');
+    const firstPhone = await store.readTimerRemote(a.id, a.control, phoneA);
+    assert.equal(firstPhone.status, 'waiting');
+    assert.equal(firstPhone.phoneConnected, true);
+    assert.equal(map.get(a.id).phoneHash, store.hashRemoteToken(phoneA));
+    assert.equal(JSON.stringify(map.get(a.id)).includes(phoneA), false);
+    await assert.rejects(store.readTimerRemote(a.id, a.control, phoneB), e => e.status === 409 && e.code === 'REMOTE_PHONE_IN_USE');
     await assert.rejects(store.readTimerRemote(a.id, b.control), e => e.status === 401);
     await assert.rejects(store.syncTimerRemote(a.id, a.control, snapshot), e => e.status === 401);
     await store.syncTimerRemote(a.id, a.owner, snapshot);
     await assert.rejects(store.createTimerRemote(teamA), e => e.status === 409);
     process.env.TIMER_REMOTE_SECRET += '-rotated';
     await assert.rejects(store.readTimerRemote(a.id, a.control), e => e.status === 401);
-    await assert.rejects(store.commandTimerRemote(a.id, a.control, command), e => e.status === 401);
+    await assert.rejects(store.commandTimerRemote(a.id, a.control, command, phoneA), e => e.status === 401);
     process.env.TIMER_REMOTE_SECRET = 'timer-remote-test-only-secret-32-bytes-minimum';
     const race = await Promise.allSettled([
-      store.commandTimerRemote(a.id, a.control, command),
-      store.commandTimerRemote(a.id, a.control, { ...command, requestId: '22345678-1234-4234-8234-123456789abc' }),
+      store.commandTimerRemote(a.id, a.control, command, phoneA),
+      store.commandTimerRemote(a.id, a.control, { ...command, requestId: '22345678-1234-4234-8234-123456789abc' }, phoneA),
       store.syncTimerRemote(a.id, a.owner, snapshot),
     ]);
     assert.equal(race[0].status, 'fulfilled');
@@ -298,11 +310,18 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
     assert.equal(map.get(a.id).expiresAt, a.expiresAt);
     const sync = await store.syncTimerRemote(a.id, a.owner, { ...snapshot, running: true, version: 'v2' }, command.requestId);
     assert.equal(sync.command, null);
+    assert.equal((await store.disconnectTimerRemotePhone(a.id, a.owner)).phoneConnected, false);
+    await assert.rejects(store.readTimerRemote(a.id, a.control, phoneA), e => e.status === 409 && e.code === 'REMOTE_PHONE_DISCONNECTED');
+    await store.enableTimerRemotePhone(a.id, a.owner);
+    assert.equal((await store.readTimerRemote(a.id, a.control, phoneB)).phoneConnected, true);
+    await assert.rejects(store.readTimerRemote(a.id, a.control, phoneA), e => e.status === 409 && e.code === 'REMOTE_PHONE_IN_USE');
+    await store.leaveTimerRemotePhone(a.id, a.control, phoneB);
+    assert.equal((await store.readTimerRemote(a.id, a.control, phoneA)).phoneConnected, true);
     await assert.rejects(store.revokeTimerRemote(a.id, a.control), e => e.status === 401);
     assert.equal((await store.revokeTimerRemote(a.id, a.owner)).revoked, true);
     const waiting = await store.readTimerRemote(a.id, a.control);
     assert.deepEqual(waiting, { snapshot: null, status: 'waiting', serverNow: waiting.serverNow, transport: 'instance' });
-    await assert.rejects(store.commandTimerRemote(a.id, a.control, command), e => e.status === 409);
+    await assert.rejects(store.commandTimerRemote(a.id, a.control, command, phoneA), e => e.status === 409);
     await assert.rejects(store.readTimerRemote(a.id, b.control), e => e.status === 401);
     const restarted = await store.createTimerRemote(teamA);
     assert.equal(restarted.id, a.id);
@@ -316,7 +335,7 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
     Date.now = () => staleNow;
     assert.equal((await store.readTimerRemote(a.id, a.control)).status, 'waiting');
     assert.equal((await store.readTimerRemote(a.id, a.control)).snapshot, null);
-    await assert.rejects(store.commandTimerRemote(a.id, a.control, command), e => e.status === 409);
+    await assert.rejects(store.commandTimerRemote(a.id, a.control, command, phoneA), e => e.status === 409);
     const takeover = await Promise.allSettled([store.createTimerRemote(teamA), store.createTimerRemote(teamA)]);
     Date.now = realNow;
     assert.equal(takeover.filter(r => r.status === 'fulfilled').length, 1);
@@ -328,7 +347,7 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
     await store.revokeTimerRemote(a.id, replacement.owner);
     map.get(b.id).expiresAt = Date.now() - 1;
     assert.equal((await store.readTimerRemote(b.id, b.control)).status, 'waiting');
-    await assert.rejects(store.commandTimerRemote(b.id, b.control, command), e => e.status === 409);
+    await assert.rejects(store.commandTimerRemote(b.id, b.control, command, phoneA), e => e.status === 409);
     await assert.rejects(store.syncTimerRemote(b.id, b.owner, snapshot), e => e.status === 401);
     assert.equal(map.size, 0);
     // Process restart loses host state, never the reusable capability.
@@ -358,7 +377,7 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
       await assert.rejects(store.createTimerRemote(teamA), e => e.status === 503);
       await assert.rejects(store.readTimerRemote(a.id, a.control), e => e.status === 503);
       await assert.rejects(store.syncTimerRemote(a.id, a.owner, snapshot), e => e.status === 503);
-      await assert.rejects(store.commandTimerRemote(a.id, a.control, command), e => e.status === 503);
+      await assert.rejects(store.commandTimerRemote(a.id, a.control, command, phoneA), e => e.status === 503);
       await assert.rejects(store.revokeTimerRemote(a.id, a.owner), e => e.status === 503);
       process.env.UPSTASH_REDIS_REST_URL = 'https://redis.invalid';
       assert.throws(() => store.timerRemoteTransport(), e => e.status === 503 && e.code === 'REMOTE_REDIS_CONFIG_INVALID');
@@ -385,7 +404,7 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
       calls.push({url, init});
       return Response.json({result: JSON.stringify(reply)});
     };
-    assert.equal((await store.readTimerRemote(b.id, b.control)).transport, 'shared');
+    assert.equal((await store.readTimerRemote(b.id, b.control, phoneB)).transport, 'shared');
     const args = JSON.parse(calls[0].init.body);
     assert.equal(args[0], 'EVAL');
     assert.equal(args[2], 1);
@@ -399,18 +418,18 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
     for (const action of ['restart', 'penalty', 'black-screen']) {
       const input = { ...command, action };
       reply = {accepted: true, serverNow: 1};
-      assert.equal((await store.commandTimerRemote(b.id, b.control, input)).accepted, true);
+      assert.equal((await store.commandTimerRemote(b.id, b.control, input, phoneB)).accepted, true);
       const wire = JSON.parse(calls.at(-1).init.body);
       assert.equal(wire[0], 'EVAL');
       assert.equal(wire[2], 1);
       assert.equal(wire[4], 'command');
       assert.equal(wire[5], store.hashRemoteToken(b.control));
-      assert.deepEqual(JSON.parse(wire[6]), input);
+      assert.deepEqual(JSON.parse(wire[6]), { ...input, phoneHash: store.hashRemoteToken(phoneB) });
       assert.equal(calls.at(-1).init.body.includes(b.control), false);
     }
     const callsBeforeInvalid = calls.length;
     await assert.rejects(store.readTimerRemote(b.id, a.control), e => e.status === 401);
-    await assert.rejects(store.commandTimerRemote(b.id, a.control, command), e => e.status === 401);
+    await assert.rejects(store.commandTimerRemote(b.id, a.control, command, phoneB), e => e.status === 401);
     assert.equal(calls.length, callsBeforeInvalid);
     process.env.PARTICIPANT_PORTAL_SECRET += '-rotated';
     await assert.rejects(store.readTimerRemote(b.id, b.control), e => e.status === 401);
@@ -429,7 +448,11 @@ test('actual instance store: reusable links, owner leases, races, rotation, down
     assert.equal(calls.at(-1).init.body.includes(shared.owner), false);
     reply = {error: 409};
     await assert.rejects(store.createTimerRemote(teamA), e => e.status === 409);
-    await assert.rejects(store.commandTimerRemote(b.id, b.control, command), e => e.status === 409);
+    await assert.rejects(store.commandTimerRemote(b.id, b.control, command, phoneB), e => e.status === 409);
+    reply = {error: 409, code: 'REMOTE_PHONE_IN_USE'};
+    await assert.rejects(store.readTimerRemote(b.id, b.control, phoneB), e => e.status === 409 && e.code === 'REMOTE_PHONE_IN_USE');
+    reply = {error: 409, code: 'REMOTE_PHONE_DISCONNECTED'};
+    await assert.rejects(store.readTimerRemote(b.id, b.control, phoneB), e => e.status === 409 && e.code === 'REMOTE_PHONE_DISCONNECTED');
     reply = {error: 401};
     await assert.rejects(store.syncTimerRemote(a.id, a.owner, snapshot), e => e.status === 401);
     await assert.rejects(store.revokeTimerRemote(a.id, a.owner), e => e.status === 401);
@@ -464,6 +487,7 @@ test('remote handlers time every success and failure from entry with only a mono
     '@/lib/remote/timer-remote-store': {
       readTimerRemote: storeOperation, createTimerRemote: storeOperation, syncTimerRemote: storeOperation,
       commandTimerRemote: storeOperation, revokeTimerRemote: storeOperation,
+      enableTimerRemotePhone: storeOperation, disconnectTimerRemotePhone: storeOperation, leaveTimerRemotePhone: storeOperation,
     },
   };
   const handlers: Record<string, (request: Request) => Promise<Response>> = {};
@@ -480,6 +504,7 @@ test('remote handlers time every success and failure from entry with only a mono
   });
   const id = 'i'.repeat(43);
   const token = 'x'.repeat(43);
+  const phoneId = 'p'.repeat(43);
   async function check(method: string, body: unknown, status: number, duration: number, options: { origin?: string; auth?: boolean; query?: string; raw?: string } = {}) {
     clock = 100;
     const request = new Request(`https://remote.example/api/timer-remote${options.query ?? `?id=${id}`}`, {
@@ -487,6 +512,7 @@ test('remote handlers time every success and failure from entry with only a mono
       headers: {
         origin: options.origin ?? 'https://remote.example',
         ...(options.auth === false ? {} : { authorization: `Bearer ${token}` }),
+        ...(method === 'GET' || method === 'POST' ? { 'x-remote-phone-id': phoneId } : {}),
       },
       ...(method === 'GET' ? {} : { body: options.raw ?? JSON.stringify(body) }),
     });
@@ -501,6 +527,9 @@ test('remote handlers time every success and failure from entry with only a mono
   await check('POST', { operation: 'create' }, 201, 25);
   await check('POST', { operation: 'sync', id, snapshot }, 200, 20);
   await check('POST', { operation: 'command', id, command: payload }, 200, 20);
+  for (const operation of ['phone-enable', 'phone-disconnect', 'phone-leave']) {
+    await check('POST', { operation, id }, 200, 20);
+  }
   for (const action of ['restart', 'penalty', 'black-screen']) {
     await check('POST', { operation: 'command', id, command: { ...payload, action } }, 200, 20);
   }
@@ -534,16 +563,20 @@ test('route/store security invariants: bounded JSON, no-store, selected-team cre
   assert.match(store, /'EVAL', script, 1/);
   assert.match(store, /redis.call\('TIME'\)/);
   assert.match(store, /'KEEPTTL'/);
+  assert.match(store, /phoneLeaseUntil/);
+  assert.match(store, /e\.phoneHash~=input\.phoneHash/);
+  assert.match(store, /input\.phoneHash~=e\.phoneHash/);
+  assert.match(store, /e\.phoneEnabled=false/);
   assert.match(store, /expected~=ARGV\[2\]/);
   assert.match(store, /previous\.expiresAt>now and previous\.leaseUntil>now then return cjson.encode\(\{error=409\}\)/);
   assert.match(store, /e\.leaseUntil=now\+\$\{REMOTE_HOST_LEASE\}/);
   assert.doesNotMatch(store, /'NX'/);
-  assert.match(store, /if op=='read' then return cjson.encode\(\{snapshot=cjson.null,status='waiting',serverNow=now\}\)/);
+  assert.match(store, /if op=='read' then return cjson.encode\(\{snapshot=cjson.null,status='waiting',serverNow=now,phoneConnected=false\}\)/);
   assert.match(store, /if op=='command' then return cjson.encode\(\{error=409\}\)/);
   assert.match(store, /op=='read' and e\.leaseUntil<=now/);
   // The shared Lua transport must enforce the same page-scoped action guard as the pure
   // instance transition BEFORE writing the pending slot (no live Redis required).
-  const commandBranch = store.slice(store.indexOf("elseif op=='command' then"), store.indexOf("if op=='sync' or op=='command' then redis.call"));
+  const commandBranch = store.slice(store.indexOf("elseif op=='command' then"), store.indexOf("if op=='sync' or op=='command' or phoneChanged"));
   assert.match(commandBranch, /s\.blackScreen==true and input\.action~='black-screen'/);
   assert.match(commandBranch, /input\.action=='penalty' and \(s\.manualPenalty or 0\)>999950/);
   assert.match(commandBranch, /s\.version~=input\.version/);

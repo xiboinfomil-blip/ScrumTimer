@@ -215,7 +215,7 @@ class MockAPIs:
                 'snapshot': None, 'hostSeenAt': None, 'leaseUntil': 0,
                 'expiresAt': now + 14400000, 'pending': None,
                 'lastCommandId': None, 'lastCommandVersion': None,
-                'owner': owner,
+                'owner': owner, 'phoneId': None, 'phoneLeaseUntil': 0, 'phoneEnabled': True,
             }
             self.entries[PAIR_ID]['leaseUntil'] = now + 10000
             pair = {'id': PAIR_ID, 'owner': owner, 'control': CONTROL,
@@ -224,12 +224,12 @@ class MockAPIs:
             self.creates.append(deepcopy(pair))
             reply(pair, 201)
             return
-        assert operation in ('GET', 'DELETE', 'sync', 'command'), operation
+        assert operation in ('GET', 'DELETE', 'sync', 'command', 'phone-enable', 'phone-disconnect', 'phone-leave'), operation
         pair_id = parse_qs(urlsplit(request.url).query).get('id', [None])[0] if method == 'GET' else body.get('id')
         entry = self.entries.get(pair_id)
         # Permanent control capabilities remain valid without an active host.
         # Authenticate BEFORE the missing-entry branch (never accept arbitrary scans).
-        if operation in ('GET', 'command') and (pair_id != PAIR_ID or
+        if operation in ('GET', 'command', 'phone-leave') and (pair_id != PAIR_ID or
                 request.headers.get('authorization') != f'Bearer {CONTROL}'):
             reply({'error': 'Télécommande indisponible.'}, 401)
             return
@@ -240,9 +240,34 @@ class MockAPIs:
             else:
                 reply({'error': 'Télécommande indisponible.'}, 409 if operation == 'command' else 401)
             return
-        token = entry['owner'] if operation in ('sync', 'DELETE') else CONTROL
+        token = entry['owner'] if operation in ('sync', 'DELETE', 'phone-enable', 'phone-disconnect') else CONTROL
         if request.headers.get('authorization') != f'Bearer {token}':
             reply({'error': 'Télécommande indisponible.'}, 401)
+            return
+        phone_id = request.headers.get('x-remote-phone-id')
+        if operation == 'GET':
+            if not phone_id:
+                reply({'error': 'Télécommande indisponible.'}, 400)
+                return
+            if not entry['phoneEnabled']:
+                reply({'error': 'Télécommande indisponible.', 'code': 'REMOTE_PHONE_DISCONNECTED'}, 409)
+                return
+            if entry['phoneId'] and entry['phoneLeaseUntil'] > now and entry['phoneId'] != phone_id:
+                reply({'error': 'Télécommande indisponible.', 'code': 'REMOTE_PHONE_IN_USE'}, 409)
+                return
+            entry.update(phoneId=phone_id, phoneLeaseUntil=now + 15000)
+        if operation == 'phone-enable':
+            entry['phoneEnabled'] = True
+            reply({'enabled': True, 'phoneConnected': bool(entry['phoneId'])})
+            return
+        if operation == 'phone-disconnect':
+            entry.update(phoneEnabled=False, phoneId=None, phoneLeaseUntil=0)
+            reply({'disconnected': True, 'phoneConnected': False})
+            return
+        if operation == 'phone-leave':
+            if phone_id and entry['phoneId'] == phone_id:
+                entry.update(phoneId=None, phoneLeaseUntil=0)
+            reply({'disconnected': True, 'phoneConnected': bool(entry['phoneId'])})
             return
         if operation == 'DELETE':
             del self.entries[pair_id]
@@ -267,6 +292,9 @@ class MockAPIs:
                     entry['pending'] = None
         elif operation == 'command':
             command = body['command']
+            if not phone_id or entry['phoneId'] != phone_id or entry['phoneLeaseUntil'] <= now:
+                reply({'error': 'Télécommande indisponible.'}, 409)
+                return
             required = {'requestId', 'action', 'version'}
             targets_person = command.get('action') == 'attendance-toggle' or command.get('action', '').startswith('mood-') and command.get('action') != 'mood-continue'
             assert set(command) == required | ({'targetIndex'} if targets_person else set()), command
@@ -292,7 +320,8 @@ class MockAPIs:
         if operation == 'GET':
             self.reads.append({**deepcopy(state), 'http': 200})
         reply({**state,
-               'serverNow': now, 'transport': 'shared',
+             'serverNow': now, 'transport': 'shared',
+             'phoneConnected': bool(entry['phoneId'] and entry['phoneLeaseUntil'] > now),
                **({'command': self.pending(entry, now), 'consumedVersion': entry['lastCommandVersion']}
                   if operation == 'sync' else {})})
 
@@ -443,13 +472,16 @@ def main():
             api = MockAPIs()
             host_context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion=motion, service_workers='block')
             phone_context = browser.new_context(viewport={'width': phone_size[0], 'height': phone_size[1]}, reduced_motion=motion, service_workers='block')
+            second_phone_context = browser.new_context(viewport={'width': phone_size[0], 'height': phone_size[1]}, reduced_motion=motion, service_workers='block')
             host_guard = install_browser_bootstrap(host_context)
             # Only the expected install modal is dismissed explicitly by open_phone.
             phone_guard = install_browser_bootstrap(phone_context, intro=False, fullscreen=False)
+            second_phone_guard = install_browser_bootstrap(second_phone_context, intro=False, fullscreen=False)
             api.register(host_context)
             api.register(phone_context)
+            api.register(second_phone_context)
             errors = []
-            host, phone = host_context.new_page(), phone_context.new_page()
+            host, phone, second_phone = host_context.new_page(), phone_context.new_page(), second_phone_context.new_page()
             phone_calls = []
             phone.on('request', lambda request: phone_calls.append(request.method)
                      if urlsplit(request.url).path == '/api/timer-remote' else None)
@@ -464,13 +496,18 @@ def main():
                 qr_path = pairing.locator('[data-testid="remote-qr"] svg').inner_html()
                 open_phone(phone, REMOTE_URL)
                 expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
+                expect(pairing).not_to_be_visible()
+                connected_icon = host.get_by_role('button', name='Téléphone connecté', exact=True)
+                expect(connected_icon).to_have_attribute('aria-pressed', 'true')
+                expect(host.get_by_role('button', name='Déconnecter le téléphone', exact=True)).to_be_visible()
+                open_phone(second_phone, REMOTE_URL)
+                expect(second_phone.get_by_text('Un autre téléphone est déjà connecté', exact=False).first).to_be_visible()
+                second_phone.goto('about:blank')
                 attendance_list = phone.get_by_role('list', name='Présences de l’équipe')
                 expect(attendance_list.get_by_role('listitem')).to_have_count(3)
                 for name in ('Alice <safe>', 'Bob', 'Charlie'):
                     expect(attendance_list.get_by_text(name, exact=True)).to_be_visible()
                 alice_absent = phone.get_by_role('button', name='Marquer absent(e) · Alice <safe>', exact=True)
-                expect(alice_absent).to_be_disabled()
-                pairing.get_by_role('button', name='Fermer', exact=True).click()
                 expect(alice_absent).to_be_enabled()
                 alice_absent.click()
                 alice_present = phone.get_by_role('button', name='Marquer présent(e) · Alice <safe>', exact=True)
@@ -739,6 +776,8 @@ def main():
                 expect(pause).to_be_enabled()
 
                 phone.set_viewport_size({'width': phone_size[0], 'height': phone_size[1]})
+                host.get_by_role('button', name='Déconnecter le téléphone', exact=True).click()
+                expect(phone.get_by_text('Cette télécommande a été déconnectée depuis l’ordinateur', exact=False).first).to_be_visible()
                 host.get_by_role('button', name='Télécommande mobile', exact=True).click()
                 pairing.get_by_role('button', name='Désactiver', exact=True).click()
                 expect(phone.get_by_text('Hors ligne', exact=True)).to_be_visible()
@@ -838,17 +877,44 @@ def main():
                 without_manual = {**finished_first, 'manualPenalty': 0}
                 assert archived_first['score'] == max(0, expected_score(without_manual) - 50)
                 assert len(archive['people']) == 3
+                open_phone(phone, REMOTE_URL)
+                expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
+                phone.evaluate("window.dispatchEvent(new Event('pagehide'))")
+                deadline = time.monotonic() + 3
+                while api.entries[PAIR_ID]['phoneId'] is not None and time.monotonic() < deadline:
+                    host.wait_for_timeout(50)
+                assert api.entries[PAIR_ID]['phoneId'] is None, 'pagehide must release its own lease'
+                phone.close()
+                phone = phone_context.new_page()
+                phone.on('pageerror', lambda error: errors.append(str(error)))
+                open_phone(phone, REMOTE_URL)
+                expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
+                host.get_by_role('button', name='Déconnecter le téléphone', exact=True).click()
+                expect(phone.get_by_text('Cette télécommande a été déconnectée depuis l’ordinateur', exact=False).first).to_be_visible()
+                expect(host.get_by_role('button', name='Télécommande mobile', exact=True)).to_be_enabled()
+                phone.close()
+                host.get_by_role('button', name='Télécommande mobile', exact=True).click()
+                pairing = host.get_by_role('dialog', name='Télécommande mobile', exact=True)
+                pairing.get_by_role('button', name='Réactiver la connexion', exact=True).click()
+                open_phone(second_phone, REMOTE_URL)
+                expect(second_phone.get_by_text('En ligne', exact=True)).to_be_visible()
+                expect(host.get_by_role('button', name='Téléphone connecté', exact=True)).to_have_attribute('aria-pressed', 'true')
+                expect(pairing).not_to_be_visible()
                 assert not errors, errors
                 host_guard.assert_no_unexpected_api()
                 phone_guard.assert_no_unexpected_api()
+                second_phone_guard.assert_no_unexpected_api()
                 print(f'PASS {motion} {phone_size}: route-aware pairing/actions, state-bound restart Yes/No, retained metrics/retries/manual score, black-screen guards and remote/local restore without resume, stale/expired recovery, permanent QR waiting/re-enable/fresh owner, remembered pairing/invalid explicit/forget', flush=True)
             except Exception:
                 for label, page in (('host', host), ('phone', phone)):
+                    if page.is_closed():
+                        continue
                     image = screenshots / f'failure-{motion}-{label}.png'
                     page.screenshot(path=str(image), full_page=True)
                     print(f'FAILURE SCREENSHOT {image}', flush=True)
                 raise
             finally:
+                second_phone_context.close()
                 phone_context.close()
                 host_context.close()
         browser.close()

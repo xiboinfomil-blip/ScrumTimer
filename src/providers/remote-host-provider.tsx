@@ -49,7 +49,8 @@ export function RemoteHostProvider({ children }: { children: ReactNode }) {
   }, [publish]);
   const dispatch = useCallback((action: RemoteAction, targetIndex?: number) => viewRef.current.dispatch(action, targetIndex), []);
   const remote = useTimerRemote(teamId, { ...view.snapshot, blocked: view.snapshot.blocked || pairingOpen }, { dispatch });
-  const openPairing = useCallback(() => setPairingOpen(true), []);
+  useEffect(() => { if (remote.phoneConnected) setPairingOpen(false); }, [remote.phoneConnected]);
+  const openPairing = useCallback(() => { if (!remote.phoneConnected) setPairingOpen(true); }, [remote.phoneConnected]);
   const closePairing = useCallback(() => setPairingOpen(false), []);
   return <RemoteHostContext.Provider value={{ remote, openPairing, registerPage }}>
     {children}

@@ -1,5 +1,6 @@
 /** Phone-only pairing preference. Never stores countdowns, roster data or host credentials. */
 export const COMPANION_PAIRING_KEY = 'standup.companion.team.v1';
+export const COMPANION_PHONE_KEY = 'standup.companion.phone.v1';
 export interface CompanionPairing { id: string; token: string }
 
 export function parseCompanionPairing(value: string): CompanionPairing | null {

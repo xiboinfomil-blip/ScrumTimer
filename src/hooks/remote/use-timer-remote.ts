@@ -11,6 +11,8 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
   const activationTeam = useRef<string | null>(null);
   const [pair, setPair] = useState<Pair | null>(null);
   const [status, setStatus] = useState('');
+  const [phoneConnected, setPhoneConnected] = useState(false);
+  const [phoneEnabled, setPhoneEnabled] = useState(false);
   const publishNow = useRef<() => void>(() => {});
   const latest = useRef({ snapshot: { ...snapshot, version: '0' }, actions, signature: '', revision: 0 });
   useEffect(() => {
@@ -22,6 +24,8 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
     if (activationTeam.current !== teamId) {
       activationTeam.current = teamId;
       setPair(null);
+      setPhoneConnected(false);
+      setPhoneEnabled(false);
       setStatus('Création du lien sécurisé…');
       setEnabled(true);
     }
@@ -61,6 +65,7 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
         const body = await response.json();
         if (cancelled) return;
         if (!response.ok) { setStatus('Connexion interrompue. Réactivez la télécommande si nécessaire.'); return; }
+        setPhoneConnected(Boolean(body.phoneConnected));
         setStatus(credentials.transport === 'shared' ? 'Télécommande prête · connexion sécurisée' : 'Télécommande prête · serveur local uniquement');
         const command = body.command as RemoteCommand | null;
         if (command) {
@@ -107,7 +112,7 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
         }
         credentials = body;
         if (cancelled) { revoke(body); return; }
-        setPair(body); void sync();
+        setPair(body); setPhoneEnabled(true); setPhoneConnected(Boolean(body.phoneConnected)); void sync();
       } catch { if (!cancelled) setStatus('Impossible de créer le lien. Désactivez puis réessayez.'); }
     }
     const pagehide = () => { if (credentials) revoke(credentials); };
@@ -120,8 +125,29 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
     return () => { cancelled = true; publishNow.current = () => {}; clearInterval(interval); clearTimeout(immediate); controller.abort(); window.removeEventListener('pagehide', pagehide); document.removeEventListener('visibilitychange', visible); window.removeEventListener('online', visible); if (credentials) revoke(credentials); };
   }, [enabled, teamId]);
 
+  async function setPhoneAccess(operation: 'phone-enable' | 'phone-disconnect') {
+    if (!pair) return false;
+    try {
+      const response = await fetch('/api/timer-remote', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${pair.owner}` },
+        body: JSON.stringify({ operation, id: pair.id }), signal: AbortSignal.timeout(5000),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error();
+      setPhoneEnabled(operation === 'phone-enable');
+      setPhoneConnected(Boolean(body.phoneConnected));
+      setStatus(operation === 'phone-enable' ? 'QR activé · en attente du téléphone.' : 'Téléphone déconnecté.');
+      return true;
+    } catch {
+      setStatus('Impossible de modifier la connexion du téléphone. Vérifiez le réseau et réessayez.');
+      return false;
+    }
+  }
+
   return { enabled, pair, status, toggle: () => {
     setPair(null);
+    setPhoneConnected(false);
+    setPhoneEnabled(false);
     if (enabled) {
       setStatus('Télécommande désactivée.');
       setEnabled(false);
@@ -129,5 +155,8 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
       setStatus('Création du lien sécurisé…');
       setEnabled(true);
     }
-  } };
+  }, phoneConnected, phoneEnabled,
+    enablePhone: () => setPhoneAccess('phone-enable'),
+    disconnectPhone: () => setPhoneAccess('phone-disconnect'),
+  };
 }

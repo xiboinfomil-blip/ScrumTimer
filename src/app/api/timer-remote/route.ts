@@ -3,7 +3,10 @@ import { readJson, sameOrigin, selectedTeam } from '@/lib/persistence/database';
 import {
   RemoteError, REMOTE_MAX_BODY_BYTES, remoteBearer, remoteObject, validateRemoteId, validateRemotePost,
 } from '@/lib/remote/timer-remote';
-import { commandTimerRemote, createTimerRemote, readTimerRemote, revokeTimerRemote, syncTimerRemote } from '@/lib/remote/timer-remote-store';
+import {
+  commandTimerRemote, createTimerRemote, disconnectTimerRemotePhone, enableTimerRemotePhone,
+  leaveTimerRemotePhone, readTimerRemote, revokeTimerRemote, syncTimerRemote,
+} from '@/lib/remote/timer-remote-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -53,7 +56,8 @@ export async function GET(request: Request) {
     const token = remoteBearer(request.headers.get('authorization'));
     const query = new URL(request.url).searchParams;
     if ([...query.keys()].some(key => key !== 'id') || query.getAll('id').length !== 1) throw new RemoteError(400);
-    return json(await readTimerRemote(validateRemoteId(query.get('id')), token), 200, startedAt);
+    const phoneId = validateRemoteId(request.headers.get('x-remote-phone-id'));
+    return json(await readTimerRemote(validateRemoteId(query.get('id')), token, phoneId), 200, startedAt);
   } catch (error) { return failure(error, startedAt); }
 }
 
@@ -68,7 +72,13 @@ export async function POST(request: Request) {
     }
     const token = remoteBearer(request.headers.get('authorization'));
     if (body.operation === 'sync') return json(await syncTimerRemote(body.id, token, body.snapshot, body.ack), 200, startedAt);
-    return json(await commandTimerRemote(body.id, token, body.command), 200, startedAt);
+    if (body.operation === 'command') {
+      const phoneId = validateRemoteId(request.headers.get('x-remote-phone-id'));
+      return json(await commandTimerRemote(body.id, token, body.command, phoneId), 200, startedAt);
+    }
+    if (body.operation === 'phone-enable') return json(await enableTimerRemotePhone(body.id, token), 200, startedAt);
+    if (body.operation === 'phone-disconnect') return json(await disconnectTimerRemotePhone(body.id, token), 200, startedAt);
+    return json(await leaveTimerRemotePhone(body.id, token, validateRemoteId(request.headers.get('x-remote-phone-id'))), 200, startedAt);
   } catch (error) { return failure(error, startedAt); }
 }
 

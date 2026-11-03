@@ -15,10 +15,19 @@ import { Button, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/
 import { type RemoteCommand } from '@/lib/remote/timer-remote';
 import { type RemoteSnapshot, type RemoteStatus, type RemoteTransport } from '@/lib/remote/timer-remote';
 import { CompanionInstall } from '@/components/remote/companion-install';
-import { COMPANION_PAIRING_KEY, resolveCompanionPairing } from '@/lib/remote/companion-pairing';
+import { COMPANION_PAIRING_KEY, COMPANION_PHONE_KEY, resolveCompanionPairing } from '@/lib/remote/companion-pairing';
 
 interface Connection { snapshot: RemoteSnapshot | null; status: RemoteStatus; transport: RemoteTransport; serverNow: number; receivedMono: number; roundTripMs: number }
-interface Credentials { id: string; token: string }
+interface Credentials { id: string; token: string; phoneId: string }
+
+function newPhoneId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function validPhoneId(value: string | null): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value);
+}
 
 export function TimerRemotePage() {
   const reducedMotion = useReducedMotion();
@@ -48,9 +57,15 @@ export function TimerRemotePage() {
       return () => { mounted.current = false; };
     }
     const { id, token } = pairing;
+    let phoneId: string | null = null;
+    try { phoneId = localStorage.getItem(COMPANION_PHONE_KEY); } catch { /* Use an in-memory identity when storage is blocked. */ }
+    if (!validPhoneId(phoneId)) {
+      phoneId = newPhoneId();
+      try { localStorage.setItem(COMPANION_PHONE_KEY, phoneId); } catch { /* The phone can still control this visit. */ }
+    }
     try { localStorage.setItem(COMPANION_PAIRING_KEY, `${id}.${token}`); }
     catch { setStorageNotice('Association non mémorisée : le stockage du navigateur est bloqué. Conservez le lien ou scannez à nouveau le QR code à la prochaine ouverture.'); }
-    credentials.current = { id, token };
+    credentials.current = { id, token, phoneId };
     let stopped = false;
     let busy = false;
     const controller = new AbortController();
@@ -59,9 +74,19 @@ export function TimerRemotePage() {
       busy = true;
       try {
         const sentAt = performance.now();
-        const response = await fetch(`/api/timer-remote?id=${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(4000)]) });
+        const response = await fetch(`/api/timer-remote?id=${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${token}`, 'X-Remote-Phone-Id': phoneId! }, cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(4000)]) });
         const body = await response.json();
         if (stopped) return;
+        if (response.status === 409 && body.code === 'REMOTE_PHONE_IN_USE') {
+          setConnection(null);
+          setMessage('Un autre téléphone est déjà connecté. Demandez à l’ordinateur de le déconnecter.');
+          return;
+        }
+        if (response.status === 409 && body.code === 'REMOTE_PHONE_DISCONNECTED') {
+          setConnection(null);
+          setMessage('Cette télécommande a été déconnectée depuis l’ordinateur. Attendez sa réactivation.');
+          return;
+        }
         if (response.status === 401 || response.status === 404) {
           stopped = true; setInvalid(true); setConnection(null); setMessage('Ce lien n’est plus valide. Scannez le QR code actuel de votre équipe.'); return;
         }
@@ -77,12 +102,22 @@ export function TimerRemotePage() {
     }
     refresh.current = read;
     const visible = () => { if (!document.hidden) void read(); };
-    document.addEventListener('visibilitychange', visible);
-    window.addEventListener('online', visible);
-    void read();
     const poll = setInterval(() => void read(), 500);
     const clock = setInterval(() => { if (!document.hidden) setNow(performance.now()); }, 250);
-    return () => { mounted.current = false; stopped = true; controller.abort(); clearInterval(poll); clearInterval(clock); document.removeEventListener('visibilitychange', visible); window.removeEventListener('online', visible); };
+    const leave = () => {
+      stopped = true;
+      void fetch('/api/timer-remote', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Remote-Phone-Id': phoneId! },
+        body: JSON.stringify({ operation: 'phone-leave', id }), keepalive: true,
+      }).catch(() => {});
+    };
+    const resume = () => { stopped = false; void read(); };
+    document.addEventListener('visibilitychange', visible);
+    window.addEventListener('online', visible);
+    window.addEventListener('pagehide', leave);
+    window.addEventListener('pageshow', resume);
+    void read();
+    return () => { mounted.current = false; stopped = true; controller.abort(); clearInterval(poll); clearInterval(clock); document.removeEventListener('visibilitychange', visible); window.removeEventListener('online', visible); window.removeEventListener('pagehide', leave); window.removeEventListener('pageshow', resume); };
   }, []);
 
   const snapshot = connection?.snapshot;
@@ -118,7 +153,7 @@ export function TimerRemotePage() {
       bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
       const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
       const requestId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-      const response = await fetch('/api/timer-remote', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${credentials.current.token}` }, body: JSON.stringify({ operation: 'command', id: credentials.current.id, command: { requestId, action, version: snapshot.version, ...(targetIndex === undefined ? {} : { targetIndex }) } }), signal: AbortSignal.timeout(5000) });
+      const response = await fetch('/api/timer-remote', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${credentials.current.token}`, 'X-Remote-Phone-Id': credentials.current.phoneId }, body: JSON.stringify({ operation: 'command', id: credentials.current.id, command: { requestId, action, version: snapshot.version, ...(targetIndex === undefined ? {} : { targetIndex }) } }), signal: AbortSignal.timeout(5000) });
       if (!mounted.current) return;
       if (response.ok) awaitingVersion.current = snapshot.version;
       setMessage(response.ok ? 'Commande envoyée · en attente du minuteur.' : response.status === 409 ? 'Le minuteur a changé. Réessayez après synchronisation.' : 'Commande non envoyée. Vérifiez la connexion.');

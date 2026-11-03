@@ -53,6 +53,7 @@ export type RemoteStatus = 'waiting' | 'online' | 'stale';
 export const REMOTE_PAIR_TTL = 4 * 60 * 60 * 1000;
 export const REMOTE_HOST_LEASE = 10_000;
 export const REMOTE_HOST_FRESH = 6_000;
+export const REMOTE_PHONE_LEASE = 15_000;
 export const REMOTE_COMMAND_TTL = 5_000;
 export const REMOTE_MAX_ENTRIES = 512;
 export const REMOTE_MAX_BODY_BYTES = 32_768;
@@ -65,6 +66,9 @@ export interface RemoteEntry {
   expiresAt: number;
   hostSeenAt: number | null;
   leaseUntil: number;
+  phoneHash: string | null;
+  phoneLeaseUntil: number;
+  phoneEnabled: boolean;
   snapshot: RemoteSnapshot | null;
   pending: RemoteCommand | null;
   lastCommandId: string | null;
@@ -73,7 +77,7 @@ export interface RemoteEntry {
 
 export class RemoteError extends Error {
   status: 400 | 401 | 404 | 409 | 503;
-  code?: 'REMOTE_SECRET_INVALID' | 'REMOTE_REDIS_REQUIRED' | 'REMOTE_REDIS_CONFIG_INVALID' | 'REMOTE_REDIS_UNAVAILABLE';
+  code?: 'REMOTE_SECRET_INVALID' | 'REMOTE_REDIS_REQUIRED' | 'REMOTE_REDIS_CONFIG_INVALID' | 'REMOTE_REDIS_UNAVAILABLE' | 'REMOTE_PHONE_IN_USE' | 'REMOTE_PHONE_DISCONNECTED';
   constructor(status: RemoteError['status'], code?: RemoteError['code']) {
     super('Télécommande indisponible.');
     this.name = 'RemoteError';
@@ -179,7 +183,8 @@ export function validateRemoteCommand(value: unknown): RemoteCommandPayload {
 
 export type RemotePost = { operation: 'create' }
   | { operation: 'sync'; id: string; snapshot: RemoteSnapshot; ack?: string }
-  | { operation: 'command'; id: string; command: RemoteCommandPayload };
+  | { operation: 'command'; id: string; command: RemoteCommandPayload }
+  | { operation: 'phone-enable' | 'phone-disconnect' | 'phone-leave'; id: string };
 
 export function validateRemotePost(value: unknown): RemotePost {
   const data = remoteObject(value, ['operation', 'id', 'snapshot', 'ack', 'command']);
@@ -195,6 +200,10 @@ export function validateRemotePost(value: unknown): RemotePost {
   if (data.operation === 'command') {
     remoteObject(value, ['operation', 'id', 'command']);
     return { operation: 'command', id: validateRemoteId(data.id), command: validateRemoteCommand(data.command) };
+  }
+  if (data.operation === 'phone-enable' || data.operation === 'phone-disconnect' || data.operation === 'phone-leave') {
+    remoteObject(value, ['operation', 'id']);
+    return { operation: data.operation, id: validateRemoteId(data.id) };
   }
   throw new RemoteError(400);
 }
