@@ -36,7 +36,7 @@ function MoodTitle({ context, mood, fallback }: { context?: MoodSlideContext | n
     load().catch(() => {}).finally(() => clearTimeout(timeout));
     return () => { controller.abort(); clearTimeout(timeout); };
   }, [context, mood]);
-  return <p data-mood-title className="break-words text-2xl font-bold leading-tight" aria-live="polite">{title ?? fallback}</p>;
+  return <p data-mood-title className="break-words text-xl font-bold leading-tight" aria-live="polite">{title ?? fallback}</p>;
 }
 
 const moodDetails = [
@@ -56,10 +56,10 @@ export function CurrentMoodCard({ timer, compact = false }: { timer: StandupTime
   const label = person ? `Humeur de ${person.name} : ${mood ?? 'non renseignée'}${mood ? ' sur 4' : ''}` : 'Aucun passage en cours';
 
   return <Paper component="section" elevation={0} aria-label={label} data-testid="current-speaker-mood" className={`min-w-0 overflow-hidden rounded-lg border bg-white ${detail?.tone ?? 'border-line'}`}>
-    <div className="flex items-center justify-between gap-3 border-b border-current/10 px-4 py-3 max-[360px]:px-3">
-      <h2 className="flex items-center gap-2 text-base font-bold"><MoodRounded fontSize="small" /> Humeur actuelle</h2>
+    <div className="flex items-center justify-between gap-3 border-b border-current/10 px-3 py-2">
+      <h2 className="flex items-center gap-2 text-sm font-bold"><MoodRounded fontSize="small" /> Humeur actuelle</h2>
     </div>
-    {person && mood && detail ? <motion.div key={`${person.id}:${mood}`} initial={reduced ? false : { opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: reduced ? 0 : .4, ease: [.22, 1, .36, 1] }} id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${mood} sur 4`} className="flex min-w-0 items-center gap-4 p-4 max-[360px]:gap-3 max-[360px]:p-3">
+    {person && mood && detail ? <motion.div key={`${person.id}:${mood}`} initial={reduced ? false : { opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: reduced ? 0 : .4, ease: [.22, 1, .36, 1] }} id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${mood} sur 4`} className="flex min-w-0 items-center gap-3 p-3">
       <div className={`relative grid ${compact ? 'size-20' : 'size-24'} text-4xl shrink-0 place-items-center overflow-hidden rounded-lg border border-current/15 bg-white`} aria-hidden="true">
         <span>{faces[mood - 1]}</span>
         {person.moodSlide && <SpeakerMoodPicture key={`${person.id}:${person.moodSlide.image}:${mood}`} context={person.moodSlide} mood={mood} card />}

@@ -21,7 +21,7 @@ export function TimerScreensaver({ open, onClose, teamName }: { open: boolean; o
     return () => window.clearInterval(interval);
   }, [open]);
   const moving = !reduced && !paused && open;
-  return <Dialog open={open} onClose={onClose} fullScreen aria-labelledby="screensaver-title" slotProps={{ paper: { className: 'm-0! h-dvh! max-h-none! w-full! max-w-none! overflow-hidden! rounded-none! bg-white! p-0!', sx: { zIndex: 3000 } }, root: { sx: { zIndex: 3000 } }, transition: { onEntered: () => closeButton.current?.focus(), onExited: () => document.getElementById('timer-actions-button')?.focus() } }}>
+  return <Dialog open={open} onClose={onClose} fullScreen aria-labelledby="screensaver-title" slotProps={{ paper: { className: 'm-0! h-dvh! max-h-none! w-full! max-w-none! overflow-hidden! rounded-none! bg-white! p-0!', sx: { zIndex: 3000 } }, root: { sx: { zIndex: 3000 } }, transition: { onEntered: () => closeButton.current?.focus(), onExited: () => document.getElementById('navbar-settings-button')?.focus() } }}>
     <div data-testid="timer-screensaver" data-scene={scene} data-motion={moving ? 'running' : 'paused'} className="relative isolate flex h-dvh min-h-0 flex-col overflow-hidden bg-[#f4f8fa] text-[#173c51] [&_button]:transform-none!">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         {scene === 'horloge' && <><div className="absolute inset-0 bg-[linear-gradient(#205f9d0a_1px,transparent_1px),linear-gradient(90deg,#205f9d0a_1px,transparent_1px)] bg-size-[64px_64px]" /><div className="absolute inset-y-0 left-0 w-2 bg-accent" /></>}

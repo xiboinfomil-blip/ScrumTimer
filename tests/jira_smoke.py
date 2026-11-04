@@ -2,6 +2,7 @@
 import os
 import re
 import tempfile
+from argparse import ArgumentParser
 from copy import deepcopy
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -9,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 from playwright.sync_api import expect, sync_playwright
 
 from browser_bootstrap import install_browser_bootstrap, mauritius_day, team_fixture
+from contrast_helpers import assert_contrast
 from team_directory_smoke import DirectoryMock, creation_panel, geometry
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3001').rstrip('/')
@@ -188,8 +190,8 @@ def run_case(browser, width, height, motion, screenshots):
         expect(page.locator('#start-button')).to_be_enabled()
         first = page.locator('#speaker-name').inner_text()
         page.locator('#start-button').click()
-        if width <= 800:
-            page.get_by_role('button', name='Tickets & notes', exact=True).click()
+        if width < 1100 or height <= 650:
+            page.get_by_role('button', name='Tickets & pense-bête', exact=True).click()
         sidebar = page.locator('[data-speaker-sidebar]')
         first_id = 'jira:a' if first == 'Alice <texte>' else 'jira:b'
         first_prefix = 'DEV' if first_id == 'jira:a' else 'BOB'
@@ -205,16 +207,16 @@ def run_case(browser, width, height, motion, screenshots):
         expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-6 :'))).to_be_visible()
         assert db.ticket_reads == ['initial'], db.ticket_reads
         assert db.ticket_statuses == ['indeterminate'], db.ticket_statuses
-        statuses = sidebar.get_by_role('group', name='Statut des tickets Jira', exact=True)
-        statuses.get_by_role('button', name='Terminés', exact=True).click()
+        statuses = sidebar.get_by_role('combobox', name='Statut des tickets Jira', exact=True)
+        statuses.select_option('done')
         expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-1 :'))).to_be_visible()
         expect(sidebar.get_by_role('list')).to_contain_text('Terminé')
         assert db.ticket_statuses == ['indeterminate', 'done'], db.ticket_statuses
-        statuses.get_by_role('button', name='À faire', exact=True).click()
+        statuses.select_option('new')
         expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-1 :'))).to_be_visible()
         expect(sidebar.get_by_role('list')).to_contain_text('Ouvert')
         assert db.ticket_statuses == ['indeterminate', 'done', 'new'], db.ticket_statuses
-        statuses.get_by_role('button', name='En cours', exact=True).click()
+        statuses.select_option('indeterminate')
         expect(sidebar.get_by_role('list')).to_contain_text('En cours')
         assert db.ticket_statuses == ['indeterminate', 'done', 'new'], db.ticket_statuses
         search = sidebar.get_by_role('searchbox', name='Rechercher un ticket Jira')
@@ -222,12 +224,12 @@ def run_case(browser, width, height, motion, screenshots):
         expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-7 :'))).to_be_visible()
         expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-1 :'))).to_have_count(0)
         search.fill('')
-        sidebar.get_by_role('button', name='Tout le tableau', exact=True).click()
+        sidebar.get_by_role('combobox', name='Filtrer les tickets Jira', exact=True).select_option('all')
         expect(sidebar.get_by_role('status').filter(has_text='15 tickets')).to_be_visible()
         search.fill('FREE-1')
         expect(sidebar).to_contain_text('Non attribué')
         expect(sidebar.get_by_role('link', name=re.compile('FREE-1 :'))).to_be_visible()
-        sidebar.get_by_role('button', name='Intervenant', exact=True).click()
+        sidebar.get_by_role('combobox', name='Filtrer les tickets Jira', exact=True).select_option('speaker')
         expect(sidebar.get_by_role('link', name=re.compile('FREE-1 :'))).to_have_count(0)
         search.fill('')
         assert db.ticket_reads == ['initial'] * 3, db.ticket_reads
@@ -241,21 +243,22 @@ def run_case(browser, width, height, motion, screenshots):
         assert db.ticket_reads == ['initial'] * 3 + ['1', '1'], db.ticket_reads
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         if width in (390, 1366) and motion == 'reduce':
+            assert_contrast(page, f'Jira speaker tickets {width}')
             page.screenshot(path=str(screenshots / f'tickets-{width}.png'), full_page=True)
-        sidebar.get_by_role('button', name='Tout le tableau', exact=True).click()
+        sidebar.get_by_role('combobox', name='Filtrer les tickets Jira', exact=True).select_option('all')
         if width in (390, 1366) and motion == 'reduce':
             page.screenshot(path=str(screenshots / f'board-tickets-{width}.png'), full_page=True)
         page.clock.install()
         page.clock.fast_forward(61_000)
-        if width <= 800:
+        if width < 1100 or height <= 650:
             sidebar.get_by_role('button', name='Revenir au minuteur').click()
         expect(page.locator('#start-button')).to_contain_text('Pause')
         page.locator('#next-button').click()
         expect(page.locator('#speaker-name')).not_to_have_text(first)
-        if width <= 800:
-            page.get_by_role('button', name='Tickets & notes', exact=True).click()
+        if width < 1100 or height <= 650:
+            page.get_by_role('button', name='Tickets & pense-bête', exact=True).click()
         expect(sidebar).to_contain_text(('jira:b' if first_id == 'jira:a' else 'jira:a') + ' ticket 1')
-        expect(sidebar.get_by_role('button', name='Intervenant', exact=True)).to_have_attribute('aria-pressed', 'true')
+        expect(sidebar.get_by_role('combobox', name='Filtrer les tickets Jira', exact=True)).to_have_value('speaker')
         assert db.ticket_reads == ['initial'] * 3 + ['1', '1'], db.ticket_reads
         assert db.ticket_statuses == ['indeterminate', 'done', 'new', 'indeterminate', 'indeterminate'], db.ticket_statuses
         page.goto(BASE + '/manage-team?team=' + SPRINT)
@@ -345,13 +348,89 @@ def site_case(browser, unavailable):
         context.close()
 
 
+def ticket_layout_case(browser, width, height, motion, screenshots):
+    context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion=motion, service_workers='block')
+    bootstrap = install_browser_bootstrap(context)
+    db = JiraMock()
+    db.active = SPRINT
+    db.teams.append({'id': SPRINT, 'name': 'Équipe sprint', 'kind': 'sprint', 'sprintName': 'Sprint 2', 'memberCount': 2})
+    db.states[SPRINT] = team_fixture(roster=[{'id': f'jira:{account}', 'name': name, 'present': True, 'mood': 2, 'moodUpdatedAt': None} for account, name in [('a', 'Alice <texte>'), ('b', 'Bob')]])
+    context.route('**/api/**', db.api)
+    context.route('**/api/meeting-settings', lambda route: route.fulfill(json={'prompts': ['Hier ?', 'Aujourd’hui ?', 'Des blocages ?'], 'revision': 0}))
+    context.route('**/api/daily-hints', lambda route: route.fulfill(json={'day': mauritius_day(), 'hints': []}))
+    context.route('**/api/timer-remote', lambda route: route.fulfill(status=503, json={'error': 'Télécommande indisponible dans ce test.'}))
+    context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
+    page = context.new_page()
+    try:
+        page.goto(BASE + '/mood?team=' + SPRINT)
+        if width <= 800:
+            page.get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
+        page.get_by_role('button', name='Continuer vers le minuteur', exact=False).click()
+        page.locator('#start-button').click()
+        first = page.locator('#speaker-name').inner_text()
+        first_prefix = 'DEV' if first == 'Alice <texte>' else 'BOB'
+        compact = width < 1100 or height <= 650
+        if compact:
+            page.get_by_role('button', name='Tickets & pense-bête', exact=True).click()
+        sidebar = page.locator('[data-speaker-sidebar]')
+        expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-1 :'))).to_be_visible()
+        sidebar.get_by_role('button', name='Tickets suivants', exact=True).click()
+        expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-6 :'))).to_be_visible()
+        status = sidebar.get_by_role('combobox', name='Statut des tickets Jira', exact=True)
+        for value, label in [('done', 'Terminé'), ('new', 'Ouvert'), ('indeterminate', 'En cours')]:
+            status.select_option(value)
+            expect(sidebar.get_by_role('list')).to_contain_text(label)
+        scope = sidebar.get_by_role('combobox', name='Filtrer les tickets Jira', exact=True)
+        scope.select_option('all')
+        search = sidebar.get_by_role('searchbox', name='Rechercher un ticket Jira')
+        search.fill('FREE-1')
+        expect(sidebar.get_by_role('link', name=re.compile('FREE-1 :'))).to_be_visible()
+        scope.select_option('speaker')
+        expect(sidebar.get_by_role('link', name=re.compile('FREE-1 :'))).to_have_count(0)
+        search.fill('')
+        db.ticket_error = True
+        sidebar.get_by_role('button', name='Actualiser les tickets Jira').click()
+        expect(sidebar.get_by_role('alert')).to_contain_text('Session Jira expirée.')
+        db.ticket_error = False
+        sidebar.get_by_role('button', name='Réessayer', exact=True).click()
+        expect(sidebar.get_by_role('link', name=re.compile(first_prefix + '-1 :'))).to_be_visible()
+        sidebar.get_by_role('button', name='Questions', exact=True).click()
+        expect(sidebar.get_by_role('heading', name='Le fil du point')).to_be_visible()
+        sidebar.get_by_role('button', name='Tickets Jira', exact=True).click()
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        if motion == 'reduce':
+            assert_contrast(page, f'Jira compact layout {width}')
+            page.screenshot(path=str(screenshots / f'jira-redesign-{width}.png'))
+        if compact:
+            sidebar.get_by_role('button', name='Revenir au minuteur').click()
+        page.locator('#next-button').click()
+        expect(page.locator('#speaker-name')).not_to_have_text(first)
+        if compact:
+            page.get_by_role('button', name='Tickets & pense-bête', exact=True).click()
+        expect(scope).to_have_value('speaker')
+        expect(sidebar.get_by_role('link', name=re.compile(('BOB' if first_prefix == 'DEV' else 'DEV') + '-1 :'))).to_be_visible()
+        bootstrap.assert_no_unexpected_api()
+        print(f'PASS compact Jira {width}x{height} {motion}: filters/search/pagination/retry/questions/handoff')
+    finally:
+        context.close()
+
+
 def main():
     if urlparse(BASE).hostname not in ('localhost', '127.0.0.1'):
         raise ValueError('Local mocked preview only')
+    parser = ArgumentParser()
+    parser.add_argument('--tickets-only', action='store_true', help='Validate the timer sidebar independently of team creation.')
+    args = parser.parse_args()
     screenshots = Path(tempfile.mkdtemp(prefix='scrum-jira-'))
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         try:
+            if args.tickets_only:
+                for motion in ('reduce', 'no-preference'):
+                    for width, height in SIZES:
+                        ticket_layout_case(browser, width, height, motion, screenshots)
+                print(f'PASS compact Jira journeys. Screenshots: {screenshots}', flush=True)
+                return
             for unavailable in (False, True):
                 site_case(browser, unavailable)
             for width, height in (SIZES[1], SIZES[3]):
