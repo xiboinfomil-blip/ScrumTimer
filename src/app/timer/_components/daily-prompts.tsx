@@ -84,7 +84,7 @@ function TeamPrompts({ teamId, sprint, className, compact, speakerId, note, note
   };
   const standard = settings.prompts.length === 3 && settings.prompts.every((prompt, index) => prompt === DEFAULT_DISCUSSION_PROMPTS[index]);
   return (
-    <Paper component="section" elevation={0} className={`daily-prompts flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-white ${compact ? 'gap-2 p-3 [@media(max-height:650px)]:p-2' : 'p-4 [@media(max-height:650px)]:p-3'} ${className}`} aria-labelledby={sprint && view === 'tickets' ? 'jira-tickets-heading' : note ? 'sidebar-note-title' : 'prompts-title'} data-speaker-sidebar>
+    <Paper component="section" elevation={0} className={`daily-prompts flex min-h-0 min-w-0 flex-col overflow-hidden rounded-none! border-0 bg-white ${compact ? 'gap-2 p-3 [@media(max-height:650px)]:p-2' : 'p-4 [@media(max-height:650px)]:p-3'} ${className}`} aria-labelledby={sprint && view === 'tickets' ? 'jira-tickets-heading' : note ? 'sidebar-note-title' : 'prompts-title'} data-speaker-sidebar>
       <button type="button" onClick={onReturn} className="mb-3 flex min-h-11 shrink-0 items-center justify-between gap-3 rounded-xl bg-blue-50 px-3 text-left min-[801px]:hidden" aria-label="Revenir au minuteur">
         <span className="min-w-0 text-xs font-semibold text-brand">{running ? 'À la parole · voir le minuteur' : 'Revenir au minuteur'}</span>
         <span className={`shrink-0 text-xl font-bold tabular-nums ${remaining < 0 ? 'text-danger' : 'text-brand'}`}>{remaining < 0 ? '+' : ''}{String(Math.floor(Math.ceil(Math.abs(remaining)) / 60)).padStart(2, '0')}:{String(Math.ceil(Math.abs(remaining)) % 60).padStart(2, '0')}</span>

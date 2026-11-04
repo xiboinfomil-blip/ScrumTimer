@@ -39,14 +39,14 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
   const ratio = turnTotal > 0 ? Math.min(1, Math.max(0, remaining / turnTotal)) : 0;
   const statusColor = ended || critical ? 'border-red-200 bg-danger-soft text-danger' : nearly ? 'border-orange-200 bg-orange-50 text-amber-800' : complete ? 'border-green-200 bg-success-soft text-success' : running || !turnStarted ? 'border-blue-200 bg-blue-50 text-brand' : 'border-orange-200 bg-orange-50 text-amber-800';
   const feedbackColor = complete ? 'text-success' : ended || critical ? 'font-semibold text-danger' : nearly ? 'text-amber-800' : 'text-muted';
-  const panelColor = 'border-transparent! bg-transparent! shadow-none!';
+  const panelColor = 'rounded-none! border-0! bg-white! shadow-none!';
   const pulse = running && critical ? 'motion-safe:animate-critical-glow' : running && nearly ? 'motion-safe:animate-warning-glow' : '';
   const FeedbackIcon = complete ? CheckIcon : ended ? ErrorOutlineIcon : nearly ? AccessTimeIcon : running ? RadioButtonCheckedIcon : NorthEastIcon;
   return (
     <Paper component="section" elevation={0} className={`timer-panel relative isolate grid min-h-0 min-w-0 grid-cols-1 ${timer.focusMode ? 'grid-rows-[auto_minmax(0,1fr)_auto]' : 'grid-rows-[auto_minmax(0,1fr)_auto_auto]'} items-center gap-3 overflow-hidden rounded-lg border border-line bg-white p-5 text-center max-[650px]:gap-2 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-3 ${panelColor} ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
       <div className="col-span-full flex min-w-0 items-center justify-between gap-2 self-start border-b border-line pb-2">
         <div className="flex min-w-0 items-center gap-2 max-[650px]:gap-1.5">
-          <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1.5 text-[11px] font-semibold tabular-nums text-muted max-[650px]:px-1.5">{person ? `Passage ${people.findIndex(candidate => candidate.id === person.id) + 1} / ${people.length}` : 'Terminé'}</span>
+          <span className="shrink-0 border-l-2 border-accent pl-3 py-1.5 text-xs font-bold tabular-nums text-ink max-[650px]:pl-2">{person ? `Passage ${people.findIndex(candidate => candidate.id === person.id) + 1} / ${people.length}` : 'Terminé'}</span>
           <span className={`flex min-w-0 shrink items-center gap-1.5 rounded-full border px-2 py-1.5 text-xs font-semibold max-[420px]:sr-only ${statusColor}`} id="status-pill" data-status={status} role="status"><span className={`size-1.5 shrink-0 rounded-full bg-current ${running ? 'motion-safe:animate-pulse' : ''} motion-reduce:animate-none`} aria-hidden="true" />{status}</span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -62,14 +62,14 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
           <span aria-hidden="true" className="mx-auto mt-3 block h-1 w-12 rounded-full bg-accent max-[650px]:mt-2 [@media(max-height:650px)]:mt-1" />
         </motion.div>
         <motion.div initial={reduced ? false : { opacity: 0, scale: .94 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: reduced ? 0 : .5, delay: reduced ? 0 : .08, ease: [.22, 1, .36, 1] }} data-testid="stopwatch-timer" data-urgency={urgency} className={`relative grid h-full max-h-[min(24rem,100cqw)] min-h-0 w-full max-w-96 flex-1 place-items-center self-center [container-type:size] ${ended || critical ? 'text-danger' : nearly ? 'text-amber-700' : 'text-brand'} ${pulse}`}>
-          <div className="relative size-[min(100cqw,100cqh)] rounded-full border border-brand/10 p-2" aria-hidden="true">
-            <div className="absolute inset-[8%] rounded-full border border-dashed border-current/15" />
+          <div className="relative size-[min(100cqw,100cqh)] rounded-full border border-brand/10 bg-[#f7fafc] p-2" aria-hidden="true">
+            <div className="absolute inset-[8%] rounded-full border border-current/10 bg-white" />
             <span className="absolute left-1/2 top-[11%] h-2 w-0.5 -translate-x-1/2 rounded-full bg-current/30" />
             <span className="absolute bottom-[11%] left-1/2 h-2 w-0.5 -translate-x-1/2 rounded-full bg-current/30" />
             <span className="absolute left-[11%] top-1/2 h-0.5 w-2 -translate-y-1/2 rounded-full bg-current/30" />
             <span className="absolute right-[11%] top-1/2 h-0.5 w-2 -translate-y-1/2 rounded-full bg-current/30" />
-            <CircularProgress variant="determinate" value={100} size="100%" thickness={1.5} className="absolute inset-0 text-brand/10" />
-            <CircularProgress variant="determinate" value={ratio * 100} size="100%" thickness={3} color="inherit" className="absolute inset-0 motion-reduce:[&_.MuiCircularProgress-circle]:transition-none" sx={{ '& circle': { strokeLinecap: 'round' } }} />
+            <CircularProgress variant="determinate" value={100} size="100%" thickness={2} className="absolute inset-0 text-brand/10" />
+            <CircularProgress variant="determinate" value={ratio * 100} size="100%" thickness={3.5} color="inherit" className="absolute inset-0 motion-reduce:[&_.MuiCircularProgress-circle]:transition-none" sx={{ '& circle': { strokeLinecap: 'round' } }} />
           </div>
           <div className="pointer-events-none absolute inset-0 flex min-w-0 flex-col items-center justify-center gap-1 px-2">
             <TimerRounded className="text-current max-[650px]:hidden [@media(max-height:650px)]:hidden" />
@@ -86,7 +86,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
         <Button disableElevation size="large" variant={running ? 'outlined' : 'contained'} sx={{ minHeight: 56, minWidth: 0, px: 1, borderRadius: 2, textTransform: 'none', fontSize: 18, fontWeight: 700 }} type="button" id="start-button" className="w-full min-w-0 max-[650px]:text-base!" disabled={!person} onClick={timer.toggle} aria-keyshortcuts="Space">
           <TimerIcon name={running ? 'pause' : 'play'} className="mr-1 size-5 shrink-0 max-[360px]:hidden" /> {running ? 'Pause' : turnStarted ? 'Reprendre' : 'Démarrer'}
         </Button>
-        <Button disableElevation size="large" variant="contained" color={ended ? 'error' : 'primary'} sx={{ minWidth: 0, px: 1, borderRadius: 2, textTransform: 'none', flexDirection: 'column', gap: .5 }} type="button" id="next-button" className="h-24 w-full min-w-0 overflow-hidden [@media(max-height:650px)]:h-22" disabled={!person} onClick={timer.next} aria-label="Suivant" aria-describedby="upcoming-speaker" title={next ? `Donner la parole à ${next.name}` : 'Terminer les passages disponibles'} aria-keyshortcuts="N"><span className="flex items-center gap-1 text-base font-semibold leading-tight max-[650px]:text-sm">Suivant<TimerIcon name="next" className="size-4 shrink-0 max-[650px]:hidden" /></span><span id="upcoming-speaker" className="line-clamp-2 w-full min-w-0 break-words text-2xl font-extrabold leading-tight max-[650px]:text-lg">{next?.name ?? 'Fin du tour'}</span></Button>
+        <Button disableElevation size="large" variant={running || ended ? 'contained' : 'outlined'} color={ended ? 'error' : 'primary'} sx={{ minWidth: 0, px: 1, borderRadius: 2, textTransform: 'none', flexDirection: 'column', gap: .5 }} type="button" id="next-button" className="h-24 w-full min-w-0 overflow-hidden [@media(max-height:650px)]:h-22" disabled={!person} onClick={timer.next} aria-label="Suivant" aria-describedby="upcoming-speaker" title={next ? `Donner la parole à ${next.name}` : 'Terminer les passages disponibles'} aria-keyshortcuts="N"><span className="flex items-center gap-1 text-base font-semibold leading-tight max-[650px]:text-sm">Suivant<TimerIcon name="next" className="size-4 shrink-0 max-[650px]:hidden" /></span><span id="upcoming-speaker" className="line-clamp-2 w-full min-w-0 break-words text-2xl font-extrabold leading-tight max-[650px]:text-lg">{next?.name ?? 'Fin du tour'}</span></Button>
       </div>
       <div id="timer-feedback" className={`sr-only ${feedbackColor}`}>
         {ended && <span id="time-up-alert" role="alert">{person?.name}, Temps utilisé. Merci de passer la parole.</span>}

@@ -179,7 +179,7 @@ with sync_playwright() as p:
         expect(page.locator('#timer-stage [data-mood-picture] span')).to_have_count(0)
         assert page.locator('#timer-display').evaluate('el => Number(getComputedStyle(el).fontWeight)') >= 700
         assert page.locator('#timer-stage').evaluate('el => getComputedStyle(el).backgroundColor') == 'rgba(0, 0, 0, 0)'
-        assert page.locator('.timer-panel').evaluate('el => getComputedStyle(el).backgroundColor') == 'rgba(0, 0, 0, 0)'
+        assert page.locator('.timer-panel').evaluate('el => getComputedStyle(el).backgroundColor') == 'rgb(255, 255, 255)'
         expect(page.locator('[data-testid="stopwatch-timer"] #speaker-name')).to_have_count(0)
         page.get_by_role('button', name=f'Lire la note de {first}', exact=True).click()
         note_dialog = page.get_by_role('dialog', name=f'Le pense-bête de {first}', exact=True)
@@ -285,7 +285,49 @@ with sync_playwright() as p:
                     page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-timer-mood-320{"-long" if LONG_CONTENT else ""}.png'))
                 page.get_by_role('button', name='Minuteur', exact=True).click()
 
+        for width, height in SIZES + [(844, 390), (568, 320)]:
+            page.set_viewport_size({'width': width, 'height': height})
+            page.get_by_role('button', name='Actions du minuteur', exact=True).click()
+            page.get_by_role('menuitem', name='Économiseur d’écran', exact=True).click()
+            saver = page.get_by_role('dialog', name='Économiseur d’écran', exact=True)
+            expect(saver).to_be_visible()
+            expect(saver.get_by_role('button', name='Revenir au minuteur', exact=True).first).to_be_focused()
+            saver_bounds = saver.bounding_box()
+            assert saver_bounds and abs(saver_bounds['x']) <= 1 and abs(saver_bounds['y']) <= 1 and abs(saver_bounds['width'] - width) <= 1 and abs(saver_bounds['height'] - height) <= 1, (width, height, 'screensaver must fill viewport', saver_bounds)
+            expect(saver.locator('img')).to_have_js_property('complete', True)
+            assert saver.locator('img').evaluate('el => el.naturalWidth > 0')
+            for scene, value in [('Horloge', 'horloge'), ('Rubans', 'rubans'), ('Mosaïque', 'mosaique')]:
+                saver.get_by_role('button', name=scene, exact=True).click()
+                expect(saver.locator('[data-testid="timer-screensaver"]')).to_have_attribute('data-scene', value)
+                expect(saver.get_by_role('button', name=scene, exact=True)).to_have_attribute('aria-pressed', 'true')
+                assert saver.evaluate('el => el.scrollWidth <= innerWidth && el.scrollHeight <= innerHeight'), (width, height, scene)
+                assert saver.locator('[data-screensaver-content]').evaluate('el => { const bounds = el.getBoundingClientRect(); return Array.from(el.children).filter(child => getComputedStyle(child).display !== "none").every(child => { const rect = child.getBoundingClientRect(); return rect.top >= bounds.top - 1 && rect.bottom <= bounds.bottom + 1; }); }'), (width, height, scene, 'clock content must fit')
+                page.wait_for_function('Array.from(document.querySelectorAll(\'[data-testid="timer-screensaver"] button\')).every(el => ["none", "matrix(1, 0, 0, 1, 0, 0)"].includes(getComputedStyle(el).transform))')
+                for control in saver.locator('button').all():
+                    bounds = control.bounding_box()
+                    assert bounds and bounds['height'] >= 44 and bounds['x'] >= 0 and bounds['x'] + bounds['width'] <= width + 1 and bounds['y'] >= 0 and bounds['y'] + bounds['height'] <= height + 1, (width, height, scene, bounds)
+                if motion == 'reduce' and width in [320, 1366]:
+                    page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-screensaver-{value}-{width}.png'))
+            animation = saver.get_by_role('button', name='Arrêter les animations', exact=True)
+            if motion == 'reduce':
+                expect(animation).to_be_disabled()
+                expect(saver.locator('[data-testid="timer-screensaver"]')).to_have_attribute('data-motion', 'paused')
+            else:
+                animation.click()
+                expect(saver.locator('[data-testid="timer-screensaver"]')).to_have_attribute('data-motion', 'paused')
+                saver.get_by_role('button', name='Animer le décor', exact=True).click()
+            saver.focus()
+            page.keyboard.press('n')
+            page.keyboard.press('Space')
+            page.keyboard.press('Shift+Tab')
+            assert saver.evaluate('el => el.contains(document.activeElement)'), 'Screensaver must retain keyboard focus'
+            page.keyboard.press('Escape')
+            expect(saver).not_to_be_visible()
+            expect(page.get_by_role('button', name='Actions du minuteur', exact=True)).to_be_focused()
+            expect(page.locator('#speaker-name')).to_have_text(first)
+            expect(page.locator('#start-button')).to_contain_text('Reprendre')
         page.set_viewport_size({'width': 1366, 'height': 768})
+        page.locator('#start-button').click()
         page.get_by_role('button', name='Actions du minuteur', exact=True).click()
         page.get_by_role('menuitem', name='Diffusion', exact=True).click()
         sharing = page.get_by_role('dialog', name='Diffusion et présentation', exact=True)

@@ -27,6 +27,8 @@ import { useRemotePage } from '@/providers/remote-host-provider';
 import SmartphoneRounded from '@mui/icons-material/SmartphoneRounded';
 import ScreenShareRounded from '@mui/icons-material/ScreenShareRounded';
 import { CurrentMoodCard } from './current-mood-card';
+import WallpaperRounded from '@mui/icons-material/WallpaperRounded';
+import { TimerScreensaver } from './timer-screensaver';
 
 export type StandupTimer = ReturnType<typeof useStandupTimer>;
 
@@ -91,13 +93,14 @@ export function TimerPage() {
   return (
     <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-1 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-0 ${presentation.presenting ? 'fixed inset-x-0 bottom-0 top-[68px] z-[1200] max-w-none! bg-slate-50 p-3 sm:p-6 max-[800px]:top-[105px]' : 'mx-auto w-full'} overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
       {navbarActions && createPortal(<>
-        <IconButton title="Actions du minuteur" aria-label="Actions du minuteur" aria-haspopup="menu" aria-controls={actionsAnchor ? 'timer-actions-menu' : undefined} aria-expanded={Boolean(actionsAnchor)} onClick={event => setActionsAnchor(event.currentTarget)} sx={{ width: 44, height: 44, color: 'primary.main' }}><MoreVertRounded /></IconButton>
+        <IconButton id="timer-actions-button" title="Actions du minuteur" aria-label="Actions du minuteur" aria-haspopup="menu" aria-controls={actionsAnchor ? 'timer-actions-menu' : undefined} aria-expanded={Boolean(actionsAnchor)} onClick={event => setActionsAnchor(event.currentTarget)} sx={{ width: 44, height: 44, color: 'primary.main' }}><MoreVertRounded /></IconButton>
         <Menu id="timer-actions-menu" anchorEl={actionsAnchor} open={Boolean(actionsAnchor)} onClose={() => setActionsAnchor(null)}>
+          <MenuItem sx={{ minHeight: 48 }} onClick={() => { setActionsAnchor(null); if (timer.running) timer.toggle(); setBlackScreen(true); }}><ListItemIcon><WallpaperRounded /></ListItemIcon><ListItemText>Économiseur d’écran</ListItemText></MenuItem>
           <MenuItem sx={{ minHeight: 48 }} onClick={() => { setActionsAnchor(null); if (timer.running) timer.toggle(); setLineupOpen(true); }}><ListItemIcon><GroupsRounded /></ListItemIcon><ListItemText>Voir le tour de parole</ListItemText></MenuItem>
           <MenuItem sx={{ minHeight: 48 }} onClick={() => { setActionsAnchor(null); if (presentation.presenting) { setPresentationView('timer'); void presentation.toggle(); } else setSharing(true); }}><ListItemIcon><ScreenShareRounded /></ListItemIcon><ListItemText>{presentation.presenting ? 'Quitter la présentation' : 'Diffusion'}</ListItemText></MenuItem>
         </Menu>
       </>, navbarActions)}
-      {blackScreen && <button type="button" autoFocus onClick={() => setBlackScreen(false)} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setBlackScreen(false); } }} aria-label="Rétablir l’écran" className="fixed inset-0 z-[3000] h-dvh w-screen bg-black text-transparent focus-visible:outline-2 focus-visible:outline-white">Rétablir l’écran</button>}
+      <TimerScreensaver open={blackScreen} onClose={() => setBlackScreen(false)} teamName={activeTeamName} />
       <Dialog open={lineupOpen && !timer.lateChecking && !waitingForPostponed} onClose={() => setLineupOpen(false)} aria-labelledby="lineup-dialog-title" fullWidth maxWidth="sm" slotProps={{ paper: { sx: { height: 'min(640px, calc(100dvh - 32px))', m: 2, width: 'calc(100% - 32px)', borderRadius: '14px', border: '1px solid #dce3e9' } } }}>
         <DialogTitle id="lineup-dialog-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Le tour de parole</DialogTitle>
         <DialogContent className="flex min-h-0 flex-1 flex-col"><p className="mb-3 shrink-0 text-xs text-muted">{timer.focusMode ? 'Votre passage reste sélectionné. Reprenez le minuteur une fois prêt.' : 'Choisissez la personne qui ouvrira le point.'}</p>{lineupOpen && <TeamLineup timer={timer} className="flex-1" />}</DialogContent>
