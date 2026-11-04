@@ -76,6 +76,10 @@ with sync_playwright() as p:
         external_notes = []
         context.route('https://evil.invalid/**', lambda route: (external_notes.append(route.request.url), route.abort()))
         page.on('pageerror', lambda error: errors.append(str(error)))
+        def capture_hydration(message):
+            if message.type == 'error' and any(term in message.text.lower() for term in ('hydration', 'hydrated', 'server rendered html')):
+                errors.append(message.text)
+        page.on('console', capture_hydration)
         for path in ['/participants', '/mood']:
             page.goto(BASE + path)
             page.wait_for_function("document.querySelector('header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
@@ -191,9 +195,11 @@ with sync_playwright() as p:
         expect(page.locator('#next-button #upcoming-speaker')).to_be_visible()
         expect(page.locator('#previous-button #previous-speaker')).to_be_visible()
         expect(page.locator('#speaker-mood')).not_to_contain_text('Énergie')
-        expect(page.locator('[data-mood-number]')).to_have_count(1)
-        expect(page.locator('[data-mood-number]')).to_have_text(str(chosen))
-        expect(page.locator('[data-testid="current-speaker-mood"]').get_by_role('group', name='Échelle d’humeur', exact=True)).to_have_count(0)
+        expect(page.locator('[data-mood-number]')).to_have_count(0)
+        scale = page.get_by_role('list', name='Échelle d’humeur', exact=True)
+        expect(scale.get_by_role('listitem')).to_have_count(4)
+        expect(scale.locator('[aria-current="true"]')).to_contain_text(str(chosen))
+        expect(scale.locator('[aria-current="true"]')).to_have_count(1)
         expect(page.locator('[data-testid="current-speaker-mood"] > div').first).not_to_contain_text('/ 4')
         assert page.locator('#speaker-name').evaluate('el => getComputedStyle(el).textAlign') == 'left'
         assert page.locator('#speaker-name').evaluate('el => Number(getComputedStyle(el).fontWeight)') >= 800
@@ -313,7 +319,7 @@ with sync_playwright() as p:
                 title_box = page.locator('[data-mood-title]').bounding_box()
                 assert card_box and title_box and title_box['x'] >= card_box['x'] and title_box['x'] + title_box['width'] <= card_box['x'] + card_box['width'] + 1, (width, card_box, title_box)
                 assert page.locator('[data-mood-title]').evaluate('el => el.scrollWidth <= el.clientWidth + 1'), width
-                expect(mood_card.locator('[data-mood-number]')).to_be_visible()
+                expect(mood_card.get_by_role('list', name='Échelle d’humeur', exact=True)).to_be_visible()
                 expect(mood_card.get_by_role('group', name='Échelle d’humeur', exact=True)).to_have_count(0)
                 if motion == 'reduce' and width == 320:
                     assert_contrast(page, 'Speaker notes and mood')
@@ -427,6 +433,7 @@ with sync_playwright() as p:
         next_name = page.locator('#speaker-name').inner_text()
         chosen = next(person['mood'] for person in team['roster'] if person['name'] == next_name)
         expect(page.locator('#speaker-mood')).to_have_attribute('aria-label', f'Humeur de {next_name} : {chosen} sur 4')
+        expect(page.locator('#speaker-mood ol [aria-current="true"]')).to_contain_text(str(chosen))
         expect(page.locator('[data-mood-title]')).to_have_text(MOOD_TITLES[chosen - 1])
         expect(page.locator('#speaker-mood [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
         expect(cue).to_contain_text('À la parole')

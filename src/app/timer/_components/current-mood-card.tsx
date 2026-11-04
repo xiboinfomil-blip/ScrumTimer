@@ -63,10 +63,12 @@ export function CurrentMoodCard({ timer, compact = false }: { timer: StandupTime
       <div className={`relative grid ${compact ? 'size-20' : 'size-24'} text-4xl shrink-0 place-items-center overflow-hidden rounded-lg border border-current/15 bg-white`} aria-hidden="true">
         <span>{faces[mood - 1]}</span>
         {person.moodSlide && <SpeakerMoodPicture key={`${person.id}:${person.moodSlide.image}:${mood}`} context={person.moodSlide} mood={mood} card />}
-        <span data-mood-number className="absolute right-1 top-1 z-10 grid size-6 place-items-center rounded bg-white/95 text-sm font-bold tabular-nums text-ink shadow-sm">{mood}</span>
       </div>
       <div className="min-w-0 flex-1">
         <MoodTitle key={`${person.id}:${person.moodSlide?.image}:${mood}`} context={person.moodSlide} mood={mood} fallback={detail.title} />
+        <ol aria-label="Échelle d’humeur" className="mt-3 grid grid-cols-4 gap-1.5">
+          {([1, 2, 3, 4] as const).map(value => <li key={value} aria-current={value === mood ? 'true' : undefined} className="min-w-0"><span className={`grid h-8 min-w-0 place-items-center rounded-md border text-sm font-bold tabular-nums ${value === mood ? 'border-brand bg-brand text-white motion-safe:scale-[1.06]' : 'border-current/15 bg-white/80 text-muted'}`}>{value}<span className="sr-only">{value === mood ? ' : humeur sélectionnée' : ''}</span></span></li>)}
+        </ol>
       </div>
       <div role="img" aria-label={`Niveau ${mood} sur 4`} className="sr-only">{mood}</div>
     </motion.div> : <div className={`flex items-center gap-3 ${compact ? 'p-2' : 'min-h-[92px] p-3'}`}>
