@@ -241,6 +241,15 @@ with sync_playwright() as p:
                 assert text['y'] >= stage['y'] and text['y'] + text['height'] <= stage['y'] + stage['height'] + 1, (width, selector, text, stage)
             ring = page.locator('[data-testid="stopwatch-timer"] svg').first.bounding_box()
             assert ring and ring['width'] >= 80 and abs(ring['width'] - ring['height']) < 2, (width, ring)
+            if width > 650 and height <= 650:
+                assert abs(ring['y'] + ring['height'] / 2 - stage['y'] - stage['height'] / 2) <= 2, (width, 'dial vertical center', ring, stage)
+            else:
+                group_center = (box['y'] + ring['y'] + ring['height']) / 2
+                assert abs(group_center - stage['y'] - stage['height'] / 2) <= 2, (width, 'speaker/dial vertical center', box, ring, stage)
+            assert page.locator('#speaker-name').evaluate('el => Number(getComputedStyle(el).fontWeight)') >= 900
+            for name in ['#previous-speaker', '#upcoming-speaker']:
+                font = page.locator(name).evaluate('el => parseFloat(getComputedStyle(el).fontSize)')
+                assert font >= (18 if width <= 650 else 24), (width, name, font)
             assert ring['x'] >= stage['x'] and ring['x'] + ring['width'] <= stage['x'] + stage['width'] + 1 and ring['y'] >= stage['y'] and ring['y'] + ring['height'] <= stage['y'] + stage['height'] + 1, (width, ring, stage)
             digits = page.locator('#timer-display').bounding_box()
             assert digits and digits['width'] <= ring['width'] * .82, (width, digits, ring)
