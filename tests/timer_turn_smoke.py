@@ -8,6 +8,9 @@ from browser_bootstrap import WARNING_SECONDS, install_browser_bootstrap, maurit
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]
+LONG_CONTENT = os.environ.get('TIMER_TEST_LONG_CONTENT') == '1'
+NAMES = [('Alexandrine ' + 'Longnom' * 7)[:60], 'Bob', 'Charlie'] if LONG_CONTENT else ['Alice <safe>', 'Bob', 'Charlie']
+MOOD_TITLES = ['Très fortement préoccupé par la situation', 'Tired', 'Secure', 'Cheerful'] if LONG_CONTENT else ['Angry', 'Tired', 'Secure', 'Cheerful']
 
 
 def picture(color):
@@ -34,7 +37,7 @@ with sync_playwright() as p:
             'roster': [
                 {'id': name.lower(), 'name': name, 'present': True, 'mood': mood, 'moodUpdatedAt': None,
                  'moodSlide': {'title': 'Images test', 'image': f'{SLIDE_ROOT}/second.svg', 'slideNumber': 2}}
-                for name, mood in [('Alice <safe>', 1), ('Bob', 2), ('Charlie', 4)]
+                for name, mood in zip(NAMES, [1, 2, 4])
             ],
             'session': [], 'duration': 120, 'warning': WARNING_SECONDS, 'sound': False, 'usedMoodMeters': [],
         }
@@ -65,7 +68,7 @@ with sync_playwright() as p:
         context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
         context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=[{'remoteId': DECK_ID, 'title': 'Images test', 'slides': []}]))
         context.route(f'**/api/mood-meters/decks/{DECK_ID}', lambda route: route.fulfill(json={'title': 'Images test', 'slides': [f'{SLIDE_ROOT[1:]}/first.svg', f'{SLIDE_ROOT[1:]}/second.svg']}))
-        context.route(f'**/api/mood-meters/decks/{DECK_ID}/titles', lambda route: route.fulfill(json={'titles': ['Angry', 'Tired', 'Secure', 'Cheerful']}))
+        context.route(f'**/api/mood-meters/decks/{DECK_ID}/titles', lambda route: route.fulfill(json={'titles': MOOD_TITLES}))
         context.route(f'**{SLIDE_ROOT}/*.svg', lambda route: route.fulfill(content_type='image/svg+xml', body=SVG if route.request.url.endswith('first.svg') else '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540"/>'))
         page = context.new_page()
         errors = []
@@ -151,16 +154,18 @@ with sync_playwright() as p:
         expect(page.locator('[data-motion-tabs]')).to_be_hidden()
         expect(page.locator('[data-testid="remote-pairing-card"]')).to_have_count(0)
         expect(page.locator('[data-testid="timer-remote-shortcut"]')).to_have_count(0)
-        assert first in ['Alice <safe>', 'Bob', 'Charlie']
+        assert first in NAMES
         expect(page.locator('#timer-page').get_by_text(first, exact=True)).to_have_count(1)
         chosen = next(person['mood'] for person in team['roster'] if person['name'] == first)
         expect(page.locator('#speaker-mood')).to_have_attribute('aria-label', f'Humeur de {first} : {chosen} sur 4')
-        expect(page.locator('[data-mood-title]')).to_have_text(['Angry', 'Tired', 'Secure', 'Cheerful'][chosen - 1])
+        expect(page.locator('[data-mood-title]')).to_have_text(MOOD_TITLES[chosen - 1])
+        expect(page.locator('#speaker-slider')).not_to_contain_text('Puis :')
+        expect(page.locator('#speaker-mood')).not_to_contain_text('Énergie')
         expect(page.locator('#speaker-mood [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
         mood_picture = page.locator('#speaker-mood [data-mood-picture]')
         expect(mood_picture).to_have_count(1)
         mood_box = mood_picture.bounding_box()
-        assert mood_box and mood_box['width'] <= 64 and mood_box['height'] <= 64, mood_box
+        assert mood_box and 77 <= mood_box['width'] <= 97 and 77 <= mood_box['height'] <= 97, mood_box
         expect(page.locator('#timer-stage #speaker-name')).to_have_text(first)
         expect(page.locator('#timer-stage [data-mood-picture] span')).to_have_count(0)
         assert page.locator('#timer-display').evaluate('el => Number(getComputedStyle(el).fontWeight)') >= 700
@@ -185,6 +190,12 @@ with sync_playwright() as p:
         expect(cue).to_have_attribute('aria-atomic', 'true')
         stage_animation = page.locator('#timer-stage').evaluate('el => getComputedStyle(el).animationName')
         assert stage_animation == 'none', stage_animation
+        page.set_viewport_size({'width': 320, 'height': 568})
+        page.locator('#start-button').click()
+        expect(page.locator('#start-button')).to_contain_text('Reprendre')
+        assert page.locator('#start-button').evaluate('el => el.scrollWidth <= el.clientWidth + 1'), 'Resume label must fit the center control'
+        page.locator('#start-button').click()
+        page.set_viewport_size({'width': 1366, 'height': 768})
 
         # Let the one-shot entrance finish before measuring geometry.
         page.wait_for_function("getComputedStyle(document.querySelector('#speaker-turn-cue')).opacity === '1' && ['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(getComputedStyle(document.querySelector('#speaker-turn-cue')).transform)")
@@ -222,18 +233,38 @@ with sync_playwright() as p:
             ring = page.locator('[data-testid="stopwatch-timer"] svg').first.bounding_box()
             assert ring and ring['width'] >= 80 and abs(ring['width'] - ring['height']) < 2, (width, ring)
             assert ring['x'] >= stage['x'] and ring['x'] + ring['width'] <= stage['x'] + stage['width'] + 1 and ring['y'] >= stage['y'] and ring['y'] + ring['height'] <= stage['y'] + stage['height'] + 1, (width, ring, stage)
+            digits = page.locator('#timer-display').bounding_box()
+            assert digits and digits['width'] <= ring['width'] * .82, (width, digits, ring)
             assert page.locator('[data-testid="stopwatch-timer"] svg').first.evaluate('el => el.querySelector("circle").getTotalLength()') > 100
             for selector in ['#previous-button', '#start-button', '#next-button', '#manage-timer-button']:
                 button = page.locator(selector).bounding_box()
                 assert button and button['height'] >= 44 and button['y'] + button['height'] <= height + 1, (motion, width, selector, button)
                 assert button['x'] >= 0 and button['x'] + button['width'] <= width + 1, (motion, width, selector, button)
+            controls = page.locator('[data-timer-controls]').bounding_box()
+            previous = page.locator('#previous-button').bounding_box()
+            following = page.locator('#next-button').bounding_box()
+            assert controls and previous and following and abs(previous['x'] - controls['x']) <= 1 and abs(following['x'] + following['width'] - controls['x'] - controls['width']) <= 1, (width, controls, previous, following)
+            assert previous['height'] >= 56 and following['height'] >= 56, (width, previous, following)
             if width <= 800:
                 page.get_by_role('button', name=f'Lire la note de {first}', exact=True).click()
                 expect(page.get_by_role('dialog', name=f'Le pense-bête de {first}', exact=True)).to_be_visible()
                 expect(page.locator('#start-button')).to_contain_text('Pause')
                 page.get_by_role('dialog', name=f'Le pense-bête de {first}', exact=True).get_by_role('button', name='Fermer', exact=True).click()
             if motion == 'reduce' and width in [320, 1366]:
-                page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-timer-focus-{width}.png'))
+                page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-timer-focus-{width}{"-long" if LONG_CONTENT else ""}.png'))
+            if width < 1100 or height <= 650:
+                page.get_by_role('button', name='Pense-bête & humeur', exact=True).click()
+                mood_card = page.locator('[data-testid="current-speaker-mood"]')
+                expect(mood_card).to_be_visible()
+                mood_card.scroll_into_view_if_needed()
+                card_box = mood_card.bounding_box()
+                title_box = page.locator('[data-mood-title]').bounding_box()
+                assert card_box and title_box and title_box['x'] >= card_box['x'] and title_box['x'] + title_box['width'] <= card_box['x'] + card_box['width'] + 1, (width, card_box, title_box)
+                assert page.locator('[data-mood-title]').evaluate('el => el.scrollWidth <= el.clientWidth + 1'), width
+                expect(mood_card.get_by_role('group', name='Échelle d’humeur', exact=True)).to_be_visible()
+                if motion == 'reduce' and width == 320:
+                    page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-timer-mood-320{"-long" if LONG_CONTENT else ""}.png'))
+                page.get_by_role('button', name='Minuteur', exact=True).click()
 
         page.set_viewport_size({'width': 1366, 'height': 768})
         page.get_by_role('button', name='Actions du minuteur', exact=True).click()
@@ -300,7 +331,7 @@ with sync_playwright() as p:
         next_name = page.locator('#speaker-name').inner_text()
         chosen = next(person['mood'] for person in team['roster'] if person['name'] == next_name)
         expect(page.locator('#speaker-mood')).to_have_attribute('aria-label', f'Humeur de {next_name} : {chosen} sur 4')
-        expect(page.locator('[data-mood-title]')).to_have_text(['Angry', 'Tired', 'Secure', 'Cheerful'][chosen - 1])
+        expect(page.locator('[data-mood-title]')).to_have_text(MOOD_TITLES[chosen - 1])
         expect(page.locator('#speaker-mood [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
         expect(cue).to_contain_text('À TOI DE PARLER !')
         expect(page.locator('#start-button')).to_contain_text('Pause')
