@@ -7,14 +7,15 @@ import { useTeam } from '@/providers/team-provider';
 import type { Mood } from '@/types/team';
 import type { StandupTimer } from './timer-page';
 
-export function LateCheckinDialog({ timer }: { timer: StandupTimer }) {
+export function LateCheckinDialog({ timer, autoOpen = false }: { timer: StandupTimer; autoOpen?: boolean }) {
   const { dailyReady, cloudStatus } = useTeam();
   const people = timer.people.filter(person => person.postponed && !person.done);
-  return <Dialog open={timer.lateChecking} onClose={timer.closeLateCheckin} aria-labelledby="late-checkin-title" aria-describedby="late-checkin-description" maxWidth={false} slotProps={{ paper: { sx: { m: 1, width: 'calc(100% - 16px)', maxWidth: 1200, height: 'min(820px, calc(100dvh - 16px))', border: '1px solid #dce3e9', borderRadius: '14px' } } }}>
+  const open = timer.lateChecking || autoOpen;
+  return <Dialog open={open} onClose={autoOpen ? undefined : timer.closeLateCheckin} aria-labelledby="late-checkin-title" aria-describedby="late-checkin-description" maxWidth={false} slotProps={{ paper: { sx: { m: 1, width: 'calc(100% - 16px)', maxWidth: 1200, height: 'min(820px, calc(100dvh - 16px))', border: '1px solid #dce3e9', borderRadius: '14px' } } }}>
     <DialogTitle id="late-checkin-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Un instant pour votre humeur</DialogTitle>
     <p id="late-checkin-description" className="shrink-0 px-6 pb-3 text-xs text-muted [@media(max-height:650px)]:sr-only">Le même baromètre, le même tour. Le minuteur est en pause et tous les passages sont conservés.</p>
     <DialogContent className="flex min-h-0 flex-1 flex-col px-3! py-0! sm:px-5!">
-      {timer.lateChecking && <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.5fr)_minmax(280px,.8fr)] gap-3 max-[800px]:grid-cols-1 max-[800px]:grid-rows-[minmax(0,1fr)_auto]">
+      {open && <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.5fr)_minmax(280px,.8fr)] gap-3 max-[800px]:grid-cols-1 max-[800px]:grid-rows-[minmax(0,1fr)_auto]">
         <MoodMeter locked className="[&_[id=meter-slide-stack]]:auto-rows-[minmax(44px,1fr)]" />
         <section className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-line bg-white p-3 ${people.length > 1 ? 'max-[800px]:h-48' : 'max-[800px]:h-40'} [@media(max-height:650px)]:p-2 [&_.list-pagination.invisible]:hidden [&_.late-checkin-list]:mt-1 [&_.late-checkin-list]:p-0`} aria-label="Humeurs des personnes reportées">
           <h2 className="shrink-0 text-sm font-bold">Rejoindre le tour · {people.length}</h2>
@@ -27,6 +28,6 @@ export function LateCheckinDialog({ timer }: { timer: StandupTimer }) {
         </section>
       </div>}
     </DialogContent>
-    <DialogActions><Button onClick={timer.closeLateCheckin} sx={{ minHeight: 44 }}>Revenir au tour</Button></DialogActions>
+    <DialogActions>{autoOpen ? <Button onClick={timer.finishWithoutPostponed} disabled={!timer.people.some(person => person.done && !person.postponed)} sx={{ minHeight: 44 }}>Terminer sans les personnes en attente</Button> : <Button onClick={timer.closeLateCheckin} sx={{ minHeight: 44 }}>Revenir au tour</Button>}</DialogActions>
   </Dialog>;
 }

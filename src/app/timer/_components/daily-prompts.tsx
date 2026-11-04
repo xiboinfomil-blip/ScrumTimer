@@ -32,7 +32,7 @@ export function DailyPrompts({ className = '', compact = false, ...speaker }: Sp
   const { activeTeamId, teams } = useTeam();
   return <TeamPrompts key={activeTeamId ?? 'none'} teamId={activeTeamId} sprint={teams.find(team => team.id === activeTeamId)?.kind === 'sprint'} className={className} compact={compact} {...speaker} />;
 }
-function TeamPrompts({ teamId, sprint, className, compact, speakerId, speakerName, note, notesError, retryNotes, running, remaining = 0, onReturn }: SpeakerContent & { teamId: string | null; sprint: boolean; className: string; compact: boolean }) {
+function TeamPrompts({ teamId, sprint, className, compact, speakerId, note, notesError, retryNotes, running, remaining = 0, onReturn }: SpeakerContent & { teamId: string | null; sprint: boolean; className: string; compact: boolean }) {
   const reduced = useReducedMotion();
   const [view, setView] = useState<'notes' | 'tickets'>(sprint ? 'tickets' : 'notes');
   const [settings, setSettings] = useState<MeetingSettings>({ prompts: [...DEFAULT_DISCUSSION_PROMPTS], revision: 0 });
@@ -86,7 +86,7 @@ function TeamPrompts({ teamId, sprint, className, compact, speakerId, speakerNam
   return (
     <Paper component="section" elevation={0} className={`daily-prompts flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-white ${compact ? 'gap-2 p-3 [@media(max-height:650px)]:p-2' : 'p-4 [@media(max-height:650px)]:p-3'} ${className}`} aria-labelledby={sprint && view === 'tickets' ? 'jira-tickets-heading' : note ? 'sidebar-note-title' : 'prompts-title'} data-speaker-sidebar>
       <button type="button" onClick={onReturn} className="mb-3 flex min-h-11 shrink-0 items-center justify-between gap-3 rounded-xl bg-blue-50 px-3 text-left min-[801px]:hidden" aria-label="Revenir au minuteur">
-        <span className="min-w-0"><span className="block truncate text-xs font-bold text-brand">{speakerName}</span><span className="text-[10px] text-muted">{running ? 'À la parole · voir le minuteur' : 'Revenir au minuteur'}</span></span>
+        <span className="min-w-0 text-xs font-semibold text-brand">{running ? 'À la parole · voir le minuteur' : 'Revenir au minuteur'}</span>
         <span className={`shrink-0 text-xl font-bold tabular-nums ${remaining < 0 ? 'text-danger' : 'text-brand'}`}>{remaining < 0 ? '+' : ''}{String(Math.floor(Math.ceil(Math.abs(remaining)) / 60)).padStart(2, '0')}:{String(Math.ceil(Math.abs(remaining)) % 60).padStart(2, '0')}</span>
       </button>
       {sprint && <div role="group" aria-label="Contenu de l’intervenant" className="mb-3 flex h-11 shrink-0 gap-1 border-b border-line">{(['tickets', 'notes'] as const).map(tab => <button key={tab} type="button" aria-pressed={view === tab} onClick={() => setView(tab)} className={`min-w-0 flex-1 rounded-t-lg px-2 text-xs font-semibold ${view === tab ? 'border-b-2 border-brand bg-blue-50 text-brand' : 'text-muted hover:bg-slate-50'}`}>{tab === 'tickets' ? 'Tickets Jira' : note ? 'Pense-bête' : 'Questions'}</button>)}</div>}
@@ -97,7 +97,6 @@ function TeamPrompts({ teamId, sprint, className, compact, speakerId, speakerNam
       {note ? <>
         <div className="shrink-0 border-b border-line pb-3">
           <h2 id="sidebar-note-title" className={`${compact ? 'text-base' : 'text-lg'} font-bold`}>Le pense-bête</h2>
-          <p className="mt-1 break-words text-xs text-muted">{speakerName}</p>
         </div>
         <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain border-l-2 border-accent bg-orange-50/30 ${compact ? 'p-3 max-[650px]:p-2' : 'p-4 max-[650px]:p-3'}`}>
           <div data-speaker-hint className="text-ink [&_.participant-note]:whitespace-normal [&_p]:whitespace-pre-line [&_p]:text-base [&_p]:leading-relaxed [&_li]:text-base [&_li]:leading-relaxed"><ParticipantNote hint={note} /></div>

@@ -29,7 +29,7 @@ export function Navbar() {
   const cloudDescription = cloudStatus === 'saved' ? 'Équipe enregistrée dans Neon.' : loading ? 'Chargement de votre équipe depuis Neon…' : cloudStatus === 'saving' ? 'Enregistrement de l’équipe dans Neon en cours.' : 'Échec de l’enregistrement de l’équipe dans Neon. Réessayez.';
   const cloudTone = cloudStatus === 'error' ? 'text-danger' : loading || cloudStatus === 'saving' ? 'text-amber-800' : 'text-success';
   const utilityClass = 'relative flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-md px-3 text-xs font-semibold transition-colors motion-reduce:transition-none max-[1100px]:px-2';
-  return <AppBar component="header" position="relative" color="transparent" elevation={0} className="site-header z-20 shrink-0 border-b border-line bg-white/95 text-ink backdrop-blur-xl" sx={{ color: 'text.primary' }}>
+  return <AppBar component="header" position="relative" color="transparent" elevation={0} className="site-header z-[1250] shrink-0 border-b border-line bg-white/95 text-ink backdrop-blur-xl" sx={{ color: 'text.primary' }}>
     <a href="#main-content" className="absolute top-2 left-3 z-50 -translate-y-24 rounded-xl bg-brand px-4 py-3 text-xs font-semibold text-white focus:translate-y-0">Aller au contenu</a>
     <div className="mx-auto flex min-h-17 w-full items-center gap-4 px-6 max-[1100px]:gap-2 max-[1100px]:px-4 max-[800px]:min-h-0 max-[800px]:flex-wrap max-[800px]:gap-y-0 max-[800px]:px-3 max-[800px]:py-1">
       <Link className="flex min-h-11 shrink-0 items-center rounded-lg pr-4 max-[1100px]:pr-1 min-[1101px]:border-r min-[1101px]:border-line" href="/teams" aria-label="Accueil du point quotidien Infomil Mauritius"><img className="h-8 w-25 object-contain max-[1100px]:w-22 max-[800px]:h-7 max-[800px]:w-17 max-[360px]:w-14" src="/infomil-logo.svg" alt="Infomil Mauritius" width={190} height={60} /></Link>
@@ -47,6 +47,7 @@ export function Navbar() {
         </ol>
       </nav>
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        {pathname === '/timer' && <div id="timer-navbar-actions" className="flex shrink-0 items-center" />}
         <ButtonBase component={Link} href="/help" title="Guide d’utilisation" aria-label="Guide d’utilisation" aria-current={pathname === '/help' ? 'page' : undefined} className={`${utilityClass} ${pathname === '/help' ? 'bg-blue-50 text-brand ring-1 ring-brand/15' : 'text-muted hover:bg-slate-100 hover:text-brand'}`}><NavIcon name="help" /><span className="max-[1400px]:sr-only">Guide</span></ButtonBase>
         {currentStep >= 0 && <>
           <IconButton title={remote.phoneConnected ? 'Téléphone connecté' : 'Télécommande mobile'} aria-label={remote.phoneConnected ? 'Téléphone connecté' : 'Télécommande mobile'} aria-pressed={remote.phoneConnected} disabled={remote.phoneConnected} onClick={openPairing} sx={remote.phoneConnected ? { '&.Mui-disabled': { color: '#147d52', opacity: 1 } } : undefined} className={`size-11 rounded-xl ${remote.phoneConnected ? 'bg-success-soft text-success ring-2 ring-success/40 shadow-[0_0_14px_#15803d55] motion-safe:animate-pulse' : 'text-muted hover:bg-slate-100 hover:text-brand'}`}><SmartphoneRounded fontSize="small" /></IconButton>

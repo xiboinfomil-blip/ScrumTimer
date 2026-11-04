@@ -110,6 +110,7 @@ export function useStandupTimer() {
     const index = current.people.findIndex(p => p.id === current.activeId);
     const people = current.people.map(p => p.id === current.activeId ? { ...p, done: true } : p);
     const person = [...people.slice(index + 1), ...people.slice(0, index)].find(p => !p.done && !p.postponed);
+    if (!person && people.some(candidate => candidate.postponed && !candidate.done)) setLateChecking(true);
     if (!person && people.every(p => p.done)) {
       roundId.current ??= createId();
       saveRound(completedRound(roundId.current, roundSpeakers(people)));
@@ -196,6 +197,7 @@ export function useStandupTimer() {
     if (current.activeId === id) {
       const index = people.findIndex(p => p.id === id);
       const following = [...people.slice(index + 1), ...people.slice(0, index)].find(p => !p.done && !p.postponed);
+      if (!following) setLateChecking(true);
       commit(cleared({ ...current, people, activeId: following?.id ?? null, focusMode: false }));
     } else commit({ ...current, people });
     notify(`${target.name} : passage reporté, sans être marqué terminé.`);

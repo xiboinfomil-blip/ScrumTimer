@@ -13,16 +13,16 @@ export function parseGoogleSlideIds(html: string): string[] {
 const cache = new Map<string, { text: string; expires: number }>();
 const pending = new Map<string, Promise<string>>();
 let bytes = 0;
-async function request(googleId: string, pageId?: string): Promise<string> {
+async function request(googleId: string, pageId?: string, powerPoint = false): Promise<string> {
   if (!/^[\w-]+$/.test(googleId) || (pageId && !/^[\w.-]+$/.test(pageId))) throw new Error('Invalid presentation');
   if (process.platform === 'win32') {
     return new Promise((resolve, reject) => {
-      execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', path.join(process.cwd(), 'scripts/fetch-google-slide.ps1'), '-GoogleId', googleId, ...(pageId ? ['-PageId', pageId] : [])],
+      execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', path.join(process.cwd(), 'scripts/fetch-google-slide.ps1'), '-GoogleId', googleId, ...(pageId ? ['-PageId', pageId] : []), ...(powerPoint ? ['-PowerPoint'] : [])],
         { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024, timeout: 50000, windowsHide: true },
         (error, stdout) => error ? reject(error) : resolve(stdout));
     });
   }
-  const suffix = pageId ? `export/svg?pageid=${encodeURIComponent(pageId)}` : 'preview';
+  const suffix = powerPoint ? 'export/pptx' : pageId ? `export/svg?pageid=${encodeURIComponent(pageId)}` : 'preview';
   const response = await fetch(`https://docs.google.com/presentation/d/${googleId}/${suffix}`, { signal: AbortSignal.timeout(40000), cache: 'no-store' });
   if (!response.ok || (pageId && !response.headers.get('Content-Type')?.startsWith('image/svg+xml'))) throw new Error('Google export unavailable');
   const reader = response.body?.getReader();
@@ -33,10 +33,17 @@ async function request(googleId: string, pageId?: string): Promise<string> {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > 20 * 1024 * 1024) { await reader.cancel(); throw new Error('Export too large'); }
+    if (size > (powerPoint ? 12 : 20) * 1024 * 1024) { await reader.cancel(); throw new Error('Export too large'); }
     chunks.push(value);
   }
-  return Buffer.concat(chunks).toString('utf8');
+  return Buffer.concat(chunks).toString(powerPoint ? 'base64' : 'utf8');
+}
+
+export async function fetchGooglePowerPoint(googleId: string): Promise<Uint8Array> {
+  const encoded = await request(googleId, undefined, true);
+  const bytes = Buffer.from(encoded, 'base64');
+  if (bytes.length > 12 * 1024 * 1024 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new Error('Invalid presentation');
+  return bytes;
 }
 
 export async function fetchGoogleSlide(googleId: string, pageId?: string, fresh = false): Promise<string> {

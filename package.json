@@ -41,6 +41,8 @@
     "@redis/client": "^5.8.2",
     "drizzle-orm": "^0.45.1",
     "entities": "^8.1.0",
+    "fast-xml-parser": "^5.3.8",
+    "fflate": "^0.8.2",
     "framer-motion": "12.10.6",
     "next": "16.3.5",
     "oauth4webapi": "^3.8.8",

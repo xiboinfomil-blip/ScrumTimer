@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
-import { Button, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material';
+import MoreVertRounded from '@mui/icons-material/MoreVertRounded';
+import GroupsRounded from '@mui/icons-material/GroupsRounded';
 import { useTeam } from '@/providers/team-provider';
 import { useLiveBroadcast } from '@/hooks/live/use-live-broadcast';
 import { usePresentation } from '@/hooks/timer/use-presentation';
@@ -23,8 +26,6 @@ import { LateCheckinDialog } from './late-checkin-dialog';
 import { useRemotePage } from '@/providers/remote-host-provider';
 import SmartphoneRounded from '@mui/icons-material/SmartphoneRounded';
 import ScreenShareRounded from '@mui/icons-material/ScreenShareRounded';
-import { WorkflowHeading } from '@/components/ui/workflow-heading';
-import { TimerRemoteCard } from './timer-remote-card';
 import { CurrentMoodCard } from './current-mood-card';
 
 export type StandupTimer = ReturnType<typeof useStandupTimer>;
@@ -33,11 +34,14 @@ export function TimerPage() {
   const reduced = useReducedMotion();
   const allowed = useStepGuard('timer');
   const timer = useStandupTimer();
-  const [view, setView] = useState<'timer' | 'queue' | 'prompts'>('timer');
+  const [view, setView] = useState<'timer' | 'prompts'>('timer');
   const [presentationView, setPresentationView] = useState<'timer' | 'notes'>('timer');
   const [lineupOpen, setLineupOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [blackScreen, setBlackScreen] = useState(false);
+  const [navbarActions, setNavbarActions] = useState<HTMLElement | null>(null);
+  const [actionsAnchor, setActionsAnchor] = useState<HTMLElement | null>(null);
+  useEffect(() => { setNavbarActions(document.getElementById('timer-navbar-actions')); }, []);
   const panels = useViewMotion(`${view}-${timer.focusMode}`);
   const { activeTeamId, activeTeamName, state, teams } = useTeam();
   const isSprint = teams.find(team => team.id === activeTeamId)?.kind === 'sprint';
@@ -52,6 +56,7 @@ export function TimerPage() {
   const note = notes.data?.hints.find(hint => hint.participantId === timer.person?.id);
   const target = useRef<HTMLDivElement>(null);
   const presentation = usePresentation(target);
+  const waitingForPostponed = !timer.activeId && timer.people.some(person => person.postponed && !person.done);
   const index = timer.people.findIndex(person => person.id === timer.activeId);
   const following = [...timer.people.slice(index + 1), ...timer.people.slice(0, Math.max(0, index))].find(person => !person.done && !person.postponed);
   const moodById = new Map(state.roster.map(person => [person.id, person.mood]));
@@ -63,7 +68,7 @@ export function TimerPage() {
     speaker: timer.person?.name ?? '', nextSpeaker: following?.name ?? '', teamName: activeTeamName,
     activeId: timer.activeId, running: timer.running, remaining: timer.remaining, deadline: timer.deadline,
     completed: timer.people.filter(person => person.done).length, total: timer.people.length,
-    blocked: timer.managing || timer.lateChecking || lineupOpen || sharing,
+    blocked: timer.managing || timer.lateChecking || waitingForPostponed || lineupOpen || sharing || Boolean(actionsAnchor),
     blackScreen, manualPenalty: timer.person?.manualPenalty ?? 0,
   }, action => {
     switch (action) {
@@ -83,25 +88,20 @@ export function TimerPage() {
   if (!allowed) return null;
   if (timer.people.length > 0 && !timer.activeId && timer.people.every(person => person.done)) return <SessionResults timer={{ ...timer, people: roundSpeakers(timer.people) }} />;
 
-  const perPerson = timer.duration % 60
-    ? `${Math.floor(timer.duration / 60)} min ${timer.duration % 60} s`
-    : `${timer.duration / 60} min`;
-
   return (
-    <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-1 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-0 ${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh max-w-none! bg-slate-50 p-3 sm:p-6' : 'mx-auto w-full'} overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
+    <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-1 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-0 ${presentation.presenting ? 'fixed inset-x-0 bottom-0 top-[68px] z-[1200] max-w-none! bg-slate-50 p-3 sm:p-6 max-[800px]:top-[105px]' : 'mx-auto w-full'} overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
+      {navbarActions && createPortal(<>
+        <IconButton title="Actions du minuteur" aria-label="Actions du minuteur" aria-haspopup="menu" aria-controls={actionsAnchor ? 'timer-actions-menu' : undefined} aria-expanded={Boolean(actionsAnchor)} onClick={event => setActionsAnchor(event.currentTarget)} sx={{ width: 44, height: 44, color: 'primary.main' }}><MoreVertRounded /></IconButton>
+        <Menu id="timer-actions-menu" anchorEl={actionsAnchor} open={Boolean(actionsAnchor)} onClose={() => setActionsAnchor(null)}>
+          <MenuItem sx={{ minHeight: 48 }} onClick={() => { setActionsAnchor(null); if (timer.running) timer.toggle(); setLineupOpen(true); }}><ListItemIcon><GroupsRounded /></ListItemIcon><ListItemText>Voir le tour de parole</ListItemText></MenuItem>
+          <MenuItem sx={{ minHeight: 48 }} onClick={() => { setActionsAnchor(null); if (presentation.presenting) { setPresentationView('timer'); void presentation.toggle(); } else setSharing(true); }}><ListItemIcon><ScreenShareRounded /></ListItemIcon><ListItemText>{presentation.presenting ? 'Quitter la présentation' : 'Diffusion'}</ListItemText></MenuItem>
+        </Menu>
+      </>, navbarActions)}
       {blackScreen && <button type="button" autoFocus onClick={() => setBlackScreen(false)} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setBlackScreen(false); } }} aria-label="Rétablir l’écran" className="fixed inset-0 z-[3000] h-dvh w-screen bg-black text-transparent focus-visible:outline-2 focus-visible:outline-white">Rétablir l’écran</button>}
-      <Dialog open={lineupOpen && !timer.lateChecking} onClose={() => setLineupOpen(false)} aria-labelledby="lineup-dialog-title" fullWidth maxWidth="sm" slotProps={{ paper: { sx: { height: 'min(640px, calc(100dvh - 32px))', m: 2, width: 'calc(100% - 32px)', borderRadius: '14px', border: '1px solid #dce3e9' } } }}>
+      <Dialog open={lineupOpen && !timer.lateChecking && !waitingForPostponed} onClose={() => setLineupOpen(false)} aria-labelledby="lineup-dialog-title" fullWidth maxWidth="sm" slotProps={{ paper: { sx: { height: 'min(640px, calc(100dvh - 32px))', m: 2, width: 'calc(100% - 32px)', borderRadius: '14px', border: '1px solid #dce3e9' } } }}>
         <DialogTitle id="lineup-dialog-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Le tour de parole</DialogTitle>
         <DialogContent className="flex min-h-0 flex-1 flex-col"><p className="mb-3 shrink-0 text-xs text-muted">{timer.focusMode ? 'Votre passage reste sélectionné. Reprenez le minuteur une fois prêt.' : 'Choisissez la personne qui ouvrira le point.'}</p>{lineupOpen && <TeamLineup timer={timer} className="flex-1" />}</DialogContent>
         <DialogActions><Button onClick={() => setLineupOpen(false)} sx={{ minHeight: 44 }}>Revenir au passage</Button></DialogActions>
-      </Dialog>
-      <Dialog open={!timer.lateChecking && !timer.activeId && timer.people.some(person => person.postponed && !person.done)} aria-labelledby="postponed-choice-title" aria-describedby="postponed-choice-description" fullWidth maxWidth="xs" sx={{ zIndex: 1500 }} slotProps={{ paper: { sx: { borderRadius: '14px', border: '1px solid #dce3e9' } } }}>
-        <DialogTitle id="postponed-choice-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Faire passer les personnes reportées ?</DialogTitle>
-        <DialogContent>
-          <p id="postponed-choice-description" className="mb-3 text-sm text-muted">Les passages disponibles sont terminés. Ouvrez le baromètre dans une fenêtre pour recueillir les humeurs des personnes reportées, puis reprenez ce tour. Sinon, terminez sans elles : elles ne figureront pas au bilan.</p>
-          {!timer.people.some(person => person.done && !person.postponed) && <p className="mt-2 text-xs text-muted">Au moins un passage doit être terminé pour enregistrer un bilan.</p>}
-        </DialogContent>
-        <DialogActions className="flex-wrap gap-1"><Button onClick={timer.openLateCheckin} sx={{ minHeight: 44 }}>Renseigner les humeurs</Button><Button onClick={timer.finishWithoutPostponed} disabled={!timer.people.some(person => person.done && !person.postponed)} sx={{ minHeight: 44 }}>Terminer sans les personnes en attente</Button></DialogActions>
       </Dialog>
       <Dialog open={sharing} onClose={() => setSharing(false)} aria-labelledby="sharing-title" fullWidth maxWidth="xs" slotProps={{ paper: { sx: { borderRadius: '14px', border: '1px solid #dce3e9' } } }}>
         <DialogTitle id="sharing-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Diffusion et présentation</DialogTitle>
@@ -112,11 +112,6 @@ export function TimerPage() {
         <span role="status" className="text-xs text-muted">{broadcast.enabled ? broadcast.status : presentation.notice}</span>
         </div></DialogContent><DialogActions><Button onClick={() => setSharing(false)}>Fermer</Button></DialogActions>
       </Dialog>
-      <WorkflowHeading step={3} title="Minuteur" description={timer.focusMode ? <span className="max-[650px]:hidden">Mode concentré · les commandes essentielles restent à portée.</span> : <><span id="overview-people" className="max-[360px]:sr-only">{timer.people.length} personnes · {perPerson} chacun</span><span aria-hidden="true" className="hidden max-[360px]:inline">{timer.people.length} · {Math.floor(timer.duration / 60)} min/pers.</span></>} action={<div className="flex shrink-0 items-center gap-2 max-[360px]:gap-1">
-        <button type="button" onClick={() => { if (timer.running) timer.toggle(); setLineupOpen(true); }} title="Voir le tour de parole" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand" aria-label="Voir le tour de parole"><span className="max-[650px]:hidden">Participants</span><span className="tabular-nums">{timer.people.filter(person => person.done).length}/{timer.people.length}</span></button>
-        {!presentation.presenting && <TimerRemoteCard compact className="min-[1100px]:hidden [@media(max-height:650px)]:flex" />}
-        <button type="button" onClick={() => { if (presentation.presenting) { setPresentationView('timer'); void presentation.toggle(); } else setSharing(true); }} aria-label={presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'} title={presentation.presenting ? 'Quitter la présentation' : 'Diffusion'} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand hover:border-brand/30 hover:bg-blue-50 max-[650px]:size-11 max-[650px]:px-0">{broadcast.enabled && <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-success" />}<ScreenShareRounded fontSize="small" /><span className="max-[650px]:sr-only">{presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'}</span></button>
-        </div>} />
       {presentation.presenting ? <ScreenTabs
         className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 max-[1099px]:flex min-[1100px]:hidden [@media(max-height:650px)]:flex [@media(max-height:650px)]:h-9 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0 [@media(max-height:650px)]:[&>button]:!min-h-9`}
         label="Présentation du point quotidien"
@@ -128,21 +123,17 @@ export function TimerPage() {
         label="Espace du point quotidien"
         value={view}
         onChange={setView}
-        tabs={[{ value: 'timer', label: 'Minuteur' }, { value: 'queue', label: `Équipe · ${timer.people.length}` }, { value: 'prompts', label: isSprint ? 'Tickets & pense-bête' : 'Pense-bête & humeur' }]}
+        tabs={[{ value: 'timer', label: 'Minuteur' }, { value: 'prompts', label: isSprint ? 'Tickets & pense-bête' : 'Pense-bête & humeur' }]}
       />}
-      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'min-[1100px]:grid-cols-[minmax(0,1.35fr)_minmax(320px,.75fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1' : timer.focusMode ? 'min-[1100px]:grid-cols-[minmax(175px,.7fr)_minmax(420px,1.65fr)_minmax(230px,.9fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1' : 'min-[1100px]:grid-cols-[minmax(210px,.82fr)_minmax(370px,1.38fr)_minmax(275px,.96fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1'}`} data-view={presentation.presenting ? presentationView : view}>
-        {!presentation.presenting && <aside aria-label="Équipe et télécommande" className={`team-rail grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 [@media(max-height:650px)]:gap-1 ${view !== 'queue' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`}>
-          <TeamLineup timer={timer} idPrefix="queue" className="min-[1100px]:col-start-1" />
-          <TimerRemoteCard />
-        </aside>}
-        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`${presentation.presenting ? 'min-[1100px]:col-start-1' : 'min-[1100px]:col-start-2'} ${presentation.presenting ? presentationView === 'notes' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
+      <div ref={panels} className="workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 min-[1100px]:grid-cols-[minmax(0,1.35fr)_minmax(320px,.75fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1" data-view={presentation.presenting ? presentationView : view}>
+        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`min-[1100px]:col-start-1 ${presentation.presenting ? presentationView === 'notes' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
         <aside aria-label="Pense-bête et humeur" className={`notes-rail grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 overflow-y-auto overscroll-contain [@media(max-height:650px)]:gap-1 ${presentation.presenting ? presentationView === 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'prompts' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`}>
-          <DailyPrompts compact={timer.focusMode} speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => presentation.presenting ? setPresentationView('timer') : setView('timer')} />
+          <DailyPrompts compact={timer.focusMode} speakerId={timer.activeId} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => presentation.presenting ? setPresentationView('timer') : setView('timer')} />
           <CurrentMoodCard compact={timer.focusMode} timer={timer} />
         </aside>
       </div>
       <TimerManagementDialog timer={timer} />
-      <LateCheckinDialog timer={timer} />
+      <LateCheckinDialog timer={timer} autoOpen={waitingForPostponed} />
     </motion.div>
   );
 }
