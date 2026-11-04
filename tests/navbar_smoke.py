@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 from browser_bootstrap import install_browser_bootstrap
+from contrast_helpers import assert_contrast
 from timer_remote_smoke import MockAPIs, REMOTE_URL, open_phone
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
@@ -50,6 +51,8 @@ with sync_playwright() as p:
         expect(navigation.get_by_role('button', name='Minuteur', exact=False)).to_be_disabled()
         page.get_by_role('link', name='Accueil du point quotidien Infomil Mauritius', exact=True).click()
         page.wait_for_url('**/teams*')
+        if preference == 'reduce':
+            assert_contrast(page, 'Teams')
         page.get_by_role('button', name='Ouvrir l’équipe Équipe Expérience & Innovation', exact=True).click()
         page.wait_for_url('**/participants*')
         expect(navigation.get_by_role('link', name='Participants', exact=True)).to_have_attribute('aria-current', 'page')
@@ -90,16 +93,22 @@ with sync_playwright() as p:
             if width in [320, 1366] and preference == 'no-preference':
                 page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-navbar-{width}.png'))
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            if preference == 'reduce' and width in [320, 1366]:
+                assert_contrast(page, f'Participants {width}')
         page.get_by_role('link', name='Accueil du point quotidien Infomil Mauritius', exact=True).click()
         page.wait_for_url('**/teams*')
         page.get_by_role('button', name='Actions de l’équipe', exact=True).click()
         page.get_by_role('menuitem', name='Gérer l’équipe', exact=True).click()
         page.wait_for_url('**/manage-team*')
+        if preference == 'reduce':
+            assert_contrast(page, 'Manage team dialog')
         expect(page.locator('.site-header nav a[href="/teams"]')).to_have_count(0)
         page.keyboard.press('Escape')
         page.wait_for_url('**/teams*')
         page.get_by_role('link', name='Guide d’utilisation', exact=True).click()
         expect(page.get_by_role('link', name='Guide d’utilisation', exact=True)).to_have_attribute('aria-current', 'page')
+        if preference == 'reduce':
+            assert_contrast(page, 'Help')
         failing[0] = True
         page.reload()
         retry = page.get_by_role('button', name='Réessayer la sauvegarde Neon', exact=True)
@@ -149,6 +158,7 @@ with sync_playwright() as p:
         pairing.get_by_role('button', name='Fermer la connexion mobile', exact=True).click()
     open_phone(phone, REMOTE_URL)
     expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
+    assert_contrast(phone, 'Remote participants')
     expect(trigger).to_be_enabled()
     expect(trigger).to_have_attribute('aria-pressed', 'true')
     trigger.hover()
@@ -164,6 +174,19 @@ with sync_playwright() as p:
     expect(trigger).to_have_attribute('aria-pressed', 'true')
     expect(pairing).not_to_be_visible()
     assert not remote_api.deletes, 'Disconnect must retain the host session and team QR'
+    live = {'snapshot': None, 'serverNow': 0, 'transport': 'redis'}
+    host_context.route('**/api/live-session', lambda route: route.fulfill(json=live))
+    spectator = host_context.new_page()
+    spectator.goto(BASE + '/spectator')
+    expect(spectator.get_by_text('En attente de la diffusion du facilitateur…', exact=True)).to_be_visible()
+    assert_contrast(spectator, 'Spectator waiting')
+    live['snapshot'] = {'speaker': 'Alice', 'nextSpeaker': 'Bob', 'teamName': 'Équipe test', 'running': False, 'remaining': 120, 'deadline': 0, 'completed': 0, 'total': 3}
+    expect(spectator.get_by_role('timer')).to_have_text('02:00')
+    assert_contrast(spectator, 'Spectator paused')
+    live['snapshot']['remaining'] = -15
+    expect(spectator.get_by_role('timer')).to_have_text('+00:15')
+    assert_contrast(spectator, 'Spectator overtime')
+    spectator.close()
     host_guard.assert_no_unexpected_api()
     phone_guard.assert_no_unexpected_api()
     host_context.close()

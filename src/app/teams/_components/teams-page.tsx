@@ -21,12 +21,10 @@ import { SprintPicker } from '@/components/jira/sprint-picker';
 import { JiraAccount } from '@/components/jira/jira-account';
 import { useJiraResource } from '@/hooks/jira/use-jira-resource';
 import type { JiraConnection, JiraSprintSelection } from '@/lib/jira/jira';
+import { field, primaryButton, secondaryButton } from '@/components/ui/styles';
 
 const searchable = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr-FR');
 const pageSize = 6;
-const secondaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 text-xs font-semibold text-brand hover:border-brand/40 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50';
-const primaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-xs font-semibold text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50';
-const field = 'min-h-11 min-w-0 rounded-lg border border-line bg-slate-50/80 px-3 text-sm text-ink placeholder:text-muted focus:border-brand';
 type View = 'all' | 'favorites';
 
 export function TeamsPage() {
@@ -114,7 +112,7 @@ export function TeamsPage() {
               <span className="min-w-0 truncate">{label}</span><span aria-hidden="true" className={`min-w-4 rounded px-1 text-center text-[10px] tabular-nums ${view === value ? 'bg-blue-50 text-brand' : 'text-muted'}`}>{ready ? count : '—'}</span>
             </button>)}
           </div>
-          <div className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-line bg-white px-3 transition-colors focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10 sm:w-72">
+          <div className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-control bg-white px-3 transition-colors focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10 sm:w-72">
             <NavIcon name="search" className="shrink-0 text-muted" width="16" height="16" />
             <label htmlFor="team-page-search" className="sr-only">Rechercher une équipe</label>
             <input id="team-page-search" type="search" value={query} onChange={event => { setQuery(event.target.value); setPage(0); }} placeholder="Rechercher par nom d’équipe…" className="min-h-11 min-w-0 flex-1 bg-transparent text-xs text-ink outline-none placeholder:text-muted focus-visible:outline-none" />
@@ -140,9 +138,9 @@ export function TeamsPage() {
                 const active = activeTeamId === team.id;
                 return <motion.li key={team.id} initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .28, delay: reducedMotion ? 0 : index * .035 }} className={`group flex min-w-0 flex-col overflow-hidden rounded-lg border bg-white motion-safe:transition-shadow hover:shadow-[0_6px_20px_#202b3608] ${active ? 'border-brand/50' : 'border-line hover:border-brand/40'}`}>
                   <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
-                    <span aria-hidden="true" className={`grid size-9 shrink-0 place-items-center rounded-lg text-xs font-bold ${active ? 'bg-brand text-white' : team.kind === 'sprint' ? 'bg-orange-50 text-accent' : 'bg-slate-100 text-muted'}`}>{team.name.split(/\s+/).slice(0, 2).map(word => Array.from(word)[0]).join('').toLocaleUpperCase('fr-FR')}</span>
+                    <span aria-hidden="true" className={`grid size-9 shrink-0 place-items-center rounded-lg text-xs font-bold ${active ? 'bg-brand text-white' : team.kind === 'sprint' ? 'bg-orange-50 text-amber-800' : 'bg-slate-100 text-muted'}`}>{team.name.split(/\s+/).slice(0, 2).map(word => Array.from(word)[0]).join('').toLocaleUpperCase('fr-FR')}</span>
                     {active && <span className="mr-auto inline-flex min-h-7 items-center gap-1.5 rounded-full bg-blue-50 px-2.5 text-[10px] font-semibold text-brand"><span aria-hidden="true" className="size-1.5 rounded-full bg-brand" />Actuelle</span>}
-                    <button type="button" disabled={disabled || team.jiraLocked} aria-label={`${team.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} : ${team.name}`} title={team.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} aria-pressed={team.favorite} onClick={() => setTeamFavorite(team.id, !team.favorite)} className={`grid size-11 shrink-0 place-items-center rounded-lg transition-colors hover:bg-amber-50 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand disabled:opacity-50 ${team.favorite ? 'text-amber-500' : 'text-slate-400'}`}>{team.favorite ? <StarIcon aria-hidden="true" sx={{ fontSize: 21 }} /> : <StarOutlineIcon aria-hidden="true" sx={{ fontSize: 21 }} />}</button>
+                    <button type="button" disabled={disabled || team.jiraLocked} aria-label={`${team.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} : ${team.name}`} title={team.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} aria-pressed={team.favorite} onClick={() => setTeamFavorite(team.id, !team.favorite)} className={`grid size-11 shrink-0 place-items-center rounded-lg transition-colors hover:bg-amber-50 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand disabled:cursor-not-allowed disabled:text-muted ${team.favorite ? 'text-amber-800' : 'text-muted'}`}>{team.favorite ? <StarIcon aria-hidden="true" sx={{ fontSize: 21 }} /> : <StarOutlineIcon aria-hidden="true" sx={{ fontSize: 21 }} />}</button>
                   </div>
                   <div className="min-w-0 flex-1 px-3 pt-2 pb-3"><h3 className="text-sm leading-5 font-semibold wrap-anywhere text-ink">{team.name}</h3><p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted"><NavIcon name="people" width="15" height="15" />{team.jiraLocked ? 'Connexion Jira requise' : <>{team.memberCount} membre{team.memberCount === 1 ? '' : 's'}{team.memberCount === 0 && ' · À compléter'}</>}</p>{team.kind === 'sprint' && <p className="mt-1.5 flex items-start gap-1.5 text-[11px] wrap-anywhere text-brand"><AccountTreeOutlinedIcon aria-hidden="true" sx={{ fontSize: 15 }} />Sprint Jira · {team.sprintName ?? ''}</p>}</div>
                   <div className={`flex flex-wrap items-center justify-between gap-2 border-t px-2 py-1.5 ${active ? 'border-brand/10 bg-blue-50/40' : 'border-slate-100'}`}>

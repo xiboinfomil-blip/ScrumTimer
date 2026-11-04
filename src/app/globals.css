@@ -10,6 +10,7 @@
 	--color-ink: #202b36;
 	--color-muted: #596979;
 	--color-line: #dce3e9;
+	--color-control: #7b8998;
 	--color-danger: #b94b43;
 	--color-success: #147d52;
 	--color-success-soft: #edf9f2;
@@ -57,7 +58,7 @@
 	input, textarea, select { font: inherit; }
 	[hidden] { display: none !important; }
 	button:not(:disabled), a, select { cursor: pointer; }
-	:is(button, a, input, select, summary):focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
+	:is(button, a, input, textarea, select, summary, [tabindex]):focus-visible { outline: 3px solid var(--color-brand-dark); outline-offset: 3px; box-shadow: 0 0 0 2px #fff; }
 	@media (prefers-reduced-motion: no-preference) {
 		/* The app scrolls inside panels, not just the document. */
 		:where(html, body, main, article, section, aside, nav, div, ul, ol) { scroll-behavior: smooth; }

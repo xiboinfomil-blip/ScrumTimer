@@ -106,7 +106,7 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
       </div>
       <div className="shrink-0 border-t border-line bg-slate-50/50 p-3">
         <p className={`mb-2 text-xs leading-snug ${canStartSession(state) && dailyReady ? 'text-success' : 'text-muted'}`} role="status">{canStartSession(state) ? <><MoodIcon name="check" className="inline-block size-3.5" /> Le tour peut commencer.</> : 'Choisissez 1 à 4 ou « Plus tard ». Une personne au moins doit être prête.'}{postponed > 0 ? ` ${postponed} personne(s) en attente : humeur et passage possibles depuis le minuteur.` : ''}</p>
-        <button type="button" className="group inline-flex min-h-11 w-full items-center justify-between gap-2 rounded-xl bg-brand px-3 text-sm font-semibold text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50" disabled={!dailyReady || !canStartSession(state)} onClick={start}>{resuming ? 'Reprendre le tour en cours' : 'Continuer vers le minuteur'} <MoodIcon name="arrow" className="size-4 shrink-0 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" /></button>
+        <button type="button" className="group inline-flex min-h-11 w-full items-center justify-between gap-2 rounded-xl bg-brand px-3 text-sm font-semibold text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-muted" disabled={!dailyReady || !canStartSession(state)} onClick={start}>{resuming ? 'Reprendre le tour en cours' : 'Continuer vers le minuteur'} <MoodIcon name="arrow" className="size-4 shrink-0 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" /></button>
       </div>
     </section>
   );

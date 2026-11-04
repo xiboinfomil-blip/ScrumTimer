@@ -5,6 +5,7 @@ import struct
 import zlib
 from playwright.sync_api import sync_playwright, expect
 from browser_bootstrap import WARNING_SECONDS, install_browser_bootstrap, mauritius_day
+from contrast_helpers import assert_contrast
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]
@@ -121,6 +122,13 @@ with sync_playwright() as p:
         expect(page.locator('#meter-catalogue-select')).to_be_disabled()
         expect(page.locator('#random-meter-button')).to_be_disabled()
         expect(page.get_by_role('button', name='Continuer vers le minuteur', exact=False)).to_be_enabled()
+        if motion == 'reduce':
+            assert_contrast(page, 'Mood meter and voting desktop')
+            page.set_viewport_size({'width': 320, 'height': 568})
+            assert_contrast(page, 'Mood meter mobile')
+            page.get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
+            assert_contrast(page, 'Mood voting mobile')
+            page.set_viewport_size({'width': 1366, 'height': 768})
         page.get_by_role('button', name='Continuer vers le minuteur', exact=False).click()
         expect(page.locator('#speaker-turn-cue')).to_have_count(0)
         expect(page.locator('#previous-button')).to_be_disabled()
@@ -269,6 +277,7 @@ with sync_playwright() as p:
                 expect(page.locator('#start-button')).to_contain_text('Pause')
                 page.get_by_role('dialog', name=f'Le pense-bête de {first}', exact=True).get_by_role('button', name='Fermer', exact=True).click()
             if motion == 'reduce' and width in [320, 1366]:
+                assert_contrast(page, f'Timer {width}')
                 page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-timer-focus-{width}{"-long" if LONG_CONTENT else ""}.png'))
             if width < 1100 or height <= 650:
                 page.get_by_role('button', name='Pense-bête & humeur', exact=True).click()
@@ -282,6 +291,7 @@ with sync_playwright() as p:
                 expect(mood_card.locator('[data-mood-number]')).to_be_visible()
                 expect(mood_card.get_by_role('group', name='Échelle d’humeur', exact=True)).to_have_count(0)
                 if motion == 'reduce' and width == 320:
+                    assert_contrast(page, 'Speaker notes and mood')
                     page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-timer-mood-320{"-long" if LONG_CONTENT else ""}.png'))
                 page.get_by_role('button', name='Minuteur', exact=True).click()
 
@@ -307,6 +317,7 @@ with sync_playwright() as p:
                     bounds = control.bounding_box()
                     assert bounds and bounds['height'] >= 44 and bounds['x'] >= 0 and bounds['x'] + bounds['width'] <= width + 1 and bounds['y'] >= 0 and bounds['y'] + bounds['height'] <= height + 1, (width, height, scene, bounds)
                 if motion == 'reduce' and width in [320, 1366]:
+                    assert_contrast(page, f'Screensaver {value} {width}')
                     page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-screensaver-{value}-{width}.png'))
             animation = saver.get_by_role('button', name='Arrêter les animations', exact=True)
             if motion == 'reduce':
