@@ -11,7 +11,11 @@ export function usePresentation(target: RefObject<HTMLElement | null>) {
     return () => { document.removeEventListener('fullscreenchange', change); document.removeEventListener('keydown', escape); };
   }, []);
   const toggle = async () => {
-    if (presenting) { setPresenting(false); return; }
+    if (presenting) {
+      setPresenting(false);
+      if (document.fullscreenElement) await document.exitFullscreen().catch(() => setNotice('Présentation fermée, mais impossible de quitter le plein écran.'));
+      return;
+    }
     if (!target.current) return;
     setPresenting(true); setNotice('');
     try { if (document.fullscreenElement) return; if (!document.documentElement.requestFullscreen) throw new Error(); await document.documentElement.requestFullscreen(); }

@@ -209,8 +209,7 @@ with sync_playwright() as p:
                 expect(page.locator('[data-motion-tabs]')).to_be_visible()
                 expect(page.locator('[data-testid="remote-pairing-card"]')).to_be_hidden()
                 expect(page.locator('[data-testid="timer-remote-shortcut"]')).to_be_visible()
-            if width > 650 and height > 650:
-                expect(page.locator('#upcoming-speaker')).to_be_visible()
+            expect(page.locator('#upcoming-speaker')).to_be_visible()
             for selector in ['#speaker-name', '#timer-display']:
                 text = page.locator(selector).bounding_box()
                 if width == 1366 and selector == '#speaker-name':
@@ -229,6 +228,36 @@ with sync_playwright() as p:
                 page.get_by_role('dialog', name=f'Le pense-bête de {first}', exact=True).get_by_role('button', name='Fermer', exact=True).click()
             if motion == 'reduce' and width in [320, 1366]:
                 page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-timer-focus-{width}.png'))
+
+        page.set_viewport_size({'width': 1366, 'height': 768})
+        page.get_by_role('button', name='Diffusion', exact=True).click()
+        sharing = page.get_by_role('dialog', name='Diffusion et présentation', exact=True)
+        sharing.get_by_role('button', name='Présentation', exact=True).click()
+        expect(page.locator('.team-rail')).to_have_count(0)
+        expect(page.locator('.notes-rail')).to_be_visible()
+        expect(page.locator('[data-speaker-sidebar]')).to_be_visible()
+        expect(page.locator('[data-testid="current-speaker-mood"]')).to_be_visible()
+        expect(page.locator('[data-motion-tabs]')).to_be_hidden()
+        page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), 'scrum-timer-presentation-1366.png'))
+        presentation_time = page.locator('#timer-display').inner_text()
+        page.set_viewport_size({'width': 320, 'height': 568})
+        expect(page.locator('[data-motion-tabs]')).to_be_visible()
+        expect(page.locator('.timer-panel')).to_be_visible()
+        expect(page.locator('.notes-rail')).to_be_hidden()
+        page.get_by_role('button', name='Pense-bête', exact=True).click()
+        expect(page.locator('.timer-panel')).to_be_hidden()
+        expect(page.locator('.notes-rail')).to_be_visible()
+        expect(page.locator('[data-testid="current-speaker-mood"]')).to_be_visible()
+        page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), 'scrum-timer-presentation-320.png'))
+        page.wait_for_timeout(1100)
+        expect(page.locator('#timer-display')).not_to_have_text(presentation_time)
+        page.get_by_role('button', name='Minuteur', exact=True).click()
+        expect(page.locator('.timer-panel')).to_be_visible()
+        expect(page.locator('.notes-rail')).to_be_hidden()
+        page.set_viewport_size({'width': 1366, 'height': 768})
+        page.get_by_role('button', name='Quitter', exact=True).click()
+        expect(page.locator('.team-rail')).to_be_visible()
+        expect(page.locator('.notes-rail')).to_be_visible()
 
         # Exiting desktop fullscreen pauses the timer before the entry gate blocks it.
         page.evaluate('document.exitFullscreen()')
@@ -294,6 +323,25 @@ with sync_playwright() as p:
         page.set_viewport_size({'width': 1366, 'height': 768})
         page.locator('#next-button').click()
         expect(page.locator('[data-speaker-sidebar]')).to_be_visible()
+
+        page.evaluate("""() => {
+            const original = Date.now;
+            Date.now = () => original() + 100000;
+            document.dispatchEvent(new Event('visibilitychange'));
+            Date.now = original;
+        }""")
+        pendulum = page.locator('[data-testid="pendulum-timer"] [data-cradle-graphic]')
+        expect(pendulum).to_have_attribute('data-urgency', 'warning')
+        warning_animation = pendulum.locator('g').first.evaluate('el => ({ duration: getComputedStyle(el).animationDuration, name: getComputedStyle(el).animationName, className: el.getAttribute("class") })')
+        assert warning_animation['duration'] == ('0s' if motion == 'reduce' else '1.2s'), warning_animation
+        page.evaluate("""() => {
+            const original = Date.now;
+            Date.now = () => original() + 115000;
+            document.dispatchEvent(new Event('visibilitychange'));
+            Date.now = original;
+        }""")
+        expect(pendulum).to_have_attribute('data-urgency', 'critical')
+        assert pendulum.locator('g').first.evaluate('el => getComputedStyle(el).animationDuration') == ('0s' if motion == 'reduce' else '0.7s')
 
         current = page.locator('#speaker-name').inner_text()
         page.evaluate("""() => {

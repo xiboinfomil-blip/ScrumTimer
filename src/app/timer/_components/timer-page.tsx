@@ -34,6 +34,7 @@ export function TimerPage() {
   const allowed = useStepGuard('timer');
   const timer = useStandupTimer();
   const [view, setView] = useState<'timer' | 'queue' | 'prompts'>('timer');
+  const [presentationView, setPresentationView] = useState<'timer' | 'notes'>('timer');
   const [lineupOpen, setLineupOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [blackScreen, setBlackScreen] = useState(false);
@@ -55,7 +56,7 @@ export function TimerPage() {
   const following = [...timer.people.slice(index + 1), ...timer.people.slice(0, Math.max(0, index))].find(person => !person.done && !person.postponed);
   const moodById = new Map(state.roster.map(person => [person.id, person.mood]));
   useRemotePage({
-    page: 'timer', participants: timer.people.map((person, personIndex) => ({
+    page: 'timer', participants: timer.people.map(person => ({
       name: person.name, present: true, mood: moodById.get(person.id) ?? null,
       done: person.done, postponed: person.postponed, active: person.id === timer.activeId,
     })), participantPresent: false, participantMood: null, participantIndex: Math.max(0, index), participantCount: timer.people.length, canVote: false, canPostpone: false, canContinue: false,
@@ -107,36 +108,38 @@ export function TimerPage() {
         <DialogContent><div className="flex flex-col gap-2" aria-label="Diffusion et présentation">
         <Button fullWidth onClick={broadcast.toggle} aria-label={broadcast.enabled ? 'Arrêter le direct' : 'Diffuser en direct'} aria-pressed={broadcast.enabled} sx={{ minHeight: 56, justifyContent: 'flex-start', border: '1px solid #dce3e9', textAlign: 'left', textTransform: 'none' }}><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-brand"><ScreenShareRounded /></span><span className="ml-3 grid justify-items-start"><strong className="text-sm">{broadcast.enabled ? 'Arrêter le direct' : 'Diffuser en direct'}</strong><span aria-hidden="true" className="text-[11px] font-normal text-muted">{broadcast.enabled ? 'Interrompre la diffusion du minuteur' : 'Afficher le minuteur sur un écran distant'}</span></span></Button>
         <Button fullWidth component={Link} href={`/spectator?team=${encodeURIComponent(activeTeamId ?? '')}`} target="_blank" rel="noopener noreferrer" aria-label="Lien spectateur" sx={{ minHeight: 56, justifyContent: 'flex-start', border: '1px solid #dce3e9', textAlign: 'left', textTransform: 'none' }}><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-brand"><SmartphoneRounded /></span><span className="ml-3 grid justify-items-start"><strong className="text-sm">Lien spectateur</strong><span aria-hidden="true" className="text-[11px] font-normal text-muted">Ouvrir une vue en lecture seule</span></span></Button>
-        <Button fullWidth onClick={() => { setSharing(false); void presentation.toggle(); }} aria-label={presentation.presenting ? 'Quitter la présentation' : 'Présentation'} aria-pressed={presentation.presenting} sx={{ minHeight: 56, justifyContent: 'flex-start', border: '1px solid #dce3e9', textAlign: 'left', textTransform: 'none' }}><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-orange-50 text-amber-800"><ScreenShareRounded /></span><span className="ml-3 grid justify-items-start"><strong className="text-sm">{presentation.presenting ? 'Quitter la présentation' : 'Présentation'}</strong><span aria-hidden="true" className="text-[11px] font-normal text-muted">{presentation.presenting ? 'Revenir à la page complète' : 'Afficher le minuteur en plein écran'}</span></span></Button>
+        <Button fullWidth onClick={() => { setSharing(false); setPresentationView('timer'); void presentation.toggle(); }} aria-label={presentation.presenting ? 'Quitter la présentation' : 'Présentation'} aria-pressed={presentation.presenting} sx={{ minHeight: 56, justifyContent: 'flex-start', border: '1px solid #dce3e9', textAlign: 'left', textTransform: 'none' }}><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-orange-50 text-amber-800"><ScreenShareRounded /></span><span className="ml-3 grid justify-items-start"><strong className="text-sm">{presentation.presenting ? 'Quitter la présentation' : 'Présentation'}</strong><span aria-hidden="true" className="text-[11px] font-normal text-muted">{presentation.presenting ? 'Revenir à la page complète' : 'Afficher le minuteur en plein écran'}</span></span></Button>
         <span role="status" className="text-xs text-muted">{broadcast.enabled ? broadcast.status : presentation.notice}</span>
         </div></DialogContent><DialogActions><Button onClick={() => setSharing(false)}>Fermer</Button></DialogActions>
       </Dialog>
       <WorkflowHeading step={3} title="Minuteur" description={timer.focusMode ? <span className="max-[650px]:hidden">Mode concentré · les commandes essentielles restent à portée.</span> : <><span id="overview-people" className="max-[360px]:sr-only">{timer.people.length} personnes · {perPerson} chacun</span><span aria-hidden="true" className="hidden max-[360px]:inline">{timer.people.length} · {Math.floor(timer.duration / 60)} min/pers.</span></>} action={<div className="flex shrink-0 items-center gap-2 max-[360px]:gap-1">
         <button type="button" onClick={() => { if (timer.running) timer.toggle(); setLineupOpen(true); }} title="Voir le tour de parole" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand" aria-label="Voir le tour de parole"><span className="max-[650px]:hidden">Participants</span><span className="tabular-nums">{timer.people.filter(person => person.done).length}/{timer.people.length}</span></button>
         {!presentation.presenting && <TimerRemoteCard compact className="min-[1100px]:hidden [@media(max-height:650px)]:flex" />}
-        <button type="button" onClick={() => presentation.presenting ? void presentation.toggle() : setSharing(true)} aria-label={presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'} title={presentation.presenting ? 'Quitter la présentation' : 'Diffusion'} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand hover:border-brand/30 hover:bg-blue-50 max-[650px]:size-11 max-[650px]:px-0">{broadcast.enabled && <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-success" />}<ScreenShareRounded fontSize="small" /><span className="max-[650px]:sr-only">{presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'}</span></button>
+        <button type="button" onClick={() => { if (presentation.presenting) { setPresentationView('timer'); void presentation.toggle(); } else setSharing(true); }} aria-label={presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'} title={presentation.presenting ? 'Quitter la présentation' : 'Diffusion'} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-brand hover:border-brand/30 hover:bg-blue-50 max-[650px]:size-11 max-[650px]:px-0">{broadcast.enabled && <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-success" />}<ScreenShareRounded fontSize="small" /><span className="max-[650px]:sr-only">{presentation.presenting ? 'Quitter' : broadcast.enabled ? 'En direct' : 'Diffusion'}</span></button>
         </div>} />
-      {!presentation.presenting && <ScreenTabs
+      {presentation.presenting ? <ScreenTabs
+        className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 max-[1099px]:flex min-[1100px]:hidden [@media(max-height:650px)]:flex [@media(max-height:650px)]:h-9 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0 [@media(max-height:650px)]:[&>button]:!min-h-9`}
+        label="Présentation du point quotidien"
+        value={presentationView}
+        onChange={setPresentationView}
+        tabs={[{ value: 'timer', label: 'Minuteur' }, { value: 'notes', label: 'Pense-bête' }]}
+      /> : <ScreenTabs
         className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 max-[1099px]:flex min-[1100px]:hidden [@media(max-height:650px)]:flex [@media(max-height:650px)]:h-9 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0 [@media(max-height:650px)]:[&>button]:!min-h-9`}
         label="Espace du point quotidien"
         value={view}
         onChange={setView}
-        tabs={[
-          { value: 'timer', label: 'Minuteur' },
-          { value: 'queue', label: `Équipe · ${timer.people.length}` },
-          { value: 'prompts', label: isSprint ? 'Tickets & pense-bête' : 'Pense-bête & humeur' },
-        ]}
+        tabs={[{ value: 'timer', label: 'Minuteur' }, { value: 'queue', label: `Équipe · ${timer.people.length}` }, { value: 'prompts', label: isSprint ? 'Tickets & pense-bête' : 'Pense-bête & humeur' }]}
       />}
-      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? '' : 'min-[1100px]:grid-cols-[minmax(210px,.82fr)_minmax(370px,1.38fr)_minmax(275px,.96fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1'}`} data-view={presentation.presenting ? 'timer' : view}>
+      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'min-[1100px]:grid-cols-[minmax(0,1.35fr)_minmax(320px,.75fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1' : 'min-[1100px]:grid-cols-[minmax(210px,.82fr)_minmax(370px,1.38fr)_minmax(275px,.96fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1'}`} data-view={presentation.presenting ? presentationView : view}>
         {!presentation.presenting && <aside aria-label="Équipe et télécommande" className={`team-rail grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 [@media(max-height:650px)]:gap-1 ${view !== 'queue' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`}>
           <TeamLineup timer={timer} idPrefix="queue" className="min-[1100px]:col-start-1" />
           <TimerRemoteCard />
         </aside>}
-        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`${presentation.presenting ? 'col-start-1 mx-auto w-full max-w-6xl' : 'min-[1100px]:col-start-2'} ${!presentation.presenting && view !== 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
-        {!presentation.presenting && <aside aria-label="Pense-bête et humeur" className={`notes-rail grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 overflow-y-auto overscroll-contain [@media(max-height:650px)]:gap-1 ${view !== 'prompts' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`}>
-          <DailyPrompts speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => setView('timer')} />
+        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`${presentation.presenting ? 'min-[1100px]:col-start-1' : 'min-[1100px]:col-start-2'} ${presentation.presenting ? presentationView === 'notes' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
+        <aside aria-label="Pense-bête et humeur" className={`notes-rail grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 overflow-y-auto overscroll-contain [@media(max-height:650px)]:gap-1 ${presentation.presenting ? presentationView === 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'prompts' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`}>
+          <DailyPrompts speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => presentation.presenting ? setPresentationView('timer') : setView('timer')} />
           <CurrentMoodCard timer={timer} />
-        </aside>}
+        </aside>
       </div>
       <TimerManagementDialog timer={timer} />
       <LateCheckinDialog timer={timer} />
