@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Paper } from '@mui/material';
 import MoodRounded from '@mui/icons-material/MoodRounded';
 import type { StandupTimer } from './timer-page';
@@ -40,14 +41,15 @@ function MoodTitle({ context, mood, fallback }: { context?: MoodSlideContext | n
 
 const moodDetails = [
   null,
-  { title: 'Mauvaise humeur', tone: 'border-red-200 bg-red-50 text-red-900', dot: 'bg-red-600' },
-  { title: 'Mauvaise humeur', tone: 'border-amber-200 bg-amber-50 text-amber-950', dot: 'bg-amber-600' },
-  { title: 'Bonne humeur', tone: 'border-blue-200 bg-blue-50 text-blue-900', dot: 'bg-blue-600' },
-  { title: 'Bonne humeur', tone: 'border-green-200 bg-green-50 text-green-900', dot: 'bg-green-600' },
+  { title: 'Mauvaise humeur', tone: 'border-red-200 bg-red-50 text-red-900' },
+  { title: 'Mauvaise humeur', tone: 'border-amber-200 bg-amber-50 text-amber-950' },
+  { title: 'Bonne humeur', tone: 'border-blue-200 bg-blue-50 text-blue-900' },
+  { title: 'Bonne humeur', tone: 'border-green-200 bg-green-50 text-green-900' },
 ] as const;
 const faces = ['😣', '😞', '😌', '😊'];
 
 export function CurrentMoodCard({ timer, compact = false }: { timer: StandupTimer; compact?: boolean }) {
+  const reduced = useReducedMotion();
   const person = timer.person;
   const mood = person?.mood ?? null;
   const detail = mood ? moodDetails[mood] : null;
@@ -56,24 +58,20 @@ export function CurrentMoodCard({ timer, compact = false }: { timer: StandupTime
   return <Paper component="section" elevation={0} aria-label={label} data-testid="current-speaker-mood" className={`min-w-0 overflow-hidden rounded-lg border bg-white ${detail?.tone ?? 'border-line'}`}>
     <div className="flex items-center justify-between gap-3 border-b border-current/10 px-4 py-3 max-[360px]:px-3">
       <h2 className="flex items-center gap-2 text-base font-bold"><MoodRounded fontSize="small" /> Humeur actuelle</h2>
-      {mood && <span className="shrink-0 rounded-md bg-white/80 px-2.5 py-1 text-base font-bold tabular-nums">{mood} / 4</span>}
     </div>
-    {person && mood && detail ? <div id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${mood} sur 4`} className="flex min-w-0 items-center gap-4 p-4 max-[360px]:gap-3 max-[360px]:p-3">
+    {person && mood && detail ? <motion.div key={`${person.id}:${mood}`} initial={reduced ? false : { opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: reduced ? 0 : .4, ease: [.22, 1, .36, 1] }} id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${mood} sur 4`} className="flex min-w-0 items-center gap-4 p-4 max-[360px]:gap-3 max-[360px]:p-3">
       <div className={`relative grid ${compact ? 'size-20' : 'size-24'} text-4xl shrink-0 place-items-center overflow-hidden rounded-lg border border-current/15 bg-white`} aria-hidden="true">
         <span>{faces[mood - 1]}</span>
         {person.moodSlide && <SpeakerMoodPicture key={`${person.id}:${person.moodSlide.image}:${mood}`} context={person.moodSlide} mood={mood} card />}
-        <span className="absolute right-1 top-1 z-10 grid size-6 place-items-center rounded bg-white/95 text-sm font-bold tabular-nums text-ink shadow-sm">{mood}</span>
+        <span data-mood-number className="absolute right-1 top-1 z-10 grid size-6 place-items-center rounded bg-white/95 text-sm font-bold tabular-nums text-ink shadow-sm">{mood}</span>
       </div>
       <div className="min-w-0 flex-1">
         <MoodTitle key={`${person.id}:${person.moodSlide?.image}:${mood}`} context={person.moodSlide} mood={mood} fallback={detail.title} />
       </div>
       <div role="img" aria-label={`Niveau ${mood} sur 4`} className="sr-only">{mood}</div>
-    </div> : <div className={`flex items-center gap-3 ${compact ? 'p-2' : 'min-h-[92px] p-3'}`}>
+    </motion.div> : <div className={`flex items-center gap-3 ${compact ? 'p-2' : 'min-h-[92px] p-3'}`}>
       <span className="grid size-12 shrink-0 place-items-center rounded-md bg-slate-50 text-muted"><MoodRounded /></span>
       <p className="text-xs leading-relaxed text-muted">{person ? 'Aucune humeur renseignée pour ce passage.' : 'La prochaine humeur apparaîtra avec la personne qui prend la parole.'}</p>
-    </div>}
-    {person && mood && <div className="grid grid-cols-4 gap-2 px-4 pb-4 max-[360px]:px-3" role="group" aria-label="Échelle d’humeur">
-      {moodDetails.slice(1).map((item, index) => <span key={index} aria-label={`Humeur ${index + 1}${mood === index + 1 ? ', sélectionnée' : ''}`} className={`grid h-9 place-items-center rounded-md text-sm font-bold tabular-nums ${mood === index + 1 ? `${item?.dot} text-white shadow-sm ring-2 ring-current ring-offset-2` : 'bg-white/60 text-ink/60'}`}>{index + 1}</span>)}
     </div>}
   </Paper>;
 }

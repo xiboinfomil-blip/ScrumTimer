@@ -161,6 +161,12 @@ with sync_playwright() as p:
         expect(page.locator('[data-mood-title]')).to_have_text(MOOD_TITLES[chosen - 1])
         expect(page.locator('#speaker-slider')).not_to_contain_text('Puis :')
         expect(page.locator('#speaker-mood')).not_to_contain_text('Énergie')
+        expect(page.locator('[data-mood-number]')).to_have_count(1)
+        expect(page.locator('[data-mood-number]')).to_have_text(str(chosen))
+        expect(page.locator('[data-testid="current-speaker-mood"]').get_by_role('group', name='Échelle d’humeur', exact=True)).to_have_count(0)
+        expect(page.locator('[data-testid="current-speaker-mood"] > div').first).not_to_contain_text('/ 4')
+        assert page.locator('#speaker-name').evaluate('el => getComputedStyle(el).textAlign') == 'center'
+        assert page.locator('#speaker-name').evaluate('el => Number(getComputedStyle(el).fontWeight)') >= 800
         expect(page.locator('#speaker-mood [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
         mood_picture = page.locator('#speaker-mood [data-mood-picture]')
         expect(mood_picture).to_have_count(1)
@@ -261,7 +267,8 @@ with sync_playwright() as p:
                 title_box = page.locator('[data-mood-title]').bounding_box()
                 assert card_box and title_box and title_box['x'] >= card_box['x'] and title_box['x'] + title_box['width'] <= card_box['x'] + card_box['width'] + 1, (width, card_box, title_box)
                 assert page.locator('[data-mood-title]').evaluate('el => el.scrollWidth <= el.clientWidth + 1'), width
-                expect(mood_card.get_by_role('group', name='Échelle d’humeur', exact=True)).to_be_visible()
+                expect(mood_card.locator('[data-mood-number]')).to_be_visible()
+                expect(mood_card.get_by_role('group', name='Échelle d’humeur', exact=True)).to_have_count(0)
                 if motion == 'reduce' and width == 320:
                     page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-timer-mood-320{"-long" if LONG_CONTENT else ""}.png'))
                 page.get_by_role('button', name='Minuteur', exact=True).click()

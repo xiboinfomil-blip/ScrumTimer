@@ -8,6 +8,7 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
 import { useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Loader } from '@infomil/scrum-shared/ui';
 import type { useDailyHints } from '@/hooks/meeting/use-daily-hints';
 import { ParticipantNote } from '@/components/ui/participant-note';
@@ -17,6 +18,7 @@ import { SpeakerSlider } from './speaker-slider';
 import { TimerIcon } from './timer-icon';
 
 export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTimer; notes: ReturnType<typeof useDailyHints>; className?: string }) {
+  const reduced = useReducedMotion();
   const { people, person, remaining, turnTotal, running, ended, warning, turnStarted } = timer;
   const [readingNote, setReadingNote] = useState(false);
   const note = notes.data?.hints.find(hint => hint.participantId === person?.id);
@@ -55,23 +57,28 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
         {ended ? <p id="time-up-alert" role="alert" className="text-[11px] font-semibold text-danger"><span className="sr-only">{person?.name}, </span>Temps utilisé. Merci de passer la parole.</p> : <span className="sr-only" id="speaker-mood-description" hidden={!person}>{person ? `Humeur ${person.mood} / 4 · ${running ? 'Parle maintenant' : 'À vous la parole'}` : ''}</span>}
       </div>
       <div id="timer-stage" key={`${timer.activeId}-${timer.focusMode}`} className="row-start-3 grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] items-center justify-items-center gap-3 self-stretch overflow-hidden bg-transparent text-ink max-[650px]:gap-2 [@media(min-width:651px)_and_(max-height:650px)]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] [@media(min-width:651px)_and_(max-height:650px)]:grid-rows-1">
-        <div id={timer.focusMode ? 'speaker-turn-cue' : undefined} role="status" aria-live="polite" aria-atomic="true" className="w-full min-w-0 border-l-4 border-brand px-3 text-left">
-          <span className={`flex items-center gap-2 text-sm font-bold max-[650px]:text-xs ${ended || critical ? 'text-danger' : nearly ? 'text-amber-800' : 'text-brand'}`}><span aria-hidden="true" className={`size-2 shrink-0 rounded-full bg-current ${running ? 'motion-safe:animate-pulse' : ''}`} />{ended ? 'Merci de passer la parole' : running ? 'À TOI DE PARLER !' : turnStarted ? 'TON TOUR EST EN PAUSE' : 'La parole est à'}</span>
-          <h2 id="speaker-name" className={`mt-1 break-words font-bold leading-tight text-ink ${speakerName.length > 35 ? 'text-3xl max-[650px]:text-xl [@media(max-height:650px)]:text-lg' : 'text-5xl max-[650px]:text-3xl [@media(max-height:650px)]:text-2xl'}`} title={speakerName}>{speakerName}</h2>
-        </div>
-        <div data-testid="stopwatch-timer" data-urgency={urgency} className={`relative grid h-full max-h-96 min-h-0 w-full max-w-96 place-items-center self-stretch [container-type:size] ${ended || critical ? 'text-danger' : nearly ? 'text-amber-700' : 'text-brand'} ${pulse}`}>
+        <motion.div initial={reduced ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} id={timer.focusMode ? 'speaker-turn-cue' : undefined} role="status" aria-live="polite" aria-atomic="true" className="w-full min-w-0 px-3 text-center">
+          <span className={`flex items-center justify-center gap-2 text-sm font-bold max-[650px]:text-xs ${ended || critical ? 'text-danger' : nearly ? 'text-amber-800' : 'text-brand'}`}><span aria-hidden="true" className={`size-2 shrink-0 rounded-full bg-current ${running ? 'motion-safe:animate-pulse' : ''}`} />{ended ? 'Merci de passer la parole' : running ? 'À TOI DE PARLER !' : turnStarted ? 'TON TOUR EST EN PAUSE' : 'La parole est à'}</span>
+          <h2 id="speaker-name" className={`mt-1 break-words font-extrabold leading-tight text-brand ${speakerName.length > 35 ? 'text-3xl max-[650px]:text-xl [@media(max-height:650px)]:text-lg' : 'text-5xl max-[650px]:text-3xl [@media(max-height:650px)]:text-2xl'}`} title={speakerName}>{speakerName}</h2>
+        </motion.div>
+        <motion.div initial={reduced ? false : { opacity: 0, scale: .94 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: reduced ? 0 : .5, delay: reduced ? 0 : .08, ease: [.22, 1, .36, 1] }} data-testid="stopwatch-timer" data-urgency={urgency} className={`relative grid h-full max-h-96 min-h-0 w-full max-w-96 place-items-center self-stretch [container-type:size] ${ended || critical ? 'text-danger' : nearly ? 'text-amber-700' : 'text-brand'} ${pulse}`}>
           <div className="relative size-[min(100cqw,100cqh)] rounded-full border border-brand/10 p-2" aria-hidden="true">
+            <div className="absolute inset-[8%] rounded-full border border-dashed border-current/15" />
+            <span className="absolute left-1/2 top-[11%] h-2 w-0.5 -translate-x-1/2 rounded-full bg-current/30" />
+            <span className="absolute bottom-[11%] left-1/2 h-2 w-0.5 -translate-x-1/2 rounded-full bg-current/30" />
+            <span className="absolute left-[11%] top-1/2 h-0.5 w-2 -translate-y-1/2 rounded-full bg-current/30" />
+            <span className="absolute right-[11%] top-1/2 h-0.5 w-2 -translate-y-1/2 rounded-full bg-current/30" />
             <CircularProgress variant="determinate" value={100} size="100%" thickness={1.5} className="absolute inset-0 text-brand/10" />
             <CircularProgress variant="determinate" value={ratio * 100} size="100%" thickness={3} color="inherit" className="absolute inset-0 motion-reduce:[&_.MuiCircularProgress-circle]:transition-none" sx={{ '& circle': { strokeLinecap: 'round' } }} />
           </div>
           <div className="pointer-events-none absolute inset-0 flex min-w-0 flex-col items-center justify-center gap-1 px-2">
             <TimerRounded className="text-current max-[650px]:hidden [@media(max-height:650px)]:hidden" />
             <span id="timer-label" className="text-sm font-semibold max-[650px]:text-xs [@media(max-height:650px)]:text-[10px]">{ended ? 'Dépassement' : critical ? 'Concluez maintenant' : nearly ? 'Bientôt la fin' : running ? 'Temps restant' : 'Temps par personne'}</span>
-            <span id="timer-display" className="block text-[min(4.5rem,23cqw,23cqh)] font-bold leading-none tabular-nums" role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
+            <motion.span key={seconds} initial={reduced ? false : { opacity: .8, y: 3 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduced ? 0 : .18 }} id="timer-display" className="block text-[min(4.5rem,23cqw,23cqh)] font-bold leading-none tabular-nums" role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
               {ended ? '+' : ''}{String(minutes).padStart(2, '0')}:{String(secs).padStart(2, '0')}
-            </span>
+            </motion.span>
           </div>
-        </div>
+        </motion.div>
         <div className="sr-only" role="progressbar" aria-label="Temps écoulé" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((1 - ratio) * 100)} />
       </div>
       <div data-timer-controls className="col-span-full grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] items-center gap-3 max-[650px]:gap-2">
