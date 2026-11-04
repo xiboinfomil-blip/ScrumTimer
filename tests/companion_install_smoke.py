@@ -341,7 +341,7 @@ def main():
                 context.add_init_script("Object.defineProperty(navigator, 'standalone', {value:true});")
             page = context.new_page()
             page.goto(BASE + '/remote')
-            expect(page.get_by_role('status')).to_contain_text('Ce lien est incomplet')
+            expect(page.get_by_role('status').filter(has_text='Ce lien est incomplet')).to_be_visible()
             expect(page.get_by_role('complementary', name='Installer la télécommande')).to_have_count(0)
             expect(install_dialog(page)).to_have_count(0)
             expect(page.get_by_role('button', name='Ajouter l’application')).to_have_count(0)

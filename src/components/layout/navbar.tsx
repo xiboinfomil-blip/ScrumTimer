@@ -7,8 +7,9 @@ import { hasValidSession } from '@/lib/team/team-storage';
 import { useTeam } from '@/providers/team-provider';
 import { NavIcon } from './nav-icon';
 import SmartphoneRounded from '@mui/icons-material/SmartphoneRounded';
-import LinkOffRounded from '@mui/icons-material/LinkOffRounded';
 import { useRemoteHost } from '@/providers/remote-host-provider';
+import { AppInstallButton } from './app-install-button';
+import { TeamNavbarActions } from './team-navbar-actions';
 
 const steps = [
   { path: '/participants', label: 'Participants', icon: 'people' },
@@ -19,8 +20,8 @@ const steps = [
 export function Navbar() {
   const pathname = usePathname();
   const reduced = useReducedMotion();
-  const { state, ready, todayRound, cloudStatus, retryCloud, updateTeam } = useTeam();
-  const { openPairing, remote } = useRemoteHost();
+  const { state, activeTeamId, ready, todayRound, cloudStatus, retryCloud, updateTeam } = useTeam();
+  const { openPairing, scheduleClosePairing, pairingOpen, remote } = useRemoteHost();
   const currentStep = steps.findIndex(step => step.path === pathname);
   const hasPeople = ready && (Boolean(todayRound) || state.roster.some(person => person.present));
   const canUseTimer = ready && (Boolean(todayRound) || hasValidSession(state));
@@ -47,11 +48,12 @@ export function Navbar() {
         </ol>
       </nav>
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        <AppInstallButton />
+        <TeamNavbarActions key={activeTeamId} />
         {pathname === '/timer' && <div id="timer-navbar-actions" className="flex shrink-0 items-center" />}
-        <ButtonBase component={Link} href="/help" title="Guide d’utilisation" aria-label="Guide d’utilisation" aria-current={pathname === '/help' ? 'page' : undefined} className={`${utilityClass} ${pathname === '/help' ? 'bg-blue-50 text-brand ring-1 ring-brand/15' : 'text-muted hover:bg-slate-100 hover:text-brand'}`}><NavIcon name="help" /><span className="max-[1400px]:sr-only">Guide</span></ButtonBase>
+        <ButtonBase component={Link} href="/help" title="Guide d’utilisation" aria-label="Guide d’utilisation" aria-current={pathname === '/help' ? 'page' : undefined} className={`${utilityClass} ${ready && activeTeamId ? 'max-[360px]:hidden' : ''} ${pathname === '/help' ? 'bg-blue-50 text-brand ring-1 ring-brand/15' : 'text-muted hover:bg-slate-100 hover:text-brand'}`}><NavIcon name="help" /><span className="max-[1400px]:sr-only">Guide</span></ButtonBase>
         {currentStep >= 0 && <>
-          <IconButton title={remote.phoneConnected ? 'Téléphone connecté' : 'Télécommande mobile'} aria-label={remote.phoneConnected ? 'Téléphone connecté' : 'Télécommande mobile'} aria-pressed={remote.phoneConnected} disabled={remote.phoneConnected} onClick={openPairing} sx={remote.phoneConnected ? { '&.Mui-disabled': { color: '#147d52', opacity: 1 } } : undefined} className={`size-11 rounded-xl ${remote.phoneConnected ? 'bg-success-soft text-success ring-2 ring-success/40 shadow-[0_0_14px_#15803d55] motion-safe:animate-pulse' : 'text-muted hover:bg-slate-100 hover:text-brand'}`}><SmartphoneRounded fontSize="small" /></IconButton>
-          {remote.phoneConnected && <Tooltip title="Déconnecter le téléphone"><IconButton title="Déconnecter le téléphone" aria-label="Déconnecter le téléphone" onClick={() => void remote.disconnectPhone()} className="size-11 rounded-xl text-danger hover:bg-danger-soft"><LinkOffRounded fontSize="small" /></IconButton></Tooltip>}
+          <IconButton id="remote-pairing-button" title={remote.phoneConnected ? 'Déconnecter le téléphone' : 'Télécommande mobile'} aria-label={remote.phoneConnected ? 'Déconnecter le téléphone' : 'Télécommande mobile'} aria-pressed={remote.phoneConnected} aria-haspopup="dialog" aria-expanded={pairingOpen} aria-controls={pairingOpen ? 'remote-pairing-panel' : undefined} onPointerMove={event => { if (event.pointerType === 'mouse' && matchMedia('(hover: hover)').matches) openPairing(); }} onPointerLeave={event => { if (event.pointerType === 'mouse') scheduleClosePairing(); }} onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); openPairing(); } }} onClick={() => { if (remote.phoneConnected) void remote.disconnectPhone(); else openPairing(); }} className={`size-11 rounded-lg ${remote.phoneConnected ? 'bg-success-soft text-success ring-1 ring-success/40 hover:bg-red-50 hover:text-danger' : 'text-muted hover:bg-slate-100 hover:text-brand'}`}><SmartphoneRounded fontSize="small" /></IconButton>
         </>}
         {pathname === '/timer' && <Tooltip title={state.sound ? 'Couper les alertes sonores' : 'Activer les alertes sonores'}><IconButton disabled={!ready} aria-label={state.sound ? 'Couper les alertes sonores' : 'Activer les alertes sonores'} aria-pressed={state.sound} className={`size-11 rounded-xl ${state.sound ? 'bg-blue-50 text-brand' : 'text-muted'}`} onClick={() => updateTeam(current => ({ ...current, sound: !current.sound }))}><NavIcon name={state.sound ? 'sound' : 'muted'} /></IconButton></Tooltip>}
         <span role="status" title={cloudDescription} aria-label={cloudDescription} className={`ml-1 flex h-8 items-center gap-1.5 px-2 text-[10px] font-semibold max-[1100px]:sr-only ${cloudTone}`}><span aria-hidden="true" className={`size-1.5 rounded-full bg-current ${loading || cloudStatus === 'saving' ? 'motion-safe:animate-pulse' : ''}`} /><span>{cloudLabel}</span></span>

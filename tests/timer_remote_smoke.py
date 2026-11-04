@@ -328,6 +328,7 @@ class MockAPIs:
     def register(self, context):
         context.route('**/api/timer-remote*', self.remote)
         context.route('**/api/teams', lambda route: route.fulfill(json=team_options(member_count=3)))
+        context.route('**/api/jira', lambda route: route.fulfill(json={'connected': False}))
 
         def team_api(route):
             assert route.request.headers.get('x-team-id') == TEAM_ID
@@ -377,7 +378,7 @@ def geometry(page, label, failures, *, host=False, timer=True):
     page.wait_for_function("""() => document.getAnimations().every(a =>
         a.playState !== 'running' || a.effect.getTiming().iterations === Infinity)""")
     report = page.evaluate("""host => {
-        const root = host ? document.querySelector('#timer-page > header') : document.querySelector('main');
+        const root = host ? document.querySelector('.site-header') : document.querySelector('main');
         const box = root.getBoundingClientRect();
         const controls = [...root.querySelectorAll('button, a, input, select')]
             .filter(el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden')
@@ -490,15 +491,20 @@ def main():
             try:
                 host.goto(BASE + '/participants')
                 expect(host.locator('#participants-page')).to_be_visible()
-                host.get_by_role('button', name='Télécommande mobile', exact=True).click()
+                host.get_by_role('button', name='Télécommande mobile', exact=True).hover()
                 pairing = host.get_by_role('dialog', name='Télécommande mobile', exact=True)
+                expect(pairing).to_have_attribute('aria-modal', 'false')
                 expect(pairing.locator('[data-testid="remote-qr"] svg')).to_be_visible()
+                expect(pairing.get_by_role('button', name='Désactiver', exact=True)).to_have_count(0)
+                pairing.hover()
+                expect(pairing).to_be_visible()
                 qr_path = pairing.locator('[data-testid="remote-qr"] svg').inner_html()
                 open_phone(phone, REMOTE_URL)
                 expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
                 expect(pairing).not_to_be_visible()
-                connected_icon = host.get_by_role('button', name='Téléphone connecté', exact=True)
+                connected_icon = host.locator('#remote-pairing-button')
                 expect(connected_icon).to_have_attribute('aria-pressed', 'true')
+                expect(connected_icon).to_be_enabled()
                 expect(host.get_by_role('button', name='Déconnecter le téléphone', exact=True)).to_be_visible()
                 open_phone(second_phone, REMOTE_URL)
                 expect(second_phone.get_by_text('Un autre téléphone est déjà connecté', exact=False).first).to_be_visible()
@@ -776,10 +782,10 @@ def main():
                 expect(pause).to_be_enabled()
 
                 phone.set_viewport_size({'width': phone_size[0], 'height': phone_size[1]})
-                host.get_by_role('button', name='Déconnecter le téléphone', exact=True).click()
+                host.locator('#remote-pairing-button').click()
                 expect(phone.get_by_text('Cette télécommande a été déconnectée depuis l’ordinateur', exact=False).first).to_be_visible()
-                host.get_by_role('button', name='Télécommande mobile', exact=True).click()
-                pairing.get_by_role('button', name='Désactiver', exact=True).click()
+                host.get_by_role('link', name='Accueil du point quotidien Infomil Mauritius', exact=True).click()
+                host.wait_for_url('**/teams*')
                 expect(phone.get_by_text('Hors ligne', exact=True)).to_be_visible()
                 expect(phone.locator('p[role="status"]')).to_contain_text('Votre équipe est associée')
                 expect(phone.get_by_role('button', name='Démarrer / reprendre', exact=True)).to_have_count(0)
@@ -793,7 +799,10 @@ def main():
                 geometry(phone, (motion, phone_size, 'disabled-waiting'), failures, timer=False)
                 # Keep the same phone document open: polling must recover unaided.
                 phone_document = phone.evaluate('performance.timeOrigin')
-                pairing.get_by_role('button', name='Activer le QR de l’équipe', exact=True).click()
+                host.goto(BASE + '/timer')
+                expect(host.locator('#speaker-name')).to_be_visible()
+                host.get_by_role('button', name='Télécommande mobile', exact=True).click()
+                expect(pairing.locator('[data-testid="remote-qr"] svg')).to_be_visible()
                 assert len(api.creates) == 2, {
                     'pairCreations': len(api.creates),
                     'status': pairing.get_by_role('status').all_text_contents(),
@@ -812,7 +821,7 @@ def main():
                     return response.status;
                 }""", old)
                 assert rejected == 401, 'Old host owner must not revoke the new lease'
-                pairing.get_by_role('button', name='Fermer', exact=True).click()
+                pairing.get_by_role('button', name='Fermer la connexion mobile', exact=True).click()
                 expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
                 expect(pause).to_be_enabled()
                 assert phone.evaluate('performance.timeOrigin') == phone_document
@@ -898,7 +907,7 @@ def main():
                 pairing.get_by_role('button', name='Réactiver la connexion', exact=True).click()
                 open_phone(second_phone, REMOTE_URL)
                 expect(second_phone.get_by_text('En ligne', exact=True)).to_be_visible()
-                expect(host.get_by_role('button', name='Téléphone connecté', exact=True)).to_have_attribute('aria-pressed', 'true')
+                expect(host.locator('#remote-pairing-button')).to_have_attribute('aria-pressed', 'true')
                 expect(pairing).not_to_be_visible()
                 assert not errors, errors
                 host_guard.assert_no_unexpected_api()

@@ -9,7 +9,6 @@ import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DeleteTeamButton } from '@/components/ui/delete-team-button';
-import { ParticipantLinkButton } from '@/components/ui/participant-link-button';
 import { PaginatedList } from '@/components/ui/paginated-list';
 import { NavIcon } from '@/components/layout/nav-icon';
 import { AddPersonForm } from '@/app/participants/_components/add-person-form';
@@ -105,7 +104,6 @@ export function ManageTeamPage({ modal = false }: { modal?: boolean } = {}) {
           <span aria-hidden="true" className="absolute right-0 top-0 h-20 w-20 translate-x-7 -translate-y-7 rounded-full border-[10px] border-accent/15" />
           <h2 id="team-access-heading" className="relative flex items-center gap-2 text-base font-bold text-ink"><NavIcon name="people" width="19" height="19" className="text-brand" />Accès des participants</h2>
           <p className="relative mt-2 text-sm leading-relaxed text-muted">Un espace partagé pour les notes, les statistiques et les bilans de l’équipe.</p>
-          <div className="relative mt-4 flex [&_button]:w-full"><ParticipantLinkButton key={activeTeamId} /></div>
           <p className="relative mt-3 text-xs leading-relaxed text-muted">Toute personne qui possède le lien peut consulter ces données et modifier les notes.</p>
         </section>}
         <section className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4" aria-labelledby="team-daily-heading">

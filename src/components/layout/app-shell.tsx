@@ -19,7 +19,6 @@ const WELCOME_DAY_KEY = 'standup.welcome.day.v1';
 export function AppShell({ children, modal }: { children: ReactNode; modal: ReactNode }) {
   useActionMotion();
   const [introOpen, setIntroOpen] = useState(false);
-  const [introChecked, setIntroChecked] = useState(false);
   const introDay = useRef<string | null>(null);
   const closeIntro = useCallback(() => setIntroOpen(false), []);
   const router = useRouter();
@@ -35,11 +34,10 @@ export function AppShell({ children, modal }: { children: ReactNode; modal: Reac
   useEffect(() => {
     if (pathname === '/remote' || pathname === '/spectator') {
       setIntroOpen(false);
-      setIntroChecked(true);
       return;
     }
     const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date());
-    if (introDay.current === day) { setIntroChecked(true); return; }
+    if (introDay.current === day) return;
     introDay.current = day;
     let seen = false;
     try {
@@ -47,7 +45,6 @@ export function AppShell({ children, modal }: { children: ReactNode; modal: Reac
       if (!seen) window.localStorage.setItem(WELCOME_DAY_KEY, day);
     } catch { /* Show the introduction when browser storage is unavailable. */ }
     setIntroOpen(!seen);
-    setIntroChecked(true);
   }, [pathname]);
   useEffect(() => {
     if (!ready || !routeScope.current || reduced) return;
@@ -65,7 +62,7 @@ export function AppShell({ children, modal }: { children: ReactNode; modal: Reac
   return <RemoteHostProvider><MotionConfig reducedMotion="user" transition={{ type: 'spring', stiffness: 420, damping: 28 }}>
     {introOpen && pathname !== '/spectator' && <WelcomeEntrance onClose={closeIntro} />}
     <div className="contents" inert={introOpen && pathname !== '/spectator'} aria-hidden={introOpen && pathname !== '/spectator' ? true : undefined}>
-    {introChecked && !introOpen && pathname !== '/spectator' && <DesktopFullscreenGate />}
+    {pathname !== '/spectator' && <DesktopFullscreenGate />}
     {pathname !== '/spectator' && <Navbar />}
     <main id="main-content" tabIndex={-1} className="page mx-auto flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden px-6 pt-4.5 pb-2.5 max-[1100px]:px-4 max-[1100px]:pt-3 max-[650px]:gap-2 max-[650px]:px-3 max-[650px]:py-2.5">
       {cloudStatus === 'error' && <Alert severity="warning" className="shrink-0" action={<Button onClick={retryCloud}>Réessayer Neon</Button>}>Données Neon indisponibles ou conflit de sauvegarde. Aucun stockage local. Les modifications non confirmées restent en mémoire. Ne rechargez pas avant de les sauvegarder.</Alert>}

@@ -1,9 +1,11 @@
 """Navbar geometry, states, keyboard and dropdown checks; no live API writes."""
 import os
+import re
 import tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 from browser_bootstrap import install_browser_bootstrap
+from timer_remote_smoke import MockAPIs, REMOTE_URL, open_phone
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 TEAM_ID = 'a' * 64
@@ -27,6 +29,9 @@ with sync_playwright() as p:
                 route.fulfill(json={'rounds': [], 'day': '2026-10-15'})
             elif path == 'jira':
                 route.fulfill(json={'connected': False})
+            elif path == 'participant-link':
+                assert route.request.method == 'POST'
+                route.fulfill(json={'url': 'https://participants.example/?team=fixture'})
             elif path == 'timer-remote':
                 route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'})
             else:
@@ -52,6 +57,19 @@ with sync_playwright() as p:
         page.get_by_role('link', name='Aller au contenu', exact=True).focus()
         page.keyboard.press('Enter')
         expect(page.locator('#main-content')).to_be_focused()
+        page.get_by_role('button', name='Actions de l’équipe', exact=True).click()
+        page.get_by_role('menuitem', name='Lien participants', exact=True).click()
+        share = page.get_by_role('dialog', name=re.compile('Portail participants'))
+        expect(share).to_be_visible()
+        expect(share.locator('#participant-share-url')).to_have_value(re.compile('https://participants.example/'))
+        share.get_by_role('button', name='Fermer', exact=True).click()
+        page.get_by_role('button', name='Actions de l’équipe', exact=True).click()
+        page.get_by_role('menuitem', name='Nouveau bilan', exact=True).click()
+        reset = page.get_by_role('dialog', name='Commencer un nouveau bilan ?', exact=True)
+        expect(reset).to_be_visible()
+        reset.get_by_role('button', name='Annuler', exact=True).click()
+        expect(page.locator('#participants-page').get_by_role('button', name='Nouveau bilan', exact=True)).to_have_count(0)
+        expect(page.locator('#participants-page a[href^="/manage-team"]')).to_have_count(0)
         for width, height in SIZES:
             page.set_viewport_size({'width': width, 'height': height})
             header = page.locator('.site-header')
@@ -74,7 +92,8 @@ with sync_playwright() as p:
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         page.get_by_role('link', name='Accueil du point quotidien Infomil Mauritius', exact=True).click()
         page.wait_for_url('**/teams*')
-        page.get_by_role('button', name='Gérer l’équipe Équipe Expérience & Innovation', exact=True).click()
+        page.get_by_role('button', name='Actions de l’équipe', exact=True).click()
+        page.get_by_role('menuitem', name='Gérer l’équipe', exact=True).click()
         page.wait_for_url('**/manage-team*')
         expect(page.locator('.site-header nav a[href="/teams"]')).to_have_count(0)
         page.keyboard.press('Escape')
@@ -93,4 +112,61 @@ with sync_playwright() as p:
         assert not errors, errors
         context.close()
         print(f'PASS navbar / nine sizes / team menu + creation / keyboard / offline / {preference}')
+    remote_api = MockAPIs()
+    host_context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion='reduce', service_workers='block')
+    phone_context = browser.new_context(viewport={'width': 390, 'height': 844}, reduced_motion='reduce', service_workers='block')
+    host_guard = install_browser_bootstrap(host_context)
+    phone_guard = install_browser_bootstrap(phone_context, fullscreen=False, intro=False)
+    remote_api.register(host_context)
+    remote_api.register(phone_context)
+    host, phone = host_context.new_page(), phone_context.new_page()
+    host.goto(BASE + '/participants')
+    expect(host.locator('#participants-page')).to_be_visible()
+    trigger = host.locator('#remote-pairing-button')
+    pairing = host.get_by_role('dialog', name='Télécommande mobile', exact=True)
+    trigger.hover()
+    expect(pairing).to_be_visible()
+    expect(pairing).to_have_attribute('aria-modal', 'false')
+    pairing.hover()
+    expect(pairing.locator('[data-testid="remote-qr"] svg')).to_be_visible()
+    expect(pairing.get_by_role('button', name='Désactiver', exact=True)).to_have_count(0)
+    qr = pairing.locator('[data-testid="remote-qr"] svg').inner_html()
+    host.mouse.move(12, 150)
+    expect(pairing).not_to_be_visible()
+    trigger.focus()
+    trigger.press('ArrowDown')
+    expect(pairing).to_be_visible()
+    host.keyboard.press('Escape')
+    expect(pairing).not_to_be_visible()
+    expect(trigger).to_be_focused()
+    for width, height in [(320, 568), (390, 844), (1366, 768)]:
+        host.set_viewport_size({'width': width, 'height': height})
+        trigger.click()
+        expect(pairing).to_be_visible()
+        box = pairing.bounding_box()
+        assert box and box['x'] >= 0 and box['x'] + box['width'] <= width + 1 and box['y'] + box['height'] <= height + 1, (width, box)
+        host.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-phone-dropdown-{width}.png'))
+        pairing.get_by_role('button', name='Fermer la connexion mobile', exact=True).click()
+    open_phone(phone, REMOTE_URL)
+    expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
+    expect(trigger).to_be_enabled()
+    expect(trigger).to_have_attribute('aria-pressed', 'true')
+    trigger.hover()
+    expect(pairing.get_by_role('button', name='Déconnecter le téléphone', exact=True)).to_be_visible()
+    trigger.click()
+    expect(phone.get_by_text('Cette télécommande a été déconnectée depuis l’ordinateur', exact=False).first).to_be_visible()
+    trigger.click()
+    expect(pairing.get_by_role('button', name='Réactiver la connexion', exact=True)).to_be_visible()
+    assert pairing.locator('[data-testid="remote-qr"] svg').inner_html() == qr
+    pairing.get_by_role('button', name='Réactiver la connexion', exact=True).click()
+    open_phone(phone, REMOTE_URL)
+    expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
+    expect(trigger).to_have_attribute('aria-pressed', 'true')
+    expect(pairing).not_to_be_visible()
+    assert not remote_api.deletes, 'Disconnect must retain the host session and team QR'
+    host_guard.assert_no_unexpected_api()
+    phone_guard.assert_no_unexpected_api()
+    host_context.close()
+    phone_context.close()
+    print('PASS phone dropdown: hover, cross-gap, leave, keyboard/Escape, click at three sizes, connected click disconnect, stable QR and reconnect')
     browser.close()

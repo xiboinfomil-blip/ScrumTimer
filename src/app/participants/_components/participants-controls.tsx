@@ -3,7 +3,7 @@
 import { Button, Checkbox } from '@mui/material';
 import { ParticipantIcon } from './participant-icon';
 
-export function ParticipantsHeading({ total, present, onFresh }: { total: number; present: number; onFresh: () => void }) {
+export function ParticipantsHeading({ total, present }: { total: number; present: number }) {
   return <header className="relative flex shrink-0 items-center justify-between gap-3 border-b border-line pb-3 motion-safe:animate-page-reveal max-[650px]:pb-1 [@media(max-height:650px)]:pb-0">
     <div className="min-w-0 flex-1">
       <p className="mb-1 hidden items-center gap-2 text-[10px] font-semibold uppercase text-muted min-[651px]:flex"><span aria-hidden="true" className="size-2 rounded-sm bg-accent" />Étape 01 <span aria-hidden="true" className="text-line">/</span> Votre équipe</p>
@@ -13,7 +13,6 @@ export function ParticipantsHeading({ total, present, onFresh }: { total: number
       </div>
       <div aria-hidden="true" className="mt-2 h-1 max-w-64 overflow-hidden rounded-full bg-slate-100 max-[650px]:hidden"><div className="h-full rounded-full bg-success motion-safe:transition-[width] motion-reduce:transition-none" style={{ width: `${total ? Math.round((present / total) * 100) : 0}%` }} /></div>
     </div>
-    <button type="button" onClick={onFresh} aria-label="Nouveau bilan" title="Commencer un nouveau bilan" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 text-xs font-semibold text-muted hover:border-brand/30 hover:bg-blue-50 hover:text-brand max-[650px]:size-11 max-[650px]:px-0"><ParticipantIcon name="reset" /><span className="max-[650px]:hidden">Nouveau bilan</span></button>
   </header>;
 }
 

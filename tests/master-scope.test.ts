@@ -46,7 +46,7 @@ test('master keeps DailyRound and SessionResults summary interfaces and wiring',
   const daily = source('src/components/layout/daily-round.tsx');
   assert.match(daily, /export function DailyRound\(\)/);
   assert.match(daily, /<DailyDashboard round=\{round\} expanded=\{view\}\s*\/>/);
-  assert.match(daily, /await resetToday\(\)/);
+  assert.match(source('src/components/layout/team-navbar-actions.tsx'), /await resetToday\(\)/);
   const timer = source('src/app/timer/_components/timer-page.tsx');
   assert.match(timer, /people\.every\(person => person\.done\)\) return <SessionResults timer=\{\{ \.\.\.timer, people: roundSpeakers\(timer\.people\) \}\}\s*\/>/);
   const results = source('src/app/timer/_components/session-results.tsx');

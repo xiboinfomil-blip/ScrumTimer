@@ -1,8 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="16" fill="#205f9d"/>
-  <rect x="16" y="7" width="32" height="50" rx="8" fill="#fff"/>
-  <rect x="19" y="13" width="26" height="38" rx="5" fill="#eaf2f8"/>
-  <circle cx="32" cy="32" r="11" fill="#ec8b23"/>
-  <path d="M30 26v12l9-6z" fill="#fff"/>
-  <rect x="27" y="9" width="10" height="2" rx="1" fill="#205f9d"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <title>Infomil Mauritius</title>
+  <rect width="96" height="96" fill="#fff"/>
+  <g transform="translate(9 5)">
+    <g fill="none" stroke="#205f9d" stroke-width="8" stroke-linejoin="miter">
+      <path d="M31 29V23L41 14Q47 9 54 15L70 31"/>
+      <path d="M8 51L32 76Q43 87 54 76L70 59"/>
+    </g>
+    <path fill="#ec8b23" d="M40 31h9v13h13v9H49v13h-9V53H27v-9h13z"/>
+  </g>
 </svg>

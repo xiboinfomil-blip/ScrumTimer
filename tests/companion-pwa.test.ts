@@ -4,6 +4,7 @@ import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { GET as manifestGET } from '../src/app/remote/manifest.webmanifest/route.ts';
 import { GET as workerGET } from '../src/app/remote/sw.js/route.ts';
+import appManifest from '../src/app/manifest.ts';
 
 const source = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const component = source('src/components/remote/companion-install.tsx');
@@ -12,14 +13,32 @@ test('global favicon and Apple touch icon use the Infomil brand', () => {
   const favicon = source('src/app/icon.svg');
   const appleIcon = source('src/app/apple-icon.tsx');
   assert.match(favicon, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
-  assert.match(favicon, /viewBox="0 0 64 64"/);
+  assert.match(favicon, /viewBox="0 0 96 96"/);
   for (const color of ['#205f9d', '#ec8b23', '#fff']) assert.ok(favicon.includes(color));
-  assert.match(appleIcon, /import \{ ImageResponse \} from 'next\/og'/);
+  const paths = (svg: string) => [...svg.matchAll(/\bd="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(paths(favicon), paths(source('infomil-logo.svg')));
   assert.match(appleIcon, /export const size = \{ width: 180, height: 180 \}/);
-  assert.match(appleIcon, /new ImageResponse\(/);
-  assert.match(appleIcon, /#205f9d/);
-  assert.match(appleIcon, /#ec8b23/);
+  assert.match(appleIcon, /return brandIcon\(size.width\)/);
+  assert.match(source('src/lib/brand/brand-icon.tsx'), /new ImageResponse\(/);
+  assert.match(source('src/lib/brand/brand-icon.tsx'), /src\/app\/icon.svg/);
   assert.match(source('src/app/layout.tsx'), /themeColor: '#205f9d'/);
+});
+
+test('main app manifest has a stable launch identity, fullscreen preference and branded PNG icons', () => {
+  const manifest = appManifest();
+  assert.equal(manifest.id, '/');
+  assert.equal(manifest.scope, '/');
+  assert.equal(manifest.start_url, '/participants');
+  assert.equal(manifest.name, 'Infomil Mauritius - Point quotidien');
+  assert.equal(manifest.lang, 'fr');
+  assert.equal(manifest.display, 'fullscreen');
+  assert.deepEqual(manifest.display_override, ['fullscreen', 'standalone']);
+  assert.equal(manifest.theme_color, '#205f9d');
+  assert.deepEqual(manifest.icons?.filter(icon => icon.type === 'image/png'), [
+    { src: '/app-icon?size=192', sizes: '192x192', type: 'image/png', purpose: 'any' },
+    { src: '/app-icon?size=512', sizes: '512x512', type: 'image/png', purpose: 'any' },
+  ]);
+  assert.doesNotMatch(JSON.stringify(manifest), /token|secret|pair|team/i);
 });
 
 test('remote manifest has stable credential-free identity, scope and PNG icons', async () => {
@@ -200,15 +219,17 @@ test('install UI provides French platform guidance, accessible status and 44px b
   assert.match(component, /text-brand/);
 });
 
-test('icon route uses server ImageResponse, only 192/512 PNG dimensions and safe phone margins', () => {
-  const icon = source('src/app/remote/icon/route.tsx');
-  assert.match(icon, /import \{ ImageResponse \} from 'next\/og'/);
-  assert.match(icon, /searchParams\.get\('size'\) === '512' \? 512 : 192/);
-  assert.match(icon, /new ImageResponse\(/);
-  assert.match(icon, /width: size,\s*height: size/);
-  assert.match(icon, /fontFamily: 'sans-serif'/);
-  for (const color of ['#205f9d', '#ec8b23', '#ffffff']) assert.ok(icon.includes(color));
-  assert.match(icon, /width: 208 \* unit, height: 320 \* unit/);
-  assert.match(icon, /borderRadius: 36 \* unit/);
-  assert.doesNotMatch(icon, /fetch\(|readFile|writeFile|https?:\/\/|<img|<script/);
+test('app and companion icons share a server renderer with only 192/512 PNG dimensions', () => {
+  for (const route of ['src/app/remote/icon/route.tsx', 'src/app/app-icon/route.tsx']) {
+    const icon = source(route);
+    assert.match(icon, /import \{ brandIcon \} from '@\/lib\/brand\/brand-icon'/);
+    assert.match(icon, /searchParams\.get\('size'\) === '512' \? 512 : 192/);
+    assert.doesNotMatch(icon, /fetch\(|writeFile|https?:\/\/|<script/);
+  }
+  const renderer = source('src/lib/brand/brand-icon.tsx');
+  assert.match(renderer, /import \{ ImageResponse \} from 'next\/og'/);
+  assert.match(renderer, /new ImageResponse\(/);
+  assert.match(renderer, /width: size, height: size/);
+  assert.match(renderer, /src\/app\/icon.svg/);
+  assert.doesNotMatch(renderer, /fetch\(|writeFile|<script/);
 });

@@ -13,6 +13,9 @@ interface RemotePageView { snapshot: RemotePageSnapshot; dispatch: RemotePageDis
 interface RemoteHostContextValue {
   remote: ReturnType<typeof useTimerRemote>;
   openPairing: () => void;
+  closePairing: () => void;
+  scheduleClosePairing: () => void;
+  pairingOpen: boolean;
   registerPage: (view: RemotePageView) => () => void;
 }
 
@@ -30,6 +33,8 @@ export function RemoteHostProvider({ children }: { children: ReactNode }) {
   const viewRef = useRef(view);
   const generation = useRef(0);
   const [pairingOpen, setPairingOpen] = useState(false);
+  const [pairingAnchor, setPairingAnchor] = useState<HTMLElement | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workflow = pathname === '/participants' || pathname === '/mood' || pathname === '/timer';
   const teamId = ready && workflow ? activeTeamId : null;
   const publish = useCallback((next: RemotePageView, token: number) => {
@@ -50,11 +55,26 @@ export function RemoteHostProvider({ children }: { children: ReactNode }) {
   const dispatch = useCallback((action: RemoteAction, targetIndex?: number) => viewRef.current.dispatch(action, targetIndex), []);
   const remote = useTimerRemote(teamId, { ...view.snapshot, blocked: view.snapshot.blocked || pairingOpen }, { dispatch });
   useEffect(() => { if (remote.phoneConnected) setPairingOpen(false); }, [remote.phoneConnected]);
-  const openPairing = useCallback(() => { if (!remote.phoneConnected) setPairingOpen(true); }, [remote.phoneConnected]);
-  const closePairing = useCallback(() => setPairingOpen(false), []);
-  return <RemoteHostContext.Provider value={{ remote, openPairing, registerPage }}>
+  const openPairing = useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setPairingAnchor(document.getElementById('remote-pairing-button'));
+    setPairingOpen(true);
+  }, []);
+  const closePairing = useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setPairingOpen(false);
+  }, []);
+  const scheduleClosePairing = useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setPairingOpen(false), 220);
+  }, []);
+  useEffect(() => {
+    closePairing();
+    return () => { if (closeTimer.current) clearTimeout(closeTimer.current); };
+  }, [pathname, activeTeamId, closePairing]);
+  return <RemoteHostContext.Provider value={{ remote, openPairing, closePairing, scheduleClosePairing, pairingOpen, registerPage }}>
     {children}
-    <RemotePairingDialog open={pairingOpen} onClose={closePairing} remote={remote} />
+    <RemotePairingDialog open={pairingOpen} anchorEl={pairingAnchor} onClose={closePairing} onEnter={openPairing} onLeave={scheduleClosePairing} remote={remote} />
   </RemoteHostContext.Provider>;
 }
 

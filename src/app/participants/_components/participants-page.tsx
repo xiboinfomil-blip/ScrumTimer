@@ -5,22 +5,19 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { AttendanceList } from './attendance-list';
 import { ParticipantsActions, ParticipantsHeading } from './participants-controls';
 import { ParticipantIcon } from './participant-icon';
 import { LineupRevealDialog, type RevealPerson } from '@/components/ui/lineup-reveal-dialog';
-import { ParticipantLinkButton } from '@/components/ui/participant-link-button';
 import { shuffle } from '@/lib/team/shuffle';
 import { useViewMotion } from '@/hooks/motion/use-view-motion';
-import { freshRound, toggleAttendance as toggleTeamAttendance } from '@/lib/team/attendance';
+import { toggleAttendance as toggleTeamAttendance } from '@/lib/team/attendance';
 import { useRemotePage } from '@/providers/remote-host-provider';
 
 export function ParticipantsPage() {
   const { state, activeTeamId, todayRound, updateTeam, participantOrder, setParticipantOrder } = useTeam();
   const notify = useNotify();
   const router = useRouter();
-  const [fresh, setFresh] = useState(false);
   const [reveal, setReveal] = useState<{ people: RevealPerson[]; order: string[] } | null>(null);
   const [attendanceView, setAttendanceView] = useState(true);
   const panels = useViewMotion(attendanceView);
@@ -71,15 +68,11 @@ export function ParticipantsPage() {
     else if (action === 'participant-continue') continueToMood();
   });
   return <div id="participants-page" className={`mx-auto flex min-h-0 w-full flex-1 flex-col gap-4 max-[650px]:gap-2 [@media(max-height:650px)]:gap-2 ${todayRound ? 'overflow-y-auto [&>.participants-panel]:min-h-96 [&>.participants-panel]:shrink-0' : ''}`}>
-    <ParticipantsHeading total={state.roster.length} present={present.length} onFresh={() => setFresh(true)} />
+    <ParticipantsHeading total={state.roster.length} present={present.length} />
     {todayRound && <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 rounded-xl border border-green-200 bg-success-soft px-3 text-xs text-success"><p>Point quotidien déjà terminé aujourd’hui.</p><Link href={`/timer?team=${activeTeamId}`} className="inline-flex min-h-11 items-center rounded-lg font-semibold hover:underline">Voir le bilan ou réinitialiser</Link></div>}
     <section className="participants-panel flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-lg border border-line bg-white" aria-label="Les participants">
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-2 max-[650px]:px-3">
         <div className="min-w-0"><h2 className="text-sm font-bold text-ink">Présences du jour</h2><p className="mt-1 text-xs text-muted max-[650px]:hidden [@media(max-height:650px)]:hidden">Une absence aujourd’hui ne retire personne de l’équipe.</p></div>
-        <div className="flex shrink-0 items-center gap-1">
-          <ParticipantLinkButton key={activeTeamId} compact />
-          <Link href={`/manage-team?team=${activeTeamId}`} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-2 text-xs font-semibold text-brand hover:bg-blue-50"><ParticipantIcon name="people" className="size-4 max-[360px]:hidden" />Gérer l’équipe</Link>
-        </div>
       </div>
       {state.roster.length > 0 && <div className="flex shrink-0 items-center gap-2 border-b border-line px-4 py-1 max-[650px]:px-3">
         <ParticipantIcon name="people" className="size-4 shrink-0 text-muted" />
@@ -100,6 +93,5 @@ export function ParticipantsPage() {
       setParticipantOrder(reveal.order);
       router.push(`/mood?team=${activeTeamId}`);
     }} />}
-    <ConfirmDialog open={fresh} title="Commencer un nouveau bilan ?" description="Votre équipe est conservée. Tout le monde sera marqué présent ; les humeurs, les reports et la progression du minuteur seront effacés pour permettre à chacun de choisir à nouveau." confirmLabel="Recommencer" onClose={() => setFresh(false)} onConfirm={() => { if (updateTeam(freshRound)) { setParticipantOrder([]); notify('Nouveau bilan prêt. Confirmez les présences et choisissez les humeurs du jour.'); } }} />
   </div>;
 }

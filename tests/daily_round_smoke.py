@@ -59,6 +59,8 @@ with sync_playwright() as p:
                 else:
                     assert req.method == 'GET'
                 route.fulfill(json={'rounds': deepcopy(db['rounds']), 'day': day})
+            elif path == '/api/timer-remote':
+                route.fulfill(status=503, json={'error': 'Remote controls are unavailable in this reset test.'})
             else:
                 route.fallback()
 
@@ -88,12 +90,14 @@ with sync_playwright() as p:
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             assert page.evaluate('document.documentElement.scrollHeight <= innerHeight')
         page = pages[1]
-        page.get_by_role('button', name='Réinitialiser aujourd’hui', exact=True).click()
+        page.get_by_role('button', name='Actions de l’équipe', exact=True).click()
+        page.get_by_role('menuitem', name='Nouveau bilan', exact=True).click()
         dialog = page.get_by_role('dialog')
         dialog.get_by_role('button', name='Annuler', exact=True).click()
         expect(dialog).not_to_be_visible()
         assert db['deletes'] == 0
-        page.get_by_role('button', name='Réinitialiser aujourd’hui', exact=True).click()
+        page.get_by_role('button', name='Actions de l’équipe', exact=True).click()
+        page.get_by_role('menuitem', name='Nouveau bilan', exact=True).click()
         dialog.get_by_role('button', name='Réinitialiser aujourd’hui', exact=True).click()
         expect(page).to_have_url(re.compile(re.escape(BASE + '/participants') + r'(?:\?team=' + TEAM_ID + r')?$'))
         expect(page.get_by_text('Alice <safe>', exact=True)).to_be_visible()

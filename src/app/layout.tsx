@@ -6,7 +6,7 @@ import { NotificationProvider } from '@/providers/notification-provider';
 import { AppShell } from '@/components/layout/app-shell';
 import { DesignProvider } from '@/providers/design-provider';
 
-export const metadata: Metadata = { title: { default: 'Infomil Mauritius — Point quotidien', template: '%s — Infomil Mauritius' }, description: 'Prenez des nouvelles de votre équipe, partagez votre humeur et donnez la parole à chacun.' };
+export const metadata: Metadata = { title: { default: 'Infomil Mauritius — Point quotidien', template: '%s — Infomil Mauritius' }, description: 'Prenez des nouvelles de votre équipe, partagez votre humeur et donnez la parole à chacun.', applicationName: 'Infomil Mauritius', manifest: '/manifest.webmanifest', appleWebApp: { capable: true, title: 'Infomil Mauritius', statusBarStyle: 'default' } };
 export const viewport: Viewport = { themeColor: '#205f9d' };
 
 export default function RootLayout({ children, modal }: { children: ReactNode; modal: ReactNode }) {

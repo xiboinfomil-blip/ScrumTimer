@@ -4,10 +4,10 @@ import QRCode from 'react-qr-code';
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
 import QrCode2Rounded from '@mui/icons-material/QrCode2Rounded';
 import RestartAltRounded from '@mui/icons-material/RestartAltRounded';
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from '@mui/material';
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField, MenuItem, ListItemIcon } from '@mui/material';
 import { useTeam } from '@/providers/team-provider';
 
-export function ParticipantLinkButton({ compact = false }: { compact?: boolean }) {
+export function ParticipantLinkButton({ compact = false, menuItem = false, onOpen }: { compact?: boolean; menuItem?: boolean; onOpen?: () => void }) {
   const { activeTeamId, activeTeamName } = useTeam();
   const [open, setOpen] = useState(false), [pending, setPending] = useState(false);
   const [baseUrl, setBaseUrl] = useState(''), [linkName, setLinkName] = useState(activeTeamName), [error, setError] = useState(''), [copied, setCopied] = useState(false);
@@ -19,6 +19,7 @@ export function ParticipantLinkButton({ compact = false }: { compact?: boolean }
     return link.href;
   })() : '';
   async function load() {
+    onOpen?.();
     setOpen(true); setPending(true); setBaseUrl(''); setLinkName(activeTeamName); setError(''); setCopied(false);
     try {
       const response = await fetch('/api/participant-link', { method: 'POST', headers: { 'X-Team-Id': activeTeamId ?? '' }, signal: AbortSignal.timeout(15_000) });
@@ -28,7 +29,7 @@ export function ParticipantLinkButton({ compact = false }: { compact?: boolean }
     } catch (error) { setError(error instanceof Error ? error.message : 'Lien indisponible.'); }
     finally { setPending(false); }
   }
-  return <><Button onClick={load} aria-label="Lien participants" title="Lien participants" variant="outlined" startIcon={<QrCode2Rounded />} className={compact ? 'max-[650px]:!min-w-11 max-[650px]:!px-0 [&_.MuiButton-startIcon]:max-[650px]:!mr-0' : undefined} sx={{ minHeight: 44, textTransform: 'none', fontSize: 12 }}><span className={compact ? 'max-[650px]:sr-only' : undefined}>Lien participants</span></Button>
+  return <>{menuItem ? <MenuItem onClick={() => void load()} className="min-h-11 text-sm!"><ListItemIcon><QrCode2Rounded fontSize="small" /></ListItemIcon>Lien participants</MenuItem> : <Button onClick={load} aria-label="Lien participants" title="Lien participants" variant="outlined" startIcon={<QrCode2Rounded />} className={compact ? 'max-[650px]:!min-w-11 max-[650px]:!px-0 [&_.MuiButton-startIcon]:max-[650px]:!mr-0' : undefined} sx={{ minHeight: 44, textTransform: 'none', fontSize: 12 }}><span className={compact ? 'max-[650px]:sr-only' : undefined}>Lien participants</span></Button>}
     <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="md" aria-labelledby="participant-link-title" slotProps={{ paper: { sx: { display: 'flex', flexDirection: 'column', borderRadius: { xs: '14px', sm: '18px' }, m: { xs: 1.5, sm: 3 }, maxHeight: 'calc(100dvh - 24px)' } } }}>
       <DialogTitle id="participant-link-title" className="border-b border-line border-t-2 border-t-accent bg-white px-4 py-4 sm:px-6">
         <span className="flex items-start gap-3"><span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-lg bg-blue-50 text-brand"><QrCode2Rounded /></span><span className="min-w-0"><span aria-hidden="true" className="block text-[10px] font-bold uppercase text-muted">PARTAGE D’ÉQUIPE</span><span className="mt-1 block break-words text-base font-bold text-ink">Portail participants · {activeTeamName}</span></span></span>
