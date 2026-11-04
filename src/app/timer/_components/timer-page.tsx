@@ -130,15 +130,15 @@ export function TimerPage() {
         onChange={setView}
         tabs={[{ value: 'timer', label: 'Minuteur' }, { value: 'queue', label: `Équipe · ${timer.people.length}` }, { value: 'prompts', label: isSprint ? 'Tickets & pense-bête' : 'Pense-bête & humeur' }]}
       />}
-      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'min-[1100px]:grid-cols-[minmax(0,1.35fr)_minmax(320px,.75fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1' : 'min-[1100px]:grid-cols-[minmax(210px,.82fr)_minmax(370px,1.38fr)_minmax(275px,.96fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1'}`} data-view={presentation.presenting ? presentationView : view}>
+      <div ref={panels} className={`workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 ${presentation.presenting ? 'min-[1100px]:grid-cols-[minmax(0,1.35fr)_minmax(320px,.75fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1' : timer.focusMode ? 'min-[1100px]:grid-cols-[minmax(175px,.7fr)_minmax(420px,1.65fr)_minmax(230px,.9fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1' : 'min-[1100px]:grid-cols-[minmax(210px,.82fr)_minmax(370px,1.38fr)_minmax(275px,.96fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1'}`} data-view={presentation.presenting ? presentationView : view}>
         {!presentation.presenting && <aside aria-label="Équipe et télécommande" className={`team-rail grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 [@media(max-height:650px)]:gap-1 ${view !== 'queue' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`}>
           <TeamLineup timer={timer} idPrefix="queue" className="min-[1100px]:col-start-1" />
           <TimerRemoteCard />
         </aside>}
         <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`${presentation.presenting ? 'min-[1100px]:col-start-1' : 'min-[1100px]:col-start-2'} ${presentation.presenting ? presentationView === 'notes' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
         <aside aria-label="Pense-bête et humeur" className={`notes-rail grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 overflow-y-auto overscroll-contain [@media(max-height:650px)]:gap-1 ${presentation.presenting ? presentationView === 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'prompts' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`}>
-          <DailyPrompts speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => presentation.presenting ? setPresentationView('timer') : setView('timer')} />
-          <CurrentMoodCard timer={timer} />
+          <DailyPrompts compact={timer.focusMode} speakerId={timer.activeId} speakerName={timer.person?.name} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => presentation.presenting ? setPresentationView('timer') : setView('timer')} />
+          <CurrentMoodCard compact={timer.focusMode} timer={timer} />
         </aside>
       </div>
       <TimerManagementDialog timer={timer} />

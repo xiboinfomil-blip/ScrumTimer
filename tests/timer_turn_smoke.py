@@ -146,6 +146,8 @@ with sync_playwright() as p:
         expect(page.locator('.workspace .team-panel')).to_be_visible()
         expect(page.locator('.workspace .daily-prompts')).to_be_visible()
         expect(page.locator('[data-testid="current-speaker-mood"]')).to_be_visible()
+        compact_row = page.locator('.workspace .team-panel .person-row').first.bounding_box()
+        assert compact_row and 44 <= compact_row['height'] <= 49, compact_row
         expect(page.locator('[data-motion-tabs]')).to_be_hidden()
         expect(page.locator('[data-testid="remote-pairing-card"]')).to_be_visible()
         expect(page.locator('[data-testid="timer-remote-shortcut"]')).to_be_hidden()

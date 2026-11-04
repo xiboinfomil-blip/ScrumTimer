@@ -27,6 +27,8 @@ with sync_playwright() as p:
                 route.fulfill(json={'rounds': [], 'day': '2026-10-15'})
             elif path == 'jira':
                 route.fulfill(json={'connected': False})
+            elif path == 'timer-remote':
+                route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'})
             else:
                 raise AssertionError(path)
         context.route('**/api/**', api)
