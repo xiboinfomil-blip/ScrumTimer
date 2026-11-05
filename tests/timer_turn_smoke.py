@@ -203,7 +203,7 @@ with sync_playwright() as p:
         expect(scale.locator('[aria-current="true"]')).to_contain_text(str(chosen))
         expect(scale.locator('[aria-current="true"]')).to_have_count(1)
         expect(page.locator('[data-testid="current-speaker-mood"] > div').first).not_to_contain_text('/ 4')
-        assert page.locator('#speaker-name').evaluate('el => getComputedStyle(el).textAlign') == 'left'
+        assert page.locator('#speaker-name').evaluate('el => getComputedStyle(el).textAlign') == 'center'
         assert page.locator('#speaker-name').evaluate('el => Number(getComputedStyle(el).fontWeight)') >= 800
         expect(page.locator('#speaker-mood [data-mood-picture] img')).to_have_attribute('src', PICTURES[chosen - 1])
         mood_picture = page.locator('#speaker-mood [data-mood-picture]')
@@ -214,7 +214,7 @@ with sync_playwright() as p:
         expect(page.locator('#timer-stage [data-mood-picture] span')).to_have_count(0)
         assert page.locator('#timer-display').evaluate('el => Number(getComputedStyle(el).fontWeight)') >= 700
         assert page.locator('#timer-stage').evaluate('el => getComputedStyle(el).backgroundColor') == 'rgba(0, 0, 0, 0)'
-        assert page.locator('.timer-panel').evaluate('el => getComputedStyle(el).backgroundColor') == 'rgb(255, 255, 255)'
+        assert page.locator('.timer-panel').evaluate('el => getComputedStyle(el).backgroundColor') == 'rgb(244, 247, 250)'
         expect(page.locator('[data-testid="stopwatch-timer"] #speaker-name')).to_have_count(0)
         page.get_by_role('button', name=f'Lire la note de {first}', exact=True).click()
         note_dialog = page.get_by_role('dialog', name=f'Le pense-bête de {first}', exact=True)
@@ -276,11 +276,9 @@ with sync_playwright() as p:
                 assert text['y'] >= stage['y'] and text['y'] + text['height'] <= stage['y'] + stage['height'] + 1, (width, selector, text, stage)
             ring = page.locator('[data-testid="stopwatch-timer"] svg').first.bounding_box()
             assert ring and ring['width'] >= 80 and abs(ring['width'] - ring['height']) < 2, (width, ring)
-            if width >= 1100 or width > 650 and height <= 650:
-                assert abs(ring['y'] + ring['height'] / 2 - stage['y'] - stage['height'] / 2) <= 2, (width, 'dial vertical center', ring, stage)
-            else:
-                group_center = (box['y'] + ring['y'] + ring['height']) / 2
-                assert abs(group_center - stage['y'] - stage['height'] / 2) <= 2, (width, 'speaker/dial vertical center', box, ring, stage)
+            assert box['y'] + box['height'] <= ring['y'], (width, 'speaker above dial', box, ring)
+            group_center = (box['y'] + ring['y'] + ring['height']) / 2
+            assert abs(group_center - stage['y'] - stage['height'] / 2) <= 2, (width, 'speaker/dial vertical center', box, ring, stage)
             assert page.locator('#speaker-name').evaluate('el => Number(getComputedStyle(el).fontWeight)') >= 900
             for name in ['#previous-speaker', '#upcoming-speaker']:
                 font = page.locator(name).evaluate('el => parseFloat(getComputedStyle(el).fontSize)')
@@ -320,6 +318,9 @@ with sync_playwright() as p:
                 card_box = mood_card.bounding_box()
                 title_box = page.locator('[data-mood-title]').bounding_box()
                 assert card_box and title_box and title_box['x'] >= card_box['x'] and title_box['x'] + title_box['width'] <= card_box['x'] + card_box['width'] + 1, (width, card_box, title_box)
+                image_box = mood_card.locator('[data-mood-picture]').bounding_box()
+                scale_box = mood_card.get_by_role('list', name='Échelle d’humeur', exact=True).bounding_box()
+                assert image_box and scale_box and image_box['x'] < title_box['x'] and scale_box['y'] >= image_box['y'] + image_box['height'], (width, image_box, title_box, scale_box)
                 assert page.locator('[data-mood-title]').evaluate('el => el.scrollWidth <= el.clientWidth + 1'), width
                 expect(mood_card.get_by_role('list', name='Échelle d’humeur', exact=True)).to_be_visible()
                 expect(mood_card.get_by_role('group', name='Échelle d’humeur', exact=True)).to_have_count(0)
