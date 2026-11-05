@@ -128,6 +128,13 @@ export function TimerRemotePage() {
   const time = `${remaining < 0 ? '+' : ''}${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
   const finished = Boolean(snapshot && snapshot.completed === snapshot.total && snapshot.total > 0);
   const people = snapshot?.participants ?? [];
+  const snapshotPage = snapshot?.page;
+  const activeId = snapshot?.activeId;
+
+  useEffect(() => {
+    if (!snapshotPage || snapshotPage === 'idle' || !activeId) return;
+    document.querySelector('[aria-current="true"], [aria-current="step"]')?.scrollIntoView({ block: 'nearest', behavior: reducedMotion ? 'auto' : 'smooth' });
+  }, [snapshotPage, activeId, reducedMotion]);
 
   useEffect(() => {
     if (!pending) return;
@@ -227,7 +234,7 @@ export function TimerRemotePage() {
           <section aria-labelledby="remote-lineup-title" className="flex flex-col gap-2">
             <div className="flex items-end justify-between gap-3 px-1"><div><p className="text-[10px] font-bold uppercase text-brand">Étape 3 · Passage</p><h2 id="remote-lineup-title" className="text-lg font-bold text-ink">Ordre de parole</h2></div><span className="shrink-0 text-xs font-semibold text-slate-700">{snapshot.completed} / {snapshot.total} terminés</span></div>
             <ol aria-label="Ordre de parole" className="flex flex-col gap-2">
-              {people.map((person, index) => <li key={`${index}-${person.name}`} aria-current={person.active ? 'step' : undefined} className={`flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2 ${person.active ? 'border-brand bg-[#eaf2f8] ring-2 ring-brand/15' : person.done ? 'border-[#b9daca] bg-[#edf7f1]' : 'border-[#dce4e1] bg-white'}`}>
+              {people.map((person, index) => <li key={`${index}-${person.name}`} aria-current={person.active ? 'step' : undefined} className={`scroll-m-3 flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2 ${person.active ? 'border-brand bg-[#eaf2f8] ring-2 ring-brand/15' : person.done ? 'border-[#b9daca] bg-[#edf7f1]' : 'border-[#dce4e1] bg-white'}`}>
                 <span aria-hidden="true" className={`grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold ${person.active ? 'bg-brand text-white' : person.done ? 'bg-[#176b49] text-white' : 'bg-slate-100 text-slate-700'}`}>{person.done ? '✓' : index + 1}</span>
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{person.name}</span>
                 <span className={`shrink-0 text-[11px] font-semibold ${person.active ? 'text-brand' : person.postponed ? 'text-amber-900' : person.done ? 'text-[#176b49]' : 'text-slate-600'}`}>{person.active ? 'En cours' : person.postponed ? 'En attente' : person.done ? 'Terminé' : 'À venir'}</span>

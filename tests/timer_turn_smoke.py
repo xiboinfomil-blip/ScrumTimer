@@ -12,6 +12,7 @@ SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1
 LONG_CONTENT = os.environ.get('TIMER_TEST_LONG_CONTENT') == '1'
 NAMES = [('Alexandrine ' + 'Longnom' * 7)[:60], 'Bob', 'Charlie'] if LONG_CONTENT else ['Alice <safe>', 'Bob', 'Charlie']
 MOOD_TITLES = ['Très fortement préoccupé par la situation', 'Tired', 'Secure', 'Cheerful'] if LONG_CONTENT else ['Angry', 'Tired', 'Secure', 'Cheerful']
+MOOD_SUBTITLES = ['Definition 1', 'Definition 2', 'Definition 3', 'Definition 4']
 
 
 def picture(color):
@@ -69,7 +70,7 @@ with sync_playwright() as p:
         context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
         context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=[{'remoteId': DECK_ID, 'title': 'Images test', 'slides': []}]))
         context.route(f'**/api/mood-meters/decks/{DECK_ID}', lambda route: route.fulfill(json={'title': 'Images test', 'slides': [f'{SLIDE_ROOT[1:]}/first.svg', f'{SLIDE_ROOT[1:]}/second.svg']}))
-        context.route(f'**/api/mood-meters/decks/{DECK_ID}/titles', lambda route: route.fulfill(json={'titles': MOOD_TITLES}))
+        context.route(f'**/api/mood-meters/decks/{DECK_ID}/titles', lambda route: route.fulfill(json={'titles': MOOD_TITLES, 'subtitles': MOOD_SUBTITLES}))
         context.route(f'**{SLIDE_ROOT}/*.svg', lambda route: route.fulfill(content_type='image/svg+xml', body=SVG if route.request.url.endswith('first.svg') else '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540"/>'))
         page = context.new_page()
         errors = []
@@ -191,6 +192,7 @@ with sync_playwright() as p:
         chosen = next(person['mood'] for person in team['roster'] if person['name'] == first)
         expect(page.locator('#speaker-mood')).to_have_attribute('aria-label', f'Humeur de {first} : {chosen} sur 4')
         expect(page.locator('[data-mood-title]')).to_have_text(MOOD_TITLES[chosen - 1])
+        expect(page.locator('[data-mood-subtitle]')).to_have_text(MOOD_SUBTITLES[chosen - 1])
         expect(page.locator('#speaker-slider')).to_have_count(0)
         expect(page.locator('#next-button #upcoming-speaker')).to_be_visible()
         expect(page.locator('#previous-button #previous-speaker')).to_be_visible()

@@ -9,10 +9,10 @@ import { SpeakerMoodPicture } from './speaker-mood-picture';
 import { loadMoodCatalog } from '@/lib/mood/mood-catalog-client';
 import type { Mood, MoodSlideContext } from '@/types/team';
 
-const titlesCache = new Map<string, (string | null)[]>();
+const titlesCache = new Map<string, { titles: (string | null)[]; subtitles: (string | null)[] }>();
 
 function MoodTitle({ context, mood, fallback }: { context?: MoodSlideContext | null; mood: Mood; fallback: string }) {
-  const [title, setTitle] = useState<string | null>(null);
+  const [text, setText] = useState<{ title: string | null; subtitle: string | null }>({ title: null, subtitle: null });
   useEffect(() => {
     if (!context) return;
     const controller = new AbortController();
@@ -21,22 +21,28 @@ function MoodTitle({ context, mood, fallback }: { context?: MoodSlideContext | n
       const catalog = await loadMoodCatalog(controller.signal);
       const deck = catalog.find(item => item.remoteId && context!.image.startsWith(`/mood-meters/slides/${item.remoteId}/`));
       if (!deck?.remoteId) return;
-      let titles = titlesCache.get(deck.remoteId);
-      if (!titles) {
+      let texts = titlesCache.get(deck.remoteId);
+      if (!texts) {
         const response = await fetch(`/api/mood-meters/decks/${deck.remoteId}/titles`, { signal: controller.signal });
         if (!response.ok) return;
-        const value: unknown = (await response.json()).titles;
-        if (!Array.isArray(value) || value.length !== 4 || !value.every(item => item === null || typeof item === 'string' && item.length <= 120)) return;
-        titles = value;
+        const body: unknown = await response.json();
+        if (!body || typeof body !== 'object') return;
+        const value = body as { titles?: unknown; subtitles?: unknown };
+        if (!Array.isArray(value.titles) || value.titles.length !== 4 || !value.titles.every(item => item === null || typeof item === 'string' && item.length <= 120)
+          || value.subtitles !== undefined && (!Array.isArray(value.subtitles) || value.subtitles.length !== 4 || !value.subtitles.every(item => item === null || typeof item === 'string' && item.length <= 300))) return;
+        texts = { titles: value.titles, subtitles: value.subtitles ?? [null, null, null, null] };
         if (titlesCache.size >= 20) titlesCache.delete(titlesCache.keys().next().value!);
-        titlesCache.set(deck.remoteId, titles);
+        titlesCache.set(deck.remoteId, texts);
       }
-      if (!controller.signal.aborted) setTitle(titles[mood - 1]);
+      if (!controller.signal.aborted) setText({ title: texts.titles[mood - 1], subtitle: texts.subtitles[mood - 1] });
     }
     load().catch(() => {}).finally(() => clearTimeout(timeout));
     return () => { controller.abort(); clearTimeout(timeout); };
   }, [context, mood]);
-  return <p data-mood-title className="break-words text-xl font-bold leading-tight" aria-live="polite">{title ?? fallback}</p>;
+  return <div className="min-w-0 text-center">
+    <p data-mood-title className="break-words text-base font-bold leading-tight" aria-live="polite">{text.title ?? fallback}</p>
+    {text.subtitle && <p data-mood-subtitle className="mt-1 break-words text-xs leading-relaxed text-muted">{text.subtitle}</p>}
+  </div>;
 }
 
 const moodDetails = [
@@ -59,14 +65,14 @@ export function CurrentMoodCard({ timer, compact = false }: { timer: StandupTime
     <div className="flex items-center justify-between gap-3 border-b border-current/10 px-3 py-2">
       <h2 className="flex items-center gap-2 text-sm font-bold"><MoodRounded fontSize="small" /> Humeur actuelle</h2>
     </div>
-    {person && mood && detail ? <motion.div key={`${person.id}:${mood}`} initial={reduced ? false : { opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: reduced ? 0 : .4, ease: [.22, 1, .36, 1] }} id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${mood} sur 4`} className="flex min-w-0 items-center gap-3 p-3">
-      <div className={`relative grid ${compact ? 'size-20' : 'size-24'} text-4xl shrink-0 place-items-center overflow-hidden rounded-lg border border-current/15 bg-white`} aria-hidden="true">
+    {person && mood && detail ? <motion.div key={`${person.id}:${mood}`} initial={reduced ? false : { opacity: 0, y: 10, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: reduced ? 0 : .4, ease: [.22, 1, .36, 1] }} id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${mood} sur 4`} className="flex min-w-0 flex-col items-center gap-2 p-3 text-center">
+      <div className={`relative grid ${compact ? 'size-20' : 'size-24'} shrink-0 place-items-center overflow-hidden rounded-xl border border-current/15 bg-white text-4xl shadow-sm`} aria-hidden="true">
         <span>{faces[mood - 1]}</span>
         {person.moodSlide && <SpeakerMoodPicture key={`${person.id}:${person.moodSlide.image}:${mood}`} context={person.moodSlide} mood={mood} card />}
       </div>
-      <div className="min-w-0 flex-1">
+      <div className="w-full min-w-0">
         <MoodTitle key={`${person.id}:${person.moodSlide?.image}:${mood}`} context={person.moodSlide} mood={mood} fallback={detail.title} />
-        <ol aria-label="Échelle d’humeur" className="mt-3 grid grid-cols-4 gap-1.5">
+        <ol aria-label="Échelle d’humeur" className="mt-2 grid grid-cols-4 gap-1.5">
           {([1, 2, 3, 4] as const).map(value => <li key={value} aria-current={value === mood ? 'true' : undefined} className="min-w-0"><span className={`grid h-8 min-w-0 place-items-center rounded-md border text-sm font-bold tabular-nums ${value === mood ? 'border-brand bg-brand text-white motion-safe:scale-[1.06]' : 'border-current/15 bg-white/80 text-muted'}`}>{value}<span className="sr-only">{value === mood ? ' : humeur sélectionnée' : ''}</span></span></li>)}
         </ol>
       </div>

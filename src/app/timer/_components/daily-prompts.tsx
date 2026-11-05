@@ -98,9 +98,9 @@ function TeamPrompts({ teamId, sprint, className, compact, speakerId, note, note
       {notesError && <div role="alert" className="shrink-0 text-[11px] text-danger">{notesError} <Button size="small" onClick={retryNotes}>Réessayer les notes</Button></div>}
       {note ? <>
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line pb-2">
-          <h2 id="sidebar-note-title" className="flex items-center gap-2 text-sm font-bold"><EditNoteRounded fontSize="small" className="text-brand" />Le pense-bête</h2><span className="text-[11px] text-muted">Aujourd’hui</span>
+          <h2 id="sidebar-note-title" className="flex min-w-0 items-center gap-2 text-sm font-bold"><EditNoteRounded fontSize="small" className="shrink-0 text-amber-800" /><span className="truncate">Le pense-bête</span></h2><span className="shrink-0 rounded-full border border-orange-300 bg-orange-50 px-2.5 py-1 text-[10px] font-extrabold uppercase text-amber-950">À lire</span>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-l-2 border-accent px-3 py-1">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-md border border-orange-200 border-l-4 border-l-accent bg-orange-50/60 px-3 py-2">
           <div data-speaker-hint className="text-ink [&_.participant-note]:whitespace-normal [&_p]:whitespace-pre-line [&_p]:text-sm [&_p]:leading-relaxed [&_li]:text-sm [&_li]:leading-relaxed"><ParticipantNote hint={note} /></div>
         </div>
       </> : <>

@@ -10,7 +10,7 @@ type Shape = { spPr?: { xfrm?: Transform }; txBody?: { p?: Paragraph | Paragraph
 type ShapeTree = { sp?: Shape | Shape[]; grpSp?: ShapeTree | ShapeTree[]; grpSpPr?: { xfrm?: Transform } };
 const array = <Value,>(value: Value | Value[] | undefined): Value[] => value === undefined ? [] : Array.isArray(value) ? value : [value];
 
-export function extractMoodTitles(bytes: Uint8Array): (string | null)[] {
+export function extractMoodText(bytes: Uint8Array): { titles: (string | null)[]; subtitles: (string | null)[] } {
   if (bytes.length > 12 * 1024 * 1024) throw new Error('Presentation too large');
   const files = unzipSync(bytes, { filter: file => {
     if (!['ppt/presentation.xml', 'ppt/slides/slide2.xml'].includes(file.name)) return false;
@@ -28,14 +28,16 @@ export function extractMoodTitles(bytes: Uint8Array): (string | null)[] {
   const width = Number(presentation?.presentation?.sldSz?.cx);
   const height = Number(presentation?.presentation?.sldSz?.cy);
   const titles: (string | null)[] = [null, null, null, null];
+  const subtitles: (string | null)[] = [null, null, null, null];
   const scores = [0, 0, 0, 0];
-  if (!(width > 0 && height > 0) || !slide?.sld?.cSld?.spTree) return titles;
+  if (!(width > 0 && height > 0) || !slide?.sld?.cSld?.spTree) return { titles, subtitles };
   const visit = (tree: ShapeTree, offsetX = 0, offsetY = 0, scaleX = 1, scaleY = 1) => {
     for (const shape of array(tree.sp)) {
       const transform = shape.spPr?.xfrm;
       if (!transform || Number(transform.rot ?? 0) !== 0) continue;
       const paragraphs = array(shape.txBody?.p);
-      const paragraph = paragraphs.find(item => array(item.r).some(run => run.t?.trim()));
+      const paragraphIndex = paragraphs.findIndex(item => array(item.r).some(run => run.t?.trim()));
+      const paragraph = paragraphs[paragraphIndex];
       if (!paragraph) continue;
       const title = array(paragraph.r).map(run => run.t ?? '').join('').replace(/\s+/g, ' ').trim();
       if (!title || title.length > 120 || title.split(' ').length > 12) continue;
@@ -50,7 +52,12 @@ export function extractMoodTitles(bytes: Uint8Array): (string | null)[] {
       const index = right ? bottom ? 2 : 3 : bottom ? 1 : 0;
       const fontSize = Math.max(Number(paragraph.pPr?.defRPr?.sz ?? 0), ...array(paragraph.r).map(run => Number(run.rPr?.sz ?? 0)));
       const score = fontSize || boxWidth * boxHeight / (width * height);
-      if (score > scores[index]) { titles[index] = title; scores[index] = score; }
+      if (score > scores[index]) {
+        titles[index] = title;
+        const subtitle = paragraphs.slice(paragraphIndex + 1).map(item => array(item.r).map(run => run.t ?? '').join('').replace(/\s+/g, ' ').trim()).find(Boolean);
+        subtitles[index] = subtitle && subtitle.length <= 300 ? subtitle : null;
+        scores[index] = score;
+      }
     }
     for (const group of array(tree.grpSp)) {
       const transform = group.grpSpPr?.xfrm;
@@ -63,5 +70,9 @@ export function extractMoodTitles(bytes: Uint8Array): (string | null)[] {
     }
   };
   visit(slide.sld.cSld.spTree);
-  return titles;
+  return { titles, subtitles };
+}
+
+export function extractMoodTitles(bytes: Uint8Array): (string | null)[] {
+  return extractMoodText(bytes).titles;
 }
