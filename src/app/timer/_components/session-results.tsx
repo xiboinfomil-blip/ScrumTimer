@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Paper } from '@mui/material';
+import { Paper } from '@mui/material';
 import { WorkflowHeading } from '@/components/ui/workflow-heading';
 import { ScreenTabs } from '@/components/ui/screen-tabs';
 import { PaginatedList } from '@/components/ui/paginated-list';
-import { card, primaryButton, routeStage, segmentedTabs } from '@/components/ui/styles';
+import { card, routeStage, segmentedTabs } from '@/components/ui/styles';
 import { formatTime } from '@/lib/timer/timer';
 import { sessionLeaderboard, sessionStatistics } from '@/lib/history/session-results';
 import type { StandupTimer } from './timer-page';
@@ -21,7 +21,7 @@ export function SessionResults({ timer }: { timer: StandupTimer }) {
   const winners = ranked.filter(person => person.rank === 1);
   const date = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).format(new Date());
   return <div id="timer-page" data-mode="results" className={`${routeStage} mx-auto w-full overflow-hidden`}>
-    <WorkflowHeading step={3} title="Bilan du tour" description={`${date} · ${timer.people.length} participants`} action={<Button disableElevation size="small" variant="contained" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 12 }} id="new-round-button" type="button" className={primaryButton} onClick={timer.newRound}>Nouveau tour</Button>} />
+    <WorkflowHeading step={3} title="Bilan du tour" description={`${date} · ${timer.people.length} participants`} />
     <ScreenTabs className={segmentedTabs} label="Bilan du point quotidien" value={view} onChange={setView} tabs={[{ value: 'ranking', label: 'Classement' }, { value: 'stats', label: 'Statistiques' }]} />
     <div ref={panels} className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.3fr)_minmax(280px,1fr)] gap-3 max-[800px]:grid-cols-1">
       <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} id="session-leaderboard" aria-labelledby="leaderboard-title" className={`${card} flex min-h-0 min-w-0 flex-col gap-2 p-3 ${view !== 'ranking' ? 'max-[800px]:hidden' : ''}`}>

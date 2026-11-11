@@ -40,10 +40,9 @@ def mood_color_family(value, colors):
     }[value]
 
 
-def remote_geometry(page, width, height):
+def remote_geometry(page, width, height, pages=2):
     stack = page.locator('#meter-slide-stack')
-    expect(stack.locator('img')).to_have_count(2)
-    expect(page.get_by_text('Survolez ou touchez la flèche pour retourner', exact=True)).to_be_visible()
+    expect(stack.locator('img')).to_have_count(pages)
     for image in stack.locator('img').all():
         expect(image).to_have_js_property('complete', True)
         expect(image).not_to_have_js_property('naturalWidth', 0)
@@ -54,25 +53,33 @@ def remote_geometry(page, width, height):
         return {stack:rect(el), images:[...el.querySelectorAll('img')].map(rect),
             scroll:el.scrollHeight,height:el.clientHeight};
     }''')
-    first, second = layout['images']
     assert all(image['width'] > 0 and image['height'] > 0 for image in layout['images']), layout
-    assert abs(first['left'] - second['left']) <= 1, layout
-    assert abs(first['top'] - second['top']) <= 1, layout
-    assert abs(first['width'] - second['width']) <= 1 and abs(first['height'] - second['height']) <= 1, layout
+    if pages == 2:
+        first, second = layout['images']
+        assert abs(first['left'] - second['left']) <= 1, layout
+        assert abs(first['top'] - second['top']) <= 1, layout
+        assert abs(first['width'] - second['width']) <= 1 and abs(first['height'] - second['height']) <= 1, layout
     assert layout['scroll'] <= layout['height'] + 2, layout
     for image in layout['images']:
         assert image['left'] >= layout['stack']['left'] - 1 and image['right'] <= layout['stack']['right'] + 1, layout
+    stack.hover(position={'x': layout['stack']['width'] / 2, 'y': layout['stack']['height'] / 2})
+    page.wait_for_function("Math.abs(new DOMMatrix(getComputedStyle(document.querySelector('#meter-page-flip')).transform).m11 - 1) < .01")
+    expect(page.locator('#meter-page-1-face')).to_have_attribute('aria-hidden', 'false')
+    if pages == 1:
+        expect(page.locator('#meter-flip-button')).to_have_count(0)
+        return
     flip = page.get_by_role('button', name='Afficher la diapositive 2', exact=True)
     expect(flip).to_have_attribute('aria-pressed', 'false')
-    stack.hover(position={'x': layout['stack']['width'] / 2, 'y': layout['stack']['height'] / 2})
+    flip.click()
     page.wait_for_function("Math.abs(new DOMMatrix(getComputedStyle(document.querySelector('#meter-page-flip')).transform).m11 + 1) < .01")
+    expect(page.locator('#meter-page-2-face')).to_have_attribute('aria-hidden', 'false')
     if width == 1366:
         duration = page.locator('#meter-page-flip').evaluate('el => parseFloat(getComputedStyle(el).transitionDuration)')
         reduced = page.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches")
         assert duration == 0 if reduced else duration >= .65, ('flip duration does not match motion preference', reduced, duration)
     if width in (320, 1366):
         page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-mood-flip-{width}.png'))
-    page.mouse.move(0, 0)
+    page.get_by_role('button', name='Afficher la diapositive 1', exact=True).click()
     page.wait_for_function("Math.abs(new DOMMatrix(getComputedStyle(document.querySelector('#meter-page-flip')).transform).m11 - 1) < .01")
     expect(flip).to_have_attribute('aria-pressed', 'false')
     flip.focus()
@@ -85,7 +92,7 @@ def remote_geometry(page, width, height):
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    for width, height, motion in [(320, 568, 'reduce'), (390, 844, 'reduce'), (768, 1024, 'reduce'), (820, 568, 'reduce'), (1024, 576, 'reduce'), (1366, 768, 'reduce'), (1366, 768, 'no-preference')]:
+    for width, height, motion, pages in [(320, 568, 'reduce', 2), (390, 844, 'reduce', 2), (768, 1024, 'reduce', 2), (820, 568, 'reduce', 2), (1024, 576, 'reduce', 2), (1366, 768, 'reduce', 2), (1366, 768, 'no-preference', 2), (320, 568, 'reduce', 1), (1366, 768, 'no-preference', 1)]:
         context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion=motion, service_workers='block')
         bootstrap = install_browser_bootstrap(context)
         team = {'roster': [{'id': 'alice', 'name': 'Alice', 'present': True, 'mood': None, 'moodUpdatedAt': None}], 'session': [], 'duration': 120, 'warning': 30, 'sound': False, 'usedMoodMeters': [], 'currentMoodSlide': None}
@@ -114,7 +121,9 @@ with sync_playwright() as p:
             elif path == '/api/mood-meters/catalog':
                 route.fulfill(json=[{'title': 'Test meter', 'category': 'Animals & Creatures', 'remoteId': 'deck-1234567890abcdef1234', 'slides': []}])
             elif path.startswith('/api/mood-meters/decks/'):
-                route.fulfill(json={'title': 'Test meter', 'slides': ['mood-meters/slides/test/page-1.svg', 'mood-meters/slides/test/page-2.svg']})
+                route.fulfill(json={'title': 'Test meter', 'slides': ['mood-meters/slides/test/page-1.svg', 'mood-meters/slides/test/page-2.svg'][:pages]})
+            elif path == '/api/timer-remote':
+                route.fulfill(status=503, json={'error': 'Remote controls disabled in this test.'})
             else:
                 route.fallback()
         context.route('**/api/**', api)
@@ -128,9 +137,8 @@ with sync_playwright() as p:
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(BASE + '/mood')
-        share_button = page.get_by_role('button', name='Lien participants', exact=True)
-        expect(share_button).to_be_visible()
-        share_button.click()
+        page.get_by_role('button', name='Réglages et outils', exact=True).click()
+        page.get_by_role('menuitem', name='Lien participants', exact=True).click()
         share_dialog = page.get_by_role('dialog', name='Portail participants · Test', exact=True)
         expect(share_dialog).to_be_visible()
         expect(share_dialog.get_by_role('textbox', name='Lien à partager', exact=True)).to_have_value('https://participants.example/t/fake-signed?equipe=Test')
@@ -150,8 +158,8 @@ with sync_playwright() as p:
         expect(select).to_have_value('0')
         assert db['patches'] == 3
         assert db['meter']['meterId'] == 'deck-1234567890abcdef1234'
-        remote_geometry(page, width, height)
-        remote_geometry(page, width, height)
+        remote_geometry(page, width, height, pages)
+        remote_geometry(page, width, height, pages)
         page.reload()
         expect(select).to_have_value('0')
         expect(select).to_be_enabled()
@@ -202,6 +210,19 @@ with sync_playwright() as p:
             button = page.get_by_role('button', name=f'Humeur {value} pour Alice', exact=True)
             button.click()
             expect(button).to_have_attribute('aria-pressed', 'true')
+            notice = page.locator('[data-notification]')
+            expect(notice).to_be_visible()
+            notice_box = notice.bounding_box()
+            continue_box = page.get_by_role('button', name='Continuer vers le minuteur', exact=True).bounding_box()
+            assert continue_box['y'] + continue_box['height'] <= notice_box['y'] + 1, (width, 'Notification overlaps next step', continue_box, notice_box)
+            assert notice_box['y'] + notice_box['height'] <= height + 1, (width, 'Notification outside viewport', notice_box)
+            assert person_row.evaluate('''row => {
+                const list = row.closest('ul').getBoundingClientRect();
+                return [...row.querySelectorAll('button')].every(button => {
+                    const box = button.getBoundingClientRect();
+                    return box.top >= list.top - 1 && box.bottom <= list.bottom + 1;
+                });
+            }'''), (width, 'Notification must not clip voting controls')
             page.wait_for_function("document.querySelector('.site-header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
             button.evaluate('async element => { await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {}))); }')
             colors = mood_contrast(button)

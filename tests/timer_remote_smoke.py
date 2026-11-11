@@ -1124,6 +1124,12 @@ def synchronized_smoke():
                     assert box and box['x'] <= 1 and box['y'] <= 1 and box['width'] >= width - 2 and box['height'] >= height - 2, box
                     if width in (320, 1366):
                         host.screenshot(path=str(screenshots / f'screensaver-{motion}-{width}.png'))
+                matching(hidden_lineup.locator('.person-row'), order)
+                with phone.expect_response(lambda response: response.request.method == 'GET'
+                        and '/api/timer-remote?' in response.url
+                        and (response.json().get('snapshot') or {}).get('version') == next(iter(api.entries.values()))['snapshot']['version']):
+                    phone.evaluate('() => new Promise(requestAnimationFrame)')
+                phone.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
                 start.click()
                 expect(saver).not_to_be_visible()
                 expect(host.locator('#start-button')).to_contain_text('Pause')
@@ -1181,6 +1187,18 @@ def synchronized_smoke():
                 phone_guard.assert_no_unexpected_api()
                 print(f'PASS adaptive capacities {capacities}, mirrored phone pages, shared SVG reuse, stacked notes/mood, pause/resume, automatic completion leaderboard and reload without duplicate archive: {motion}', flush=True)
             except Exception:
+                print('Host state:', host.evaluate('''() => ({hidden:document.hidden,
+                    fullscreen:Boolean(document.fullscreenElement),
+                    dialogs:[...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].map(el => ({
+                        title:el.getAttribute('aria-labelledby'), visibility:getComputedStyle(el).visibility,
+                        hiddenAncestor:Boolean(el.closest('[aria-hidden="true"]'))})),
+                    timers:Object.keys(sessionStorage).filter(key => key.startsWith('standup.timer.tab.v1:')).map(key => {
+                        const timer=JSON.parse(sessionStorage.getItem(key)).timer;
+                        return {running:timer.running, managing:timer.managing};
+                    })})'''), flush=True)
+                print('Published state:', [{key: (entry.get('snapshot') or {}).get(key)
+                      for key in ('page', 'running', 'blocked', 'blackScreen', 'version')}
+                      for entry in api.entries.values()], flush=True)
                 host.screenshot(path=str(screenshots / f'failure-host-{motion}.png'))
                 phone.screenshot(path=str(screenshots / f'failure-phone-{motion}.png'))
                 print(f'FAILURE {screenshots}', flush=True)

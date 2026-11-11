@@ -10,6 +10,7 @@ import { completedRound } from '@/lib/history/history';
 import { finishWaitingRound, roundSpeakers } from '@/lib/timer/timer-completion';
 import { createId } from '@/lib/team/team-storage';
 import { penalizeCurrentTimer, previousSpeaker, previousTimer, recoverTimer, restartCurrentTimer, type TimerState } from '@/lib/timer/timer-checkpoint';
+import { visibleModalDialogs } from '@/lib/timer/modal';
 
 export function useStandupTimer() {
   const { state: team, activeTeamId, updateTeam, saveRound, getTimerCheckpoint, storeTimerCheckpoint } = useTeam();
@@ -143,6 +144,7 @@ export function useStandupTimer() {
     commit(cleared({ ...current, activeId: id }));
   }, [cleared, commit, tick]);
   const newRound = useCallback(() => {
+    if (roundId.current) return;
     const current = latest.current;
     roundId.current = null;
     commit(cleared({ ...current, focusMode: false, managing: false, previousId: null, people: current.people.map(p => ({ ...p, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0, manualPenalty: 0 })), activeId: current.people.find(p => !p.postponed)?.id ?? null }));
@@ -215,7 +217,7 @@ export function useStandupTimer() {
   }, [updateTeam, commit, cleared, notify]);
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') || (event.target instanceof Element && event.target.closest('input,select,textarea,button,a,[contenteditable]')) || event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
+      if (visibleModalDialogs().length || (event.target instanceof Element && event.target.closest('input,select,textarea,button,a,[contenteditable]')) || event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
       if (event.code === 'Space') { event.preventDefault(); toggle(); }
       else if (event.key.toLowerCase() === 'n') next();
       else if (event.key.toLowerCase() === 'r') reset();

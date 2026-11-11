@@ -528,6 +528,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
 
   const updateTeam = useCallback((update: (current: TeamState) => TeamState) => {
     if (busy.current || !hydrated.current || conflict.current) { notify('Action indisponible : changement d’équipe ou conflit de sauvegarde en cours.', 'error'); return false; }
+    if (pendingRounds.current.length) { notify('Attendez la sauvegarde du bilan avant de modifier l’équipe.', 'warning'); return false; }
     const next = update(latest.current);
     try { validateTeamInput(next); }
     catch (error) { notify(error instanceof Error ? error.message : 'Action invalide.', 'error'); return false; }

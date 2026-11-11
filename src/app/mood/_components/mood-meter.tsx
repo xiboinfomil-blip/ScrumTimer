@@ -140,15 +140,14 @@ function OrderedMeterSlides({ deck, title, retry }: { deck: MoodMeterDeck; title
   const [pinned, setPinned] = useState(false);
   const pages = deck.slides.slice(0, 2);
   return <div id="meter-slide-stack" className="group relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl [perspective:1200px]" aria-label="Diapositives du baromètre">
-    <div id="meter-page-flip" className={`relative h-full w-full [transform-style:preserve-3d] transition-transform duration-1000 ease-[cubic-bezier(.22,.61,.36,1)] motion-reduce:transition-none ${pinned ? '[transform:rotateY(180deg)]' : '[transform:rotateY(0deg)] group-hover:[transform:rotateY(180deg)]'}`}>
+    <div id="meter-page-flip" className={`relative h-full w-full [transform-style:preserve-3d] transition-transform duration-1000 ease-[cubic-bezier(.22,.61,.36,1)] motion-reduce:transition-none ${pinned ? '[transform:rotateY(180deg)]' : '[transform:rotateY(0deg)]'}`}>
       {pages.map((item, index) => <div id={`meter-page-${index + 1}-face`} key={`${index}:${retry}`} aria-hidden={index === 0 ? pinned : !pinned}
         className={`pointer-events-none absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[14px] [backface-visibility:hidden] ${index === 1 ? '[transform:rotateY(180deg)]' : ''}`}>
         <MeterSlide slide={item} title={`${title} — diapositive ${index + 1}`} paused idPrefix={`meter-page-${index + 1}`} />
       </div>)}
     </div>
-    <span className="pointer-events-none absolute top-2 left-2 z-10 rounded-md bg-white/90 px-2.5 py-1.5 text-[10px] font-semibold text-ink shadow-sm">Survolez ou touchez la flèche pour retourner</span>
     {pages.length > 1 && <IconButton id="meter-flip-button" type="button" aria-label={pinned ? 'Afficher la diapositive 1' : 'Afficher la diapositive 2'} aria-pressed={pinned}
-      title={pinned ? 'Revenir à la première diapositive' : 'Maintenir la deuxième diapositive affichée'}
+      title={pinned ? 'Afficher la première diapositive' : 'Afficher la deuxième diapositive'}
       onClick={() => setPinned(value => !value)}
       sx={{ width: 44, height: 44 }} className="absolute right-1 bottom-1 z-10 rounded-full border border-line bg-white/95 text-brand shadow-sm">
       <MoodIcon name={pinned ? 'back' : 'arrow'} className="size-5" />

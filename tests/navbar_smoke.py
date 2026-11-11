@@ -160,11 +160,22 @@ with sync_playwright() as p:
         assert box and box['x'] >= 0 and box['x'] + box['width'] <= width + 1 and box['y'] + box['height'] <= height + 1, (width, box)
         host.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-phone-dropdown-{width}.png'))
         pairing.get_by_role('button', name='Fermer la connexion mobile', exact=True).click()
+    idle_before = remote_api.calls.count('sync')
+    host.evaluate('async () => { const end = performance.now() + 6000; while (performance.now() < end) await new Promise(requestAnimationFrame); }')
+    idle_syncs = remote_api.calls.count('sync') - idle_before
+    assert 2 <= idle_syncs <= 5, ('Unpaired host must keep a slow heartbeat', idle_syncs)
     open_phone(phone, REMOTE_URL)
     expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
     assert_contrast(phone, 'Remote participants')
     expect(trigger).to_be_enabled()
     expect(trigger).to_have_attribute('aria-pressed', 'true')
+    expect(pairing).not_to_be_visible()
+    connected_before = remote_api.calls.count('sync')
+    host.evaluate('async () => { const end = performance.now() + 2000; while (performance.now() < end) await new Promise(requestAnimationFrame); }')
+    connected_syncs = remote_api.calls.count('sync') - connected_before
+    assert 4 <= connected_syncs <= 10, ('Connected host must retain fast polling', connected_syncs)
+    expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
+    print(f'PASS remote heartbeat: {idle_syncs} idle syncs / 6s, {connected_syncs} connected syncs / 2s')
     trigger.hover()
     expect(pairing.get_by_role('button', name='Déconnecter le téléphone', exact=True)).to_be_visible()
     trigger.click()
@@ -196,4 +207,36 @@ with sync_playwright() as p:
     host_context.close()
     phone_context.close()
     print('PASS phone dropdown: hover, cross-gap, leave, keyboard/Escape, click at three sizes, connected click disconnect, stable QR and reconnect')
+    for failure in (503, 409, 'network'):
+        retry_api = MockAPIs()
+        context = browser.new_context(viewport={'width': 390, 'height': 844}, reduced_motion='reduce', service_workers='block')
+        guard = install_browser_bootstrap(context)
+        retry_api.register(context)
+        attempts = []
+        def activation(route):
+            body = route.request.post_data_json if route.request.method == 'POST' else {}
+            if body.get('operation') == 'create':
+                attempts.append(body)
+                if len(attempts) == 1:
+                    if failure == 'network':
+                        route.abort('failed')
+                    else:
+                        route.fulfill(status=failure, json={'error': 'Temporary activation failure'})
+                    return
+            retry_api.remote(route)
+        context.route('**/api/timer-remote*', activation)
+        page = context.new_page()
+        page.goto(BASE + '/participants')
+        expect(page.locator('#participants-page')).to_be_visible()
+        page.locator('#remote-pairing-button').click()
+        popup = page.locator('#remote-pairing-panel')
+        retry = popup.get_by_role('button', name='Réessayer la connexion', exact=True)
+        expect(retry).to_be_visible()
+        assert len(attempts) == 1, 'Activation failures must wait for an explicit retry'
+        retry.click()
+        expect(popup.locator('[data-testid="remote-qr"] svg')).to_be_visible()
+        assert len(attempts) == 2
+        guard.assert_no_unexpected_api()
+        context.close()
+        print(f'PASS phone activation retry after {failure}')
     browser.close()

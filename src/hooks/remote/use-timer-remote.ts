@@ -2,17 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { isCommandAllowed, type RemoteAction, type RemoteCommand, type RemoteSnapshot, type RemoteTransport } from '@/lib/remote/timer-remote';
+import { visibleModalDialogs } from '@/lib/timer/modal';
 
 interface Pair { id: string; owner: string; control: string; expiresAt: number; transport: RemoteTransport }
 type HostSnapshot = Omit<RemoteSnapshot, 'version'>;
 
 function hasBlockingModal(snapshot: HostSnapshot): boolean {
-  return [...document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"], dialog[open]')].some(modal => {
-    const style = getComputedStyle(modal);
-    return style.visibility !== 'hidden' && style.display !== 'none' && modal.getClientRects().length > 0
-      && !modal.closest('[aria-hidden="true"]')
-      && !(snapshot.blackScreen && modal.querySelector('[data-testid="timer-screensaver"]'));
-  });
+  return visibleModalDialogs().some(modal => !(snapshot.blackScreen && modal.querySelector('[data-testid="timer-screensaver"]')));
 }
 
 export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, actions: { dispatch: (action: RemoteAction, targetIndex?: number) => void }) {
@@ -54,6 +50,7 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
     let cancelled = false;
     let busy = false;
     let queued = false;
+    let connected = false;
     let immediate: ReturnType<typeof setTimeout> | undefined;
     let credentials: Pair | null = null;
     let ack: string | undefined;
@@ -63,6 +60,7 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
     async function sync() {
       if (cancelled || !credentials) return;
       if (busy) { queued = true; return; }
+      clearTimeout(immediate);
       busy = true;
       queued = false;
       try {
@@ -74,7 +72,8 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
         const body = await response.json();
         if (cancelled) return;
         if (!response.ok) { setStatus('Connexion interrompue. Réactivez la télécommande si nécessaire.'); return; }
-        setPhoneConnected(Boolean(body.phoneConnected));
+        connected = Boolean(body.phoneConnected);
+        setPhoneConnected(connected);
         setStatus(credentials.transport === 'shared' ? 'Télécommande prête · connexion sécurisée' : 'Télécommande prête · serveur local uniquement');
         const command = body.command as RemoteCommand | null;
         if (command) {
@@ -101,7 +100,7 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
       } catch { if (!cancelled) setStatus('Connexion interrompue · nouvelle tentative automatique.'); }
       finally {
         busy = false;
-        if (queued && !cancelled) immediate = setTimeout(() => void sync(), 0);
+        if (!cancelled) immediate = setTimeout(() => void sync(), queued ? 0 : connected && !document.hidden ? 350 : 1500);
       }
     }
     publishNow.current = () => { void sync(); };
@@ -116,22 +115,24 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
             REMOTE_REDIS_CONFIG_INVALID: 'Configuration Redis invalide. Vérifiez REDIS_URL (redis:// ou rediss://), ou la paire UPSTASH_REDIS_REST_URL (HTTPS) et UPSTASH_REDIS_REST_TOKEN, puis redémarrez ou redéployez.',
             REMOTE_REDIS_UNAVAILABLE: 'Connexion Redis impossible. Vérifiez le service, ses accès et la connexion réseau du serveur, puis réessayez.',
           };
-          if (!cancelled) setStatus(response.status === 409 ? 'Un autre ordinateur contrôle déjà cette équipe. Désactivez-le ou attendez dix secondes après sa déconnexion.' : diagnostics[body.code] ?? (response.status === 403 ? 'Origine refusée. Rechargez le site depuis une seule adresse et réessayez.' : 'Activation impossible : le serveur ou la vérification de l’équipe est indisponible. Réessayez ; en local, redémarrez le serveur après modification de la configuration.'));
+          if (!cancelled) {
+            setStatus(response.status === 409 ? 'Un autre ordinateur contrôle déjà cette équipe. Fermez le point sur cet autre ordinateur, puis réessayez après dix secondes.' : diagnostics[body.code] ?? (response.status === 403 ? 'Origine refusée. Rechargez le site depuis une seule adresse et réessayez.' : 'Activation impossible : le serveur ou la vérification de l’équipe est indisponible. Réessayez ; en local, redémarrez le serveur après modification de la configuration.'));
+            setEnabled(false);
+          }
           return;
         }
         credentials = body;
         if (cancelled) { revoke(body); return; }
         setPair(body); setPhoneEnabled(true); setPhoneConnected(Boolean(body.phoneConnected)); void sync();
-      } catch { if (!cancelled) setStatus('Impossible de créer le lien. Désactivez puis réessayez.'); }
+      } catch { if (!cancelled) { setStatus('Impossible de créer le lien. Vérifiez le réseau puis réessayez.'); setEnabled(false); } }
     }
     const pagehide = () => { if (credentials) revoke(credentials); };
     window.addEventListener('pagehide', pagehide);
     void create();
-    const interval = setInterval(() => { if (!busy) void sync(); }, 350);
     const visible = () => { void sync(); };
     document.addEventListener('visibilitychange', visible);
     window.addEventListener('online', visible);
-    return () => { cancelled = true; publishNow.current = () => {}; clearInterval(interval); clearTimeout(immediate); controller.abort(); window.removeEventListener('pagehide', pagehide); document.removeEventListener('visibilitychange', visible); window.removeEventListener('online', visible); if (credentials) revoke(credentials); };
+    return () => { cancelled = true; publishNow.current = () => {}; clearTimeout(immediate); controller.abort(); window.removeEventListener('pagehide', pagehide); document.removeEventListener('visibilitychange', visible); window.removeEventListener('online', visible); if (credentials) revoke(credentials); };
   }, [enabled, teamId]);
 
   async function setPhoneAccess(operation: 'phone-enable' | 'phone-disconnect') {

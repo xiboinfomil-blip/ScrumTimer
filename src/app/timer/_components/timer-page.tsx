@@ -60,8 +60,9 @@ export function TimerPage() {
   const noteSpeaker = useRef({ teamId: activeTeamId, participantId: timer.activeId });
   useEffect(() => {
     const previous = noteSpeaker.current;
+    if (previous.teamId === activeTeamId && notes.loading) return;
     noteSpeaker.current = { teamId: activeTeamId, participantId: timer.activeId };
-    if (previous.teamId === activeTeamId && previous.participantId !== timer.activeId && !notes.loading) refreshNotes();
+    if (previous.teamId === activeTeamId && previous.participantId !== timer.activeId) refreshNotes();
   }, [activeTeamId, timer.activeId, notes.loading, refreshNotes]);
   const note = notes.data?.hints.find(hint => hint.participantId === timer.person?.id);
   const target = useRef<HTMLDivElement>(null);
