@@ -21,7 +21,7 @@ const snapshot: RemoteSnapshot = { page: 'timer', speaker: '<Alice>', nextSpeake
   ], participantPresent: false, participantMood: null, participantIndex: 0, participantCount: 2, canVote: false, canPostpone: false, canContinue: false,
   running: false, remaining: 30, deadline: 0, completed: 0, total: 2, version: 'v1', blocked: false };
 const payload: RemoteCommandPayload = { requestId, action: 'start', version: 'v1' };
-const actions = ['start', 'pause', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-postpone', 'mood-continue'] as const;
+const actions = ['start', 'pause', 'previous', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-postpone', 'mood-continue'] as const;
 function entry(): RemoteEntry {
   return { teamId: 'a'.repeat(64), ownerHash: 'a'.repeat(64), controlHash: 'b'.repeat(64), expiresAt: now + REMOTE_PAIR_TTL,
     hostSeenAt: now, leaseUntil: now + REMOTE_HOST_LEASE, phoneHash: null, phoneLeaseUntil: 0, phoneEnabled: true,
@@ -73,6 +73,33 @@ test('optional black-screen and manual penalty snapshot fields preserve legacy w
   }
 });
 
+test('shared list pages validate bounds and allow only in-range versioned navigation', () => {
+  const lists = [{ key: 'mood', indices: [1], page: 1, pages: 3 }];
+  const shared = { ...snapshot, lists };
+  assert.deepEqual(validateRemoteSnapshot(shared), shared);
+  for (const action of ['list-previous', 'list-next'] as const) {
+    const command = { action, version: snapshot.version, targetIndex: 0 };
+    assert.deepEqual(validateRemoteCommand({ ...command, requestId }), { ...command, requestId });
+    assert.equal(isCommandAllowed(shared, command), true);
+    assert.equal(isCommandAllowed({ ...shared, blocked: true }, command), false);
+    assert.equal(isCommandAllowed({ ...shared, blackScreen: true }, command), false);
+    for (const targetIndex of [-1, 1, 99, undefined, 0.5]) assert.equal(isCommandAllowed(shared, { ...command, targetIndex }), false);
+    assert.equal(isCommandAllowed(shared, { ...command, version: 'stale' }), false);
+    rejectsStatus(() => validateRemoteCommand({ action, requestId, version: snapshot.version }), 400);
+  }
+  assert.equal(isCommandAllowed({ ...shared, lists: [{ ...lists[0], page: 0 }] }, { action: 'list-previous', targetIndex: 0, version: 'v1' }), false);
+  assert.equal(isCommandAllowed({ ...shared, lists: [{ ...lists[0], page: 2 }] }, { action: 'list-next', targetIndex: 0, version: 'v1' }), false);
+  for (const list of [
+    { ...lists[0], indices: [-1] }, { ...lists[0], indices: [2] }, { ...lists[0], indices: [0, 0] },
+    { ...lists[0], indices: [0, 1, 0, 1] }, { ...lists[0], indices: [0.5] },
+    { ...lists[0], page: -1 }, { ...lists[0], page: 3 }, { ...lists[0], page: 0.5 },
+    { ...lists[0], pages: 0 }, { ...lists[0], pages: 101 }, { ...lists[0], key: '' },
+    { ...lists[0], extra: true },
+  ]) rejectsStatus(() => validateRemoteSnapshot({ ...snapshot, lists: [list] }), 400);
+  rejectsStatus(() => validateRemoteSnapshot({ ...snapshot, lists: [lists[0], lists[0]] }), 400);
+  rejectsStatus(() => validateRemoteSnapshot({ ...snapshot, lists: null }), 400);
+});
+
 test('opaque capabilities only come from Authorization and require the 32-byte base64url shape', () => {
   const token = 'x'.repeat(43);
   assert.equal(isRemoteToken(token), true);
@@ -104,17 +131,19 @@ test('operation envelopes and command requestId are strict; timestamps and token
 });
 
 test('actions respect expected version, running, blocked, active speaker and completion', () => {
-  const timerActions = ['start', 'pause', 'next', 'restart', 'penalty', 'black-screen'] as const;
+  const timerActions = ['start', 'pause', 'previous', 'next', 'restart', 'penalty', 'black-screen'] as const;
   for (const running of [false, true]) {
     for (const action of timerActions) {
       const command = { action, version: 'v1' };
-      assert.equal(isCommandAllowed({ ...snapshot, running }, command), action === 'start' ? !running : action === 'pause' ? running : true);
+      assert.equal(isCommandAllowed({ ...snapshot, running }, command), action === 'start' ? !running : action === 'pause' ? running : action === 'previous' ? false : true);
       for (const change of [{ blocked: true }, { activeId: null }, { completed: 2 }, { version: 'v2' }]) {
         assert.equal(isCommandAllowed({ ...snapshot, running, ...change }, command), false);
       }
       assert.equal(isCommandAllowed(null, command), false);
     }
   }
+  assert.equal(isCommandAllowed({ ...snapshot, participantIndex: 1 }, { action: 'previous', version: 'v1' }), true);
+  assert.equal(isCommandAllowed({ ...snapshot, participantIndex: 1, participants: snapshot.participants.map(person => ({ ...person, postponed: true })) }, { action: 'previous', version: 'v1' }), false);
 });
 
 test('all remote actions have strict envelopes; person-targeted commands require bounded indexes', () => {
@@ -142,7 +171,7 @@ test('black screen allows only its restore toggle, never bypassing freshness/ver
     for (const action of actions) {
       const command = { action, version: 'v1' };
       const black = { ...snapshot, running, blackScreen: true, manualPenalty: 1_000_000 };
-      assert.equal(isCommandAllowed(black, command), action === 'black-screen');
+      assert.equal(isCommandAllowed(black, command), action === 'black-screen' || action === 'start');
       for (const change of [{ blocked: true }, { activeId: null }, { completed: 2 }, { version: 'v2' }]) {
         assert.equal(isCommandAllowed({ ...black, ...change }, command), false);
       }
@@ -581,7 +610,7 @@ test('route/store security invariants: bounded JSON, no-store, selected-team cre
   assert.match(commandBranch, /input\.action=='penalty' and \(s\.manualPenalty or 0\)>999950/);
   assert.match(commandBranch, /s\.version~=input\.version/);
   assert.match(commandBranch, /has\(pending\(\)\) or e\.lastCommandId==input\.requestId or e\.lastCommandVersion==input\.version/);
-  for (const action of ['start', 'pause', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-postpone', 'mood-continue']) assert.ok(commandBranch.includes(`input.action=='${action}'`) || commandBranch.includes(`input.action~='${action}'`), action);
+  for (const action of ['start', 'pause', 'previous', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-postpone', 'mood-continue']) assert.ok(commandBranch.includes(`input.action=='${action}'`) || commandBranch.includes(`input.action~='${action}'`), action);
   assert.match(commandBranch, /s\.page=='participants'/);
   assert.match(commandBranch, /s\.page=='mood'/);
   assert.match(commandBranch, /s\.page=='timer'/);

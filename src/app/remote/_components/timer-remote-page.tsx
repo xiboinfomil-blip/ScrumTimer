@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
 import PauseRounded from '@mui/icons-material/PauseRounded';
+import SkipPreviousRounded from '@mui/icons-material/SkipPreviousRounded';
 import SkipNextRounded from '@mui/icons-material/SkipNextRounded';
 import SmartphoneRounded from '@mui/icons-material/SmartphoneRounded';
 import LinkOffRounded from '@mui/icons-material/LinkOffRounded';
@@ -11,6 +12,8 @@ import ShieldOutlined from '@mui/icons-material/ShieldOutlined';
 import RestartAltRounded from '@mui/icons-material/RestartAltRounded';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import DesktopWindowsRounded from '@mui/icons-material/DesktopWindowsRounded';
+import KeyboardArrowUpRounded from '@mui/icons-material/KeyboardArrowUpRounded';
+import KeyboardArrowDownRounded from '@mui/icons-material/KeyboardArrowDownRounded';
 import { Button, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { type RemoteCommand } from '@/lib/remote/timer-remote';
 import { type RemoteSnapshot, type RemoteStatus, type RemoteTransport } from '@/lib/remote/timer-remote';
@@ -128,13 +131,9 @@ export function TimerRemotePage() {
   const time = `${remaining < 0 ? '+' : ''}${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
   const finished = Boolean(snapshot && snapshot.completed === snapshot.total && snapshot.total > 0);
   const people = snapshot?.participants ?? [];
-  const snapshotPage = snapshot?.page;
-  const activeId = snapshot?.activeId;
-
-  useEffect(() => {
-    if (!snapshotPage || snapshotPage === 'idle' || !activeId) return;
-    document.querySelector('[aria-current="true"], [aria-current="step"]')?.scrollIntoView({ block: 'nearest', behavior: reducedMotion ? 'auto' : 'smooth' });
-  }, [snapshotPage, activeId, reducedMotion]);
+  const visibleIndices = snapshot?.lists?.length ? snapshot.lists.flatMap(list => list.indices) : people.slice(0, 3).map((_, index) => index);
+  const visiblePeople = [...new Set(visibleIndices)].flatMap(index => people[index] ? [{ person: people[index], index }] : []);
+  const canPrevious = Boolean(snapshot?.page === 'timer' && snapshot.participants.slice(0, snapshot.participantIndex).some(person => !person.postponed));
 
   useEffect(() => {
     if (!pending) return;
@@ -150,7 +149,7 @@ export function TimerRemotePage() {
   }, [pending, snapshot?.version]);
 
   async function command(action: RemoteCommand['action'], targetIndex?: number) {
-    if (!usable || !snapshot || !credentials.current || pendingRef.current || (snapshot.blackScreen && action !== 'black-screen')) return;
+    if (!usable || !snapshot || !credentials.current || pendingRef.current || (snapshot.blackScreen && action !== 'black-screen' && action !== 'start')) return;
     pendingRef.current = true; setPending(true); setConfirmNext(null);
     setConfirmRestart(null);
     setConfirmPenalty(null);
@@ -167,6 +166,14 @@ export function TimerRemotePage() {
       await refresh.current();
     } catch { if (mounted.current) setMessage('Envoi non confirmé. Vérifiez le minuteur avant de réessayer.'); }
     finally { if (!awaitingVersion.current) { pendingRef.current = false; if (mounted.current) setPending(false); } }
+  }
+
+  function pageNavigation() {
+    return snapshot?.lists?.map((list, index) => <nav key={list.key} aria-label={`Pages · ${list.key === 'mood' ? 'Humeurs' : list.key === 'timer' ? 'Tour de parole' : list.key.includes('absent') ? 'Absents' : 'Présents'}`} className="flex min-h-12 items-center justify-between gap-2 border-y border-[#dce4e1] py-1">
+      <button type="button" aria-label={`Page précédente · ${list.key}`} title="Page précédente" disabled={!usable || snapshot.blackScreen || list.page === 0} onClick={() => void command('list-previous', index)} className="grid size-11 shrink-0 place-items-center rounded-lg border border-control bg-white text-brand disabled:bg-slate-100 disabled:text-slate-500"><KeyboardArrowUpRounded /></button>
+      <span className="text-center text-xs font-semibold tabular-nums text-ink" role="status">{list.key === 'mood' ? 'Humeurs' : list.key === 'timer' ? 'Tour de parole' : list.key.includes('absent') ? 'Absents' : 'Présents'} · {list.page + 1} / {list.pages}</span>
+      <button type="button" aria-label={`Page suivante · ${list.key}`} title="Page suivante" disabled={!usable || snapshot.blackScreen || list.page + 1 >= list.pages} onClick={() => void command('list-next', index)} className="grid size-11 shrink-0 place-items-center rounded-lg border border-control bg-white text-brand disabled:bg-slate-100 disabled:text-slate-500"><KeyboardArrowDownRounded /></button>
+    </nav>);
   }
 
   return <div className="relative flex min-h-0 flex-1 justify-center overflow-y-auto overscroll-contain bg-[#f2f5f4] px-3 pt-[max(10px,env(safe-area-inset-top))] sm:px-6">
@@ -188,13 +195,14 @@ export function TimerRemotePage() {
             <span className="shrink-0 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">{people.filter(person => person.present).length} présents · {people.length} personnes</span>
           </div>
           <ol aria-label="Présences de l’équipe" className="flex flex-col gap-2">
-            {people.map((person, index) => <li key={`${index}-${person.name}`} aria-current={person.active ? 'true' : undefined} className={`flex min-h-[72px] items-center gap-3 rounded-lg border bg-white p-3 ${person.active ? 'border-brand ring-2 ring-brand/15' : 'border-[#dce4e1]'}`}>
+            {visiblePeople.map(({ person, index }) => <li key={`${index}-${person.name}`} aria-current={person.active ? 'true' : undefined} data-remote-active={person.active ? 'true' : undefined} className={`flex min-h-[72px] items-center gap-3 rounded-lg border bg-white p-3 ${person.active ? 'border-brand ring-2 ring-brand/15' : 'border-[#dce4e1]'}`}>
               <span aria-hidden="true" className={`grid size-10 shrink-0 place-items-center rounded-full text-sm font-bold ${person.present ? 'bg-[#e6f4ed] text-[#176b49]' : 'bg-slate-100 text-slate-600'}`}>{Array.from(person.name)[0]?.toLocaleUpperCase('fr-FR')}</span>
               <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-ink">{person.name}</p><p className={`mt-0.5 text-xs font-medium ${person.present ? 'text-[#176b49]' : 'text-slate-600'}`}>{person.present ? 'Présent(e)' : 'Absent(e)'}{person.active ? ' · Sélectionné(e)' : ''}</p></div>
               <button type="button" aria-pressed={person.present} aria-label={`${person.present ? 'Marquer absent(e)' : 'Marquer présent(e)'} · ${person.name}`} disabled={!usable || pending} onClick={() => void command('attendance-toggle', index)} className={`min-h-11 min-w-11 rounded-lg border px-3 text-xs font-bold focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600 ${person.present ? 'border-slate-400 bg-white text-ink' : 'border-[#176b49] bg-[#176b49] text-white'}`}>{person.present ? 'Absent(e)' : 'Présent(e)'}</button>
             </li>)}
           </ol>
           {!people.length && <p className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-700">Aucune personne dans l’équipe.</p>}
+          {pageNavigation()}
         </section>}
 
         {snapshot?.page === 'mood' && <section aria-labelledby="remote-mood-title" className="flex flex-col gap-3">
@@ -204,7 +212,7 @@ export function TimerRemotePage() {
           </div>
           <p className="px-1 text-xs leading-relaxed text-slate-700">Choisissez une humeur pour chaque personne présente, ou indiquez « Plus tard ».</p>
           <ol aria-label="Humeurs de l’équipe" className="flex flex-col gap-2">
-            {people.map((person, index) => <li key={`${index}-${person.name}`} aria-current={person.active ? 'true' : undefined} className={`rounded-lg border bg-white p-3 ${person.active ? 'border-brand ring-2 ring-brand/15' : 'border-[#dce4e1]'}`}>
+            {visiblePeople.map(({ person, index }) => <li key={`${index}-${person.name}`} aria-current={person.active ? 'true' : undefined} data-remote-active={person.active ? 'true' : undefined} className={`rounded-lg border bg-white p-3 ${person.active ? 'border-brand ring-2 ring-brand/15' : 'border-[#dce4e1]'}`}>
               <div className="mb-2 flex min-w-0 items-center gap-2">
                 <span aria-hidden="true" className={`grid size-9 shrink-0 place-items-center rounded-full text-sm font-bold ${person.postponed ? 'bg-amber-100 text-amber-900' : person.mood !== null ? 'bg-[#e6f4ed] text-[#176b49]' : 'bg-blue-50 text-brand'}`}>{Array.from(person.name)[0]?.toLocaleUpperCase('fr-FR')}</span>
                 <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-ink">{person.name}</p><p className="text-xs text-slate-700">{person.postponed ? 'À renseigner plus tard' : person.mood !== null ? `Humeur ${person.mood} sur 4` : 'Humeur à renseigner'}</p></div>
@@ -221,6 +229,7 @@ export function TimerRemotePage() {
             </li>)}
           </ol>
           {!people.length && <p className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-700">Aucune personne présente.</p>}
+          {pageNavigation()}
         </section>}
 
         {snapshot?.page === 'timer' && <>
@@ -234,12 +243,13 @@ export function TimerRemotePage() {
           <section aria-labelledby="remote-lineup-title" className="flex flex-col gap-2">
             <div className="flex items-end justify-between gap-3 px-1"><div><p className="text-[10px] font-bold uppercase text-brand">Étape 3 · Passage</p><h2 id="remote-lineup-title" className="text-lg font-bold text-ink">Ordre de parole</h2></div><span className="shrink-0 text-xs font-semibold text-slate-700">{snapshot.completed} / {snapshot.total} terminés</span></div>
             <ol aria-label="Ordre de parole" className="flex flex-col gap-2">
-              {people.map((person, index) => <li key={`${index}-${person.name}`} aria-current={person.active ? 'step' : undefined} className={`scroll-m-3 flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2 ${person.active ? 'border-brand bg-[#eaf2f8] ring-2 ring-brand/15' : person.done ? 'border-[#b9daca] bg-[#edf7f1]' : 'border-[#dce4e1] bg-white'}`}>
+              {visiblePeople.map(({ person, index }) => <li key={`${index}-${person.name}`} aria-current={person.active ? 'step' : undefined} data-remote-active={person.active ? 'true' : undefined} className={`scroll-m-3 flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2 ${person.active ? 'border-brand bg-[#eaf2f8] ring-2 ring-brand/15' : person.done ? 'border-[#b9daca] bg-[#edf7f1]' : 'border-[#dce4e1] bg-white'}`}>
                 <span aria-hidden="true" className={`grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold ${person.active ? 'bg-brand text-white' : person.done ? 'bg-[#176b49] text-white' : 'bg-slate-100 text-slate-700'}`}>{person.done ? '✓' : index + 1}</span>
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{person.name}</span>
                 <span className={`shrink-0 text-[11px] font-semibold ${person.active ? 'text-brand' : person.postponed ? 'text-amber-900' : person.done ? 'text-[#176b49]' : 'text-slate-600'}`}>{person.active ? 'En cours' : person.postponed ? 'En attente' : person.done ? 'Terminé' : 'À venir'}</span>
               </li>)}
             </ol>
+            {pageNavigation()}
           </section>
         </>}
 
@@ -254,11 +264,12 @@ export function TimerRemotePage() {
         {snapshot?.page === 'participants' && <button type="button" disabled={!usable || !snapshot.canContinue || pending} onClick={() => void command('participant-continue')} className="min-h-12 w-full rounded-lg bg-brand px-4 text-sm font-bold text-white focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-700">Continuer vers les humeurs</button>}
         {snapshot?.page === 'mood' && <button type="button" disabled={!usable || !snapshot.canContinue || pending} onClick={() => void command('mood-continue')} className="min-h-12 w-full rounded-lg bg-brand px-4 text-sm font-bold text-white focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-700">Continuer vers le minuteur</button>}
         {snapshot?.page === 'timer' && <section className="flex flex-col gap-2" aria-label="Commandes à distance">
-          {confirmNext && confirmNext === snapshot.version && usable && !snapshot.blackScreen ? <div className="rounded-lg border border-orange-300 bg-orange-50 p-3"><p className="text-sm font-bold text-ink">Terminer ce passage ?</p><p className="mt-1 text-xs leading-relaxed text-slate-700">{snapshot.nextSpeaker ? `${snapshot.nextSpeaker} prendra la parole immédiatement.` : 'Ce passage sera terminé sur l’ordinateur.'}</p><div className="mt-2 grid grid-cols-2 gap-2"><button type="button" onClick={() => setConfirmNext(null)} className="min-h-11 rounded-lg border border-slate-500 bg-white text-sm font-semibold text-ink">Annuler</button><button type="button" onClick={() => void command('next')} className="min-h-11 rounded-lg bg-brand text-sm font-bold text-white">Confirmer</button></div></div> : <div className="grid grid-cols-[1fr_1.2fr] gap-2">
-            <motion.button whileTap={reducedMotion ? undefined : { scale: .98 }} type="button" disabled={!usable || snapshot.blackScreen} aria-label={pending ? 'Transmission…' : snapshot.running ? 'Mettre en pause' : 'Démarrer / reprendre'} onClick={() => void command(snapshot.running ? 'pause' : 'start')} className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-brand bg-white px-2 text-sm font-bold text-brand focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-600">
+          {confirmNext && confirmNext === snapshot.version && usable && !snapshot.blackScreen ? <div className="rounded-lg border border-orange-300 bg-orange-50 p-3"><p className="text-sm font-bold text-ink">Terminer ce passage ?</p><p className="mt-1 text-xs leading-relaxed text-slate-700">{snapshot.nextSpeaker ? `${snapshot.nextSpeaker} prendra la parole immédiatement.` : 'Ce passage sera terminé sur l’ordinateur.'}</p><div className="mt-2 grid grid-cols-2 gap-2"><button type="button" onClick={() => setConfirmNext(null)} className="min-h-11 rounded-lg border border-slate-500 bg-white text-sm font-semibold text-ink">Annuler</button><button type="button" onClick={() => void command('next')} className="min-h-11 rounded-lg bg-brand text-sm font-bold text-white">Confirmer</button></div></div> : <div className="grid grid-cols-[1fr_1fr_1.2fr] gap-2">
+            <motion.button whileTap={reducedMotion ? undefined : { scale: .98 }} type="button" disabled={!usable} aria-label={pending ? 'Transmission…' : snapshot.running ? 'Mettre en pause' : 'Démarrer / reprendre'} onClick={() => void command(snapshot.running ? 'pause' : 'start')} className="order-2 flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border border-brand bg-brand px-2 text-xs font-bold text-white focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-600">
               {snapshot.running ? <PauseRounded fontSize="small" /> : <PlayArrowRounded fontSize="small" />}{pending ? 'Envoi…' : snapshot.running ? 'Pause' : 'Reprendre'}
             </motion.button>
-            <button type="button" aria-label="Passage suivant" disabled={!usable || snapshot.blackScreen} onClick={() => setConfirmNext(snapshot.version)} className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#a84f0b] px-3 text-sm font-bold text-white focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-700"><SkipNextRounded fontSize="small" />Suivant</button>
+            <button type="button" aria-label="Passage précédent" title="Passage précédent" disabled={!usable || snapshot.blackScreen || !canPrevious} onClick={() => void command('previous')} className="order-1 flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border border-control bg-white px-2 text-xs font-bold text-brand transition-colors hover:bg-blue-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-600"><SkipPreviousRounded /><span>Précédent</span></button>
+            <button type="button" aria-label="Passage suivant" disabled={!usable || snapshot.blackScreen} onClick={() => setConfirmNext(snapshot.version)} className="order-3 flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border border-[#a84f0b] bg-[#fff3e3] px-2 text-xs font-bold text-[#8f4309] transition-colors hover:bg-orange-100 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-700"><SkipNextRounded /><span>Suivant</span></button>
           </div>}
           <div className="grid grid-cols-3 gap-2">
             <button type="button" aria-label="Redémarrer" disabled={!usable || snapshot.blackScreen} onClick={() => setConfirmRestart(snapshot.version)} className="min-h-11 rounded-lg border border-slate-400 bg-white px-1 text-xs font-semibold text-ink focus-visible:outline-3 focus-visible:outline-brand disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600"><RestartAltRounded className="mr-1" fontSize="small" />Redémarrer</button>

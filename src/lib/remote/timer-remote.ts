@@ -24,6 +24,7 @@ export interface RemoteSnapshot {
   blocked: boolean;
   blackScreen?: boolean;
   manualPenalty?: number;
+  lists?: { key: string; indices: number[]; page: number; pages: number }[];
 }
 
 export interface RemoteParticipant {
@@ -43,7 +44,8 @@ export interface RemoteCommand {
   createdAt: number;
 }
 
-export type RemoteAction = 'start' | 'pause' | 'next' | 'restart' | 'penalty' | 'black-screen'
+export type RemoteAction = 'start' | 'pause' | 'previous' | 'next' | 'restart' | 'penalty' | 'black-screen'
+  | 'list-previous' | 'list-next'
   | 'participant-previous' | 'participant-next' | 'attendance-toggle' | 'participant-continue'
   | 'mood-1' | 'mood-2' | 'mood-3' | 'mood-4' | 'mood-postpone' | 'mood-continue';
 
@@ -121,7 +123,7 @@ function version(value: unknown): value is string {
 }
 
 export function validateRemoteSnapshot(value: unknown): RemoteSnapshot {
-  const data = remoteObject(value, ['page', 'speaker', 'nextSpeaker', 'teamName', 'activeId', 'participants', 'participantPresent', 'participantMood', 'participantIndex', 'participantCount', 'canVote', 'canPostpone', 'canContinue', 'running', 'remaining', 'deadline', 'completed', 'total', 'version', 'blocked', 'blackScreen', 'manualPenalty']);
+  const data = remoteObject(value, ['page', 'speaker', 'nextSpeaker', 'teamName', 'activeId', 'participants', 'participantPresent', 'participantMood', 'participantIndex', 'participantCount', 'canVote', 'canPostpone', 'canContinue', 'running', 'remaining', 'deadline', 'completed', 'total', 'version', 'blocked', 'blackScreen', 'manualPenalty', 'lists']);
   const participants = Array.isArray(data.participants) ? data.participants : null;
   const validParticipants = participants?.every(person => {
     if (!person || typeof person !== 'object' || Array.isArray(person)) return false;
@@ -135,6 +137,18 @@ export function validateRemoteSnapshot(value: unknown): RemoteSnapshot {
       && typeof item.postponed === 'boolean'
       && typeof item.active === 'boolean';
   }) ?? false;
+  if (data.lists !== undefined) {
+    if (!Array.isArray(data.lists) || data.lists.length > 3) throw new RemoteError(400);
+    const keys = new Set<string>();
+    for (const value of data.lists) {
+      const list = remoteObject(value, ['key', 'indices', 'page', 'pages']);
+      if (!text(list.key, 32, false) || keys.has(list.key) || !Array.isArray(list.indices) || list.indices.length > 3
+        || new Set(list.indices).size !== list.indices.length || !list.indices.every(index => Number.isInteger(index) && index >= 0 && index < (participants?.length ?? 0))
+        || !Number.isInteger(list.pages) || (list.pages as number) < 1 || (list.pages as number) > 100
+        || !Number.isInteger(list.page) || (list.page as number) < 0 || (list.page as number) >= (list.pages as number)) throw new RemoteError(400);
+      keys.add(list.key);
+    }
+  }
   if ((data.blackScreen !== undefined && typeof data.blackScreen !== 'boolean') || (data.manualPenalty !== undefined && (!finite(data.manualPenalty) || !Number.isInteger(data.manualPenalty) || data.manualPenalty < 0 || data.manualPenalty > 1_000_000))) throw new RemoteError(400);
   if (!['participants', 'mood', 'timer', 'idle'].includes(data.page as string)
     || !text(data.speaker, 100) || !text(data.nextSpeaker, 100) || !text(data.teamName, 100)
@@ -174,8 +188,8 @@ export function validateRemoteRequestId(value: unknown): string {
 export function validateRemoteCommand(value: unknown): RemoteCommandPayload {
   const data = remoteObject(value, ['requestId', 'action', 'targetIndex', 'version']);
   const requestId = validateRemoteRequestId(data.requestId);
-  if (!version(data.version) || !['start', 'pause', 'next', 'restart', 'penalty', 'black-screen', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-postpone', 'mood-continue'].includes(data.action as string)) throw new RemoteError(400);
-  const targetsPerson = data.action === 'attendance-toggle' || /^mood-[1-4]$/.test(data.action as string) || data.action === 'mood-postpone';
+  if (!version(data.version) || !['start', 'pause', 'previous', 'next', 'restart', 'penalty', 'black-screen', 'list-previous', 'list-next', 'participant-previous', 'participant-next', 'attendance-toggle', 'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-postpone', 'mood-continue'].includes(data.action as string)) throw new RemoteError(400);
+  const targetsPerson = data.action === 'attendance-toggle' || /^mood-[1-4]$/.test(data.action as string) || data.action === 'mood-postpone' || data.action === 'list-previous' || data.action === 'list-next';
   if (targetsPerson ? !Number.isInteger(data.targetIndex) || (data.targetIndex as number) < 0 || (data.targetIndex as number) > 99 : data.targetIndex !== undefined) throw new RemoteError(400);
   return { requestId, action: data.action as RemoteCommand['action'], version: data.version,
     ...(targetsPerson ? { targetIndex: data.targetIndex as number } : {}) };
@@ -218,6 +232,11 @@ function validTargetIndex(snapshot: RemoteSnapshot, targetIndex: number | undefi
 
 export function isCommandAllowed(snapshot: RemoteSnapshot | null, command: Pick<RemoteCommand, 'action' | 'targetIndex' | 'version'>): boolean {
   if (!snapshot || snapshot.blocked || snapshot.version !== command.version) return false;
+  if (command.action === 'list-previous' || command.action === 'list-next') {
+    if (snapshot.blackScreen || snapshot.page === 'idle' || !Number.isInteger(command.targetIndex)) return false;
+    const list = snapshot.lists?.[command.targetIndex!];
+    return Boolean(list && (command.action === 'list-previous' ? list.page > 0 : list.page + 1 < list.pages));
+  }
   if (snapshot.page === 'participants') return command.action === 'participant-continue' ? snapshot.canContinue
     : command.action === 'attendance-toggle' ? validTargetIndex(snapshot, command.targetIndex)
       : Boolean(snapshot.activeId) && ['participant-previous', 'participant-next'].includes(command.action) && snapshot.participantCount > 1;
@@ -228,10 +247,11 @@ export function isCommandAllowed(snapshot: RemoteSnapshot | null, command: Pick<
         && snapshot.participants[command.targetIndex!].present && snapshot.canVote
         && (/^mood-[1-4]$/.test(command.action) || (command.action === 'mood-postpone' && snapshot.canPostpone)));
   if (snapshot.page !== 'timer' || !snapshot.activeId || snapshot.completed >= snapshot.total) return false;
-  if (snapshot.blackScreen) return command.action === 'black-screen';
+  if (snapshot.blackScreen) return command.action === 'black-screen' || command.action === 'start';
   switch (command.action) {
     case 'start': return !snapshot.running;
     case 'pause': return snapshot.running;
+    case 'previous': return snapshot.participants.slice(0, snapshot.participantIndex).some(person => !person.postponed);
     case 'next': return true;
     case 'restart': return true;
     case 'penalty': return (snapshot.manualPenalty ?? 0) <= 999_950;

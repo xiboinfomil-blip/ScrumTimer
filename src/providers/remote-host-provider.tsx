@@ -9,7 +9,8 @@ import { usePathname } from 'next/navigation';
 
 export type RemotePageSnapshot = Omit<RemoteSnapshot, 'version'>;
 type RemotePageDispatch = (action: RemoteAction, targetIndex?: number) => void;
-interface RemotePageView { snapshot: RemotePageSnapshot; dispatch: RemotePageDispatch }
+interface RemotePageView { snapshot: RemotePageSnapshot; dispatch: RemotePageDispatch; participantIds?: string[] }
+interface SynchronizedList { key: string; ids: string[]; page: number; pages: number; changePage: (page: number) => void }
 interface RemoteHostContextValue {
   remote: ReturnType<typeof useTimerRemote>;
   openPairing: () => void;
@@ -17,6 +18,7 @@ interface RemoteHostContextValue {
   scheduleClosePairing: () => void;
   pairingOpen: boolean;
   registerPage: (view: RemotePageView) => () => void;
+  registerList: (list: SynchronizedList) => () => void;
 }
 
 const RemoteHostContext = createContext<RemoteHostContextValue | null>(null);
@@ -32,6 +34,11 @@ export function RemoteHostProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<RemotePageView>({ snapshot: idleSnapshot, dispatch: () => {} });
   const viewRef = useRef(view);
   const generation = useRef(0);
+  const [lists, setLists] = useState<SynchronizedList[]>([]);
+  const registerList = useCallback((list: SynchronizedList) => {
+    setLists(current => [...current.filter(candidate => candidate.key !== list.key), list]);
+    return () => setLists(current => current.filter(candidate => candidate !== list));
+  }, []);
   const [pairingOpen, setPairingOpen] = useState(false);
   const [pairingAnchor, setPairingAnchor] = useState<HTMLElement | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,8 +59,14 @@ export function RemoteHostProvider({ children }: { children: ReactNode }) {
       setView(idle);
     };
   }, [publish]);
-  const dispatch = useCallback((action: RemoteAction, targetIndex?: number) => viewRef.current.dispatch(action, targetIndex), []);
-  const remote = useTimerRemote(teamId, { ...view.snapshot, blocked: view.snapshot.blocked || pairingOpen }, { dispatch });
+  const sharedLists = lists.filter(list => list.ids.every(id => view.participantIds?.includes(id))).sort((first, second) => first.key.localeCompare(second.key));
+  const dispatch = useCallback((action: RemoteAction, targetIndex?: number) => {
+    if (action === 'list-previous' || action === 'list-next') {
+      const list = sharedLists[targetIndex ?? -1];
+      if (list) list.changePage(list.page + (action === 'list-next' ? 1 : -1));
+    } else viewRef.current.dispatch(action, targetIndex);
+  }, [sharedLists]);
+  const remote = useTimerRemote(teamId, { ...view.snapshot, lists: sharedLists.map(list => ({ key: list.key, indices: list.ids.map(id => view.participantIds!.indexOf(id)), page: list.page, pages: list.pages })), blocked: view.snapshot.blocked || pairingOpen }, { dispatch });
   useEffect(() => { if (remote.phoneConnected) setPairingOpen(false); }, [remote.phoneConnected]);
   const openPairing = useCallback(() => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
@@ -72,22 +85,34 @@ export function RemoteHostProvider({ children }: { children: ReactNode }) {
     closePairing();
     return () => { if (closeTimer.current) clearTimeout(closeTimer.current); };
   }, [pathname, activeTeamId, closePairing]);
-  return <RemoteHostContext.Provider value={{ remote, openPairing, closePairing, scheduleClosePairing, pairingOpen, registerPage }}>
+  return <RemoteHostContext.Provider value={{ remote, openPairing, closePairing, scheduleClosePairing, pairingOpen, registerPage, registerList }}>
     {children}
     <RemotePairingDialog open={pairingOpen} anchorEl={pairingAnchor} onClose={closePairing} onEnter={openPairing} onLeave={scheduleClosePairing} remote={remote} />
   </RemoteHostContext.Provider>;
 }
 
-export function useRemotePage(snapshot: RemotePageSnapshot, dispatch: RemotePageDispatch) {
+export function useRemotePage(snapshot: RemotePageSnapshot, dispatch: RemotePageDispatch, participantIds?: string[]) {
   const context = useContext(RemoteHostContext);
   if (!context) throw new Error('RemoteHostProvider is missing.');
   const { registerPage } = context;
   const dispatchRef = useRef(dispatch);
   const snapshotRef = useRef(snapshot);
-  const signature = JSON.stringify(snapshot);
+  const participantIdsRef = useRef(participantIds);
+  const signature = JSON.stringify([snapshot, participantIds]);
   useEffect(() => { dispatchRef.current = dispatch; }, [dispatch]);
   useEffect(() => { snapshotRef.current = snapshot; }, [snapshot]);
-  useEffect(() => registerPage({ snapshot: snapshotRef.current, dispatch: (action, targetIndex) => dispatchRef.current(action, targetIndex) }), [registerPage, signature]);
+  useEffect(() => { participantIdsRef.current = participantIds; }, [participantIds]);
+  useEffect(() => registerPage({ snapshot: snapshotRef.current, participantIds: participantIdsRef.current, dispatch: (action, targetIndex) => dispatchRef.current(action, targetIndex) }), [registerPage, signature]);
+}
+
+export function useSynchronizedList(list: SynchronizedList) {
+  const registerList = useContext(RemoteHostContext)?.registerList;
+  const signature = JSON.stringify([list.key, list.ids, list.page, list.pages]);
+  const latest = useRef(list);
+  useEffect(() => { latest.current = list; }, [list]);
+  useEffect(() => {
+    if (list.key && registerList) return registerList(latest.current);
+  }, [registerList, signature, list.key]);
 }
 
 export function useRemoteHost() {

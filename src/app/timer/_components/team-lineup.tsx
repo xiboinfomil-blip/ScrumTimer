@@ -29,7 +29,8 @@ export function TeamLineup({ timer, className = '', idPrefix = '' }: { timer: St
       </div>
       <div id={elementId('person-list')} className="contents">
         <PaginatedList
-          items={people.filter(person => !person.postponed)}
+          syncKey="timer"
+          items={people}
           className="person-list"
           ordered
           activeId={activeId}

@@ -6,6 +6,11 @@ import { isCommandAllowed, type RemoteAction, type RemoteCommand, type RemoteSna
 interface Pair { id: string; owner: string; control: string; expiresAt: number; transport: RemoteTransport }
 type HostSnapshot = Omit<RemoteSnapshot, 'version'>;
 
+function hasBlockingModal(snapshot: HostSnapshot): boolean {
+  const modal = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"], dialog[open]');
+  return Boolean(modal && !(snapshot.blackScreen && modal.querySelector('[data-testid="timer-screensaver"]')));
+}
+
 export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, actions: { dispatch: (action: RemoteAction, targetIndex?: number) => void }) {
   const [enabled, setEnabled] = useState(false);
   const activationTeam = useRef<string | null>(null);
@@ -59,7 +64,7 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
       try {
         const sentAt = performance.now();
         const current = latest.current.snapshot;
-        const blocked = current.blocked || document.hidden || Boolean(document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]'));
+        const blocked = current.blocked || document.hidden || hasBlockingModal(current);
         const remaining = current.running ? (current.deadline - Date.now()) / 1000 : current.remaining;
         const response = await fetch('/api/timer-remote', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${credentials.owner}` }, body: JSON.stringify({ operation: 'sync', id: credentials.id, snapshot: { ...current, remaining, blocked, running: blocked ? false : current.running }, ...(ack ? { ack } : {}) }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(4000)]) });
         const body = await response.json();
@@ -71,7 +76,7 @@ export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, ac
         if (command) {
           ack = command.id;
           const live = latest.current;
-          if (!handled.has(command.id) && Math.abs(body.serverNow - command.createdAt) + performance.now() - sentAt <= 5000 && !document.hidden && !document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]') && isCommandAllowed(live.snapshot, command)) {
+          if (!handled.has(command.id) && Math.abs(body.serverNow - command.createdAt) + performance.now() - sentAt <= 5000 && !document.hidden && !hasBlockingModal(live.snapshot) && isCommandAllowed(live.snapshot, command)) {
             handled.add(command.id);
             // Lock this version synchronously: an in-flight duplicate cannot act twice.
             live.snapshot = { ...live.snapshot, blocked: true };

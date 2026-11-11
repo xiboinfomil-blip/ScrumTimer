@@ -98,12 +98,20 @@ elseif op=='command' then
   if not phoneConnected() or not has(input.phoneHash) or input.phoneHash~=e.phoneHash then return cjson.encode({error=409}) end
   local s=e.snapshot
   if status()~='online' or not has(s) or s.blocked or s.version~=input.version then return cjson.encode({error=409}) end
-  if s.page=='timer' then
+  if input.action=='list-previous' or input.action=='list-next' then
+    local list=s.lists and s.lists[input.targetIndex+1]
+    if s.page=='idle' or s.blackScreen==true or not list then return cjson.encode({error=409}) end
+    if (input.action=='list-previous' and list.page<=0) or (input.action=='list-next' and list.page+1>=list.pages) then return cjson.encode({error=409}) end
+  elseif s.page=='timer' then
     if not has(s.activeId) or s.activeId=='' or s.completed>=s.total then return cjson.encode({error=409}) end
     if (input.action=='start' and s.running) or (input.action=='pause' and not s.running) then return cjson.encode({error=409}) end
-    if s.blackScreen==true and input.action~='black-screen' then return cjson.encode({error=409}) end
+    if s.blackScreen==true and input.action~='black-screen' and input.action~='start' then return cjson.encode({error=409}) end
     if input.action=='penalty' and (s.manualPenalty or 0)>999950 then return cjson.encode({error=409}) end
-    if input.action~='start' and input.action~='pause' and input.action~='next' and input.action~='restart' and input.action~='penalty' and input.action~='black-screen' then return cjson.encode({error=409}) end
+    if input.action=='previous' then
+      local canPrevious=false
+      for i=1,s.participantIndex do if not s.participants[i].postponed then canPrevious=true end end
+      if not canPrevious then return cjson.encode({error=409}) end
+    elseif input.action~='start' and input.action~='pause' and input.action~='next' and input.action~='restart' and input.action~='penalty' and input.action~='black-screen' then return cjson.encode({error=409}) end
   elseif s.page=='participants' then
     if input.action=='participant-continue' then
       if not s.canContinue then return cjson.encode({error=409}) end

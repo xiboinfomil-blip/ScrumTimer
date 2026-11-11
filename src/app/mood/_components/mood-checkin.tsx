@@ -73,7 +73,7 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
       else chooseMood(person.id, Number(action.slice(5)) as Mood);
     }
     else if (action === 'mood-continue') start();
-  });
+  }, displayed.map(person => person.id));
   return (
     <section className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-white ${className}`} aria-labelledby="mood-team-title">
       <div className="shrink-0 border-b border-line px-4 py-3 max-[650px]:px-3">
@@ -85,7 +85,7 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
         <div className="mt-2 grid h-1 grid-flow-col gap-1 overflow-hidden rounded-full" aria-hidden="true">{present.map(person => <span key={person.id} className={`rounded-full ${person.mood ? 'bg-success' : state.postponed?.includes(person.id) ? 'bg-accent' : 'bg-slate-100'}`} />)}</div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col px-3 pb-2 [&_.checkin-list]:gap-2 [&_.checkin-list]:py-0 [&_.paginated-list]:@container max-[650px]:px-2">
-      <PaginatedList className="checkin-list" items={displayed} renderItem={person => (
+      <PaginatedList syncKey="mood" activeId={remotePerson?.id} className="checkin-list" items={displayed} renderItem={person => (
         <li key={person.id} className={`checkin-person flex h-25 shrink-0 flex-wrap content-center items-center gap-x-1 gap-y-1 rounded-md border-b px-2 @max-[340px]:h-36 motion-safe:animate-enter ${state.postponed?.includes(person.id) ? 'border-amber-200 bg-amber-50/40' : person.mood ? 'border-success/20 bg-success-soft/30' : 'border-line bg-white hover:bg-slate-50'}`}>
           <strong className="flex min-w-0 basis-full items-center gap-2 text-sm font-semibold" title={person.name}><span aria-hidden="true" className={`grid size-6 shrink-0 place-items-center rounded-lg text-[10px] font-bold ${state.postponed?.includes(person.id) ? 'bg-amber-100 text-amber-800' : person.mood ? 'bg-success-soft text-success' : 'bg-blue-50 text-brand'}`}>{person.mood ? <MoodIcon name="check" className="size-3.5" /> : Array.from(person.name)[0]?.toLocaleUpperCase('fr-FR')}</span><span className="min-w-0 flex-1 truncate">{person.name}</span><span className="shrink-0 text-[10px] font-medium text-muted">{state.postponed?.includes(person.id) ? 'En attente' : person.mood ? `Humeur ${person.mood}` : 'À vous'}</span></strong>
           <div className="flex shrink-0 items-center gap-1" role="group" aria-label={`Humeur de ${person.name} : choisissez de 1 à 4`}>

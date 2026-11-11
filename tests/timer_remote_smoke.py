@@ -23,7 +23,7 @@ SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1
 PAIR_ID, OWNER, CONTROL = 'i' * 43, 'o' * 43, 'c' * 43
 REMOTE_URL = f'{BASE}/remote#{PAIR_ID}.{CONTROL}'
 MAX_COMMAND_MS = 2500
-COMMAND_ACTIONS = ('start', 'pause', 'next', 'restart', 'penalty', 'black-screen',
+COMMAND_ACTIONS = ('start', 'pause', 'previous', 'next', 'restart', 'penalty', 'black-screen', 'list-previous', 'list-next',
                    'participant-previous', 'participant-next', 'attendance-toggle',
                    'participant-continue', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-postpone', 'mood-continue')
 
@@ -162,6 +162,13 @@ class MockAPIs:
         if not snapshot or snapshot['blocked'] or snapshot['version'] != command['version']:
             return False
         action = command['action']
+        if action in ('list-previous', 'list-next'):
+            index = command.get('targetIndex', -1)
+            lists = snapshot.get('lists', [])
+            if snapshot.get('blackScreen') or not isinstance(index, int) or not 0 <= index < len(lists):
+                return False
+            current = lists[index]
+            return current['page'] > 0 if action == 'list-previous' else current['page'] + 1 < current['pages']
         if snapshot['page'] == 'participants':
             if action == 'participant-continue':
                 return snapshot['canContinue']
@@ -184,11 +191,13 @@ class MockAPIs:
         if snapshot['page'] != 'timer' or not snapshot['activeId'] or snapshot['completed'] >= snapshot['total']:
             return False
         if snapshot.get('blackScreen', False):
-            return action == 'black-screen'
+            return action in ('black-screen', 'start')
         if action == 'start':
             return not snapshot['running']
         if action == 'pause':
             return snapshot['running']
+        if action == 'previous':
+            return any(not person['postponed'] for person in snapshot['participants'][:snapshot['participantIndex']])
         if action == 'penalty':
             return snapshot.get('manualPenalty', 0) <= 999950
         return action in ('next', 'restart', 'black-screen')
@@ -296,7 +305,7 @@ class MockAPIs:
                 reply({'error': 'Télécommande indisponible.'}, 409)
                 return
             required = {'requestId', 'action', 'version'}
-            targets_person = command.get('action') == 'attendance-toggle' or command.get('action', '').startswith('mood-') and command.get('action') != 'mood-continue'
+            targets_person = command.get('action') in ('attendance-toggle', 'list-previous', 'list-next') or command.get('action', '').startswith('mood-') and command.get('action') != 'mood-continue'
             assert set(command) == required | ({'targetIndex'} if targets_person else set()), command
             if targets_person:
                 assert type(command['targetIndex']) is int and 0 <= command['targetIndex'] < 100
@@ -552,6 +561,8 @@ def main():
                 expect(phone.get_by_role('region', name='Passage en cours').get_by_role('heading', level=2)).to_have_text(first)
                 start = phone.get_by_role('button', name='Démarrer / reprendre', exact=True)
                 expect(start).to_be_enabled()
+                previous_button = phone.get_by_role('button', name='Passage précédent', exact=True)
+                expect(previous_button).to_be_disabled()
                 expect(phone.get_by_role('navigation')).to_have_count(0)
                 expect(phone.get_by_role('list', name='Progression du point quotidien')).to_have_count(0)
                 expect(phone.get_by_role('dialog')).to_have_count(0)
@@ -593,9 +604,10 @@ def main():
                 penalty = phone.get_by_role('button', name='Pénalité de 50 points', exact=True)
                 restart = phone.get_by_role('button', name='Redémarrer', exact=True)
                 restart_dialog = phone.get_by_role('dialog', name='Redémarrer ce passage ?', exact=True)
-                black = phone.get_by_role('button', name='Écran noir', exact=True)
-                restore = phone.get_by_role('button', name='Rétablir l’écran', exact=True)
-                host_overlay = host.get_by_role('button', name='Rétablir l’écran', exact=True)
+                black = phone.get_by_role('button', name='Économiseur d’écran', exact=True)
+                restore = phone.get_by_role('button', name='Quitter l’économiseur', exact=True)
+                host_overlay = host.get_by_role('dialog', name='Économiseur d’écran', exact=True)
+                host_restore = host_overlay.get_by_role('button', name='Revenir au minuteur', exact=True).first
 
                 # No/cancel is local only and retains the exact paused checkpoint.
                 before_cancel = len(api.commands)
@@ -659,25 +671,24 @@ def main():
                 expect(pause).to_be_enabled()
                 assert current_person(checkpoint(host))['attempts'] == current_person(penalized)['attempts'] + 1
 
-                # Black screen covers the actual host viewport and pauses it.
+                # The full-screen screensaver dialog covers the host and pauses it.
                 black.click()
                 expect(host_overlay).to_be_visible()
                 expect(restore).to_be_enabled()
-                expect(restore).to_have_attribute('aria-pressed', 'true')
                 expect(start).to_be_disabled()
                 expect(restart).to_be_disabled()
                 expect(penalty).to_be_disabled()
                 expect(phone.get_by_role('button', name='Passage suivant', exact=True)).to_be_disabled()
-                expect(phone.get_by_text('Écran masqué · minuteur en pause. Rétablissez l’écran avant de reprendre.', exact=True)).to_be_visible()
-                overlay_geometry = host_overlay.evaluate("""el => {
+                expect(phone.get_by_text('Économiseur actif · minuteur en pause.', exact=True)).to_be_visible()
+                overlay_geometry = host_overlay.locator('[data-testid="timer-screensaver"]').evaluate("""el => {
                     const b = el.getBoundingClientRect();
                     return {x:b.x,y:b.y,width:b.width,height:b.height,
                         viewportWidth:innerWidth,viewportHeight:innerHeight,
                         background:getComputedStyle(el).backgroundColor};
                 }""")
-                assert overlay_geometry == {'x': 0, 'y': 0, 'width': overlay_geometry['viewportWidth'],
-                    'height': overlay_geometry['viewportHeight'], 'viewportWidth': 1366,
-                    'viewportHeight': 768, 'background': 'rgb(0, 0, 0)'}, overlay_geometry
+                assert overlay_geometry == {'x': 1, 'y': 1, 'width': overlay_geometry['viewportWidth'] - 2,
+                    'height': overlay_geometry['viewportHeight'] - 2, 'viewportWidth': 1366,
+                    'viewportHeight': 768, 'background': 'rgb(244, 248, 250)'}, overlay_geometry
                 hidden = checkpoint(host)
                 assert not hidden['running']
                 assert current_person(hidden)['manualPenalty'] == 50
@@ -711,7 +722,7 @@ def main():
                 black.click()
                 expect(host_overlay).to_be_visible()
                 expect(restore).to_be_enabled()
-                host_overlay.click()
+                host_restore.click()
                 expect(host_overlay).not_to_be_visible()
                 expect(start).to_be_enabled()
                 assert checkpoint(host) == running_restarted
@@ -756,8 +767,19 @@ def main():
                 second = host.locator('#speaker-name').inner_text()
                 expect(phone.get_by_role('region', name='Passage en cours').get_by_role('heading', level=2)).to_have_text(second)
                 expect(pause).to_be_enabled()
+                expect(previous_button).to_be_enabled()
+                active_row = phone.locator('[data-remote-active="true"]')
+                expect(active_row).to_have_count(1)
+                expect(active_row).to_contain_text(second)
                 expect(host.locator('#start-button')).to_contain_text('Pause')
                 assert current_person(checkpoint(host))['manualPenalty'] == 0, 'Penalty must not follow the next speaker'
+                previous_button.click()
+                expect(host.locator('#speaker-name')).to_have_text(first)
+                expect(active_row).to_contain_text(first)
+                expect(previous_button).to_be_disabled()
+                next_button.click()
+                phone.get_by_role('button', name='Confirmer', exact=True).click()
+                expect(host.locator('#speaker-name')).to_have_text(second)
 
                 for width, height in (SIZES if phone_size[0] == 390 else [phone_size]):
                     phone.set_viewport_size({'width': width, 'height': height})
@@ -941,5 +963,133 @@ def main():
     print('PASS: timer remote DEV smoke, 4 phone lifecycle cases + 12 viewport/motion geometry combinations; mocked APIs only, no Neon writes', flush=True)
 
 
+def synchronized_smoke():
+    screenshots = Path(tempfile.mkdtemp(prefix='scrum-synchronized-'))
+    print(f'Screenshots: {screenshots}', flush=True)
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        for motion in ('reduce', 'no-preference'):
+            api = MockAPIs()
+            api.team = team_fixture([f'Participant {index:02d}' for index in range(1, 13)])
+            for person in api.team['roster']:
+                person.update(mood=2, moodUpdatedAt=None)
+            host_context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion=motion, service_workers='block')
+            phone_context = browser.new_context(viewport={'width': 390, 'height': 844}, reduced_motion=motion, service_workers='block')
+            host_guard = install_browser_bootstrap(host_context)
+            phone_guard = install_browser_bootstrap(phone_context, intro=False, fullscreen=False)
+            api.register(host_context)
+            api.register(phone_context)
+            host, phone = host_context.new_page(), phone_context.new_page()
+            errors = []
+            for page in (host, phone):
+                page.on('pageerror', lambda error: errors.append(str(error)))
+            try:
+                host.goto(BASE + '/participants')
+                expect(host.locator('#participants-page')).to_be_visible()
+                open_phone(phone, REMOTE_URL)
+                expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
+
+                def matching(host_rows, phone_list):
+                    expect(phone_list.get_by_role('listitem')).to_have_count(host_rows.count())
+                    names = host_rows.locator('strong, .person-name').all_text_contents()
+                    if not names:
+                        names = host_rows.locator('.person-name').all_text_contents()
+                    for name in names:
+                        expect(phone_list).to_contain_text(name.strip())
+
+                presence = phone.get_by_role('list', name='Présences de l’équipe', exact=True)
+                host_presence = host.locator('#attendance-present')
+                expect(presence.get_by_role('listitem')).to_have_count(3)
+                host_presence.get_by_role('button', name='Page suivante', exact=True).click()
+                expect(presence).to_contain_text('Participant 04')
+                matching(host_presence.locator('li'), presence)
+                phone.get_by_role('button', name='Page précédente · presence-present', exact=True).click()
+                expect(host_presence).to_contain_text('Participant 01')
+                matching(host_presence.locator('li'), presence)
+
+                host.get_by_role('navigation', name='Navigation du point quotidien', exact=True).get_by_role('link', name='Humeurs', exact=True).click()
+                mood_list = phone.get_by_role('list', name='Humeurs de l’équipe', exact=True)
+                expect(mood_list).to_be_visible()
+                mood_section = host.locator('section[aria-labelledby="mood-team-title"]')
+                host_next = mood_section.get_by_role('button', name='Page suivante', exact=True)
+                host_next.click()
+                host_names = mood_section.locator('li strong').all_text_contents()
+                for name in host_names:
+                    expect(mood_list).to_contain_text(name.strip().split('Humeur')[0].strip())
+                phone.get_by_role('button', name='Page précédente · mood', exact=True).click()
+                expect(mood_section.get_by_role('button', name='Page précédente', exact=True)).to_be_disabled()
+                host.get_by_role('button', name='Continuer vers le minuteur', exact=True).click()
+                expect(host.locator('#timer-page')).to_be_visible()
+                order = phone.get_by_role('list', name='Ordre de parole', exact=True)
+                sidebar = host.locator('#sidebar-person-list')
+                expect(sidebar.locator('li').first).to_be_visible()
+                expect(order.get_by_role('listitem')).to_have_count(sidebar.locator('li').count())
+                sidebar.get_by_role('button', name='Page suivante', exact=True).click()
+                expect(phone.get_by_role('button', name='Page précédente · timer', exact=True)).to_be_enabled()
+                matching(sidebar.locator('li'), order)
+                phone.get_by_role('button', name='Page précédente · timer', exact=True).click()
+                expect(sidebar.get_by_role('button', name='Page précédente', exact=True)).to_be_disabled()
+                rail_tabs = host.get_by_role('group', name='Contenu du point', exact=True)
+                rail_tabs.get_by_role('button', name='Pense-bête', exact=True).click()
+                expect(host.locator('.daily-prompts')).to_be_visible()
+                rail_tabs.get_by_role('button', name='Humeur', exact=True).click()
+                expect(host.locator('[data-testid="current-speaker-mood"]')).to_be_visible()
+                rail_tabs.get_by_role('button', name='Tour de parole', exact=True).click()
+                expect(sidebar).to_be_visible()
+
+                start = phone.get_by_role('button', name='Démarrer / reprendre', exact=True)
+                start.click()
+                expect(phone.get_by_role('button', name='Mettre en pause', exact=True)).to_be_enabled()
+                host.locator('#start-button').click()
+                saver = host.get_by_role('dialog', name='Économiseur d’écran', exact=True)
+                expect(saver).to_be_visible()
+                expect(saver.locator('[data-scene]')).to_have_count(1)
+                expect(saver.get_by_role('button', name='Horloge', exact=True)).to_have_count(0)
+                expect(start).to_be_enabled()
+                expect(phone.get_by_role('button', name='Passage suivant', exact=True)).to_be_disabled()
+                scene = saver.locator('[data-testid="timer-screensaver"]')
+                expect(scene).to_have_attribute('data-motion', 'paused' if motion == 'reduce' else 'running')
+                if motion == 'no-preference':
+                    host.wait_for_function("document.getAnimations().some(animation => animation.playState === 'running' && animation.effect.getTiming().iterations === Infinity)")
+                for width, height in SIZES:
+                    host.set_viewport_size({'width': width, 'height': height})
+                    expect(saver.get_by_role('button', name='Reprendre le passage', exact=True)).to_be_in_viewport()
+                    assert host.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                    box = scene.bounding_box()
+                    assert box and box['x'] <= 1 and box['y'] <= 1 and box['width'] >= width - 2 and box['height'] >= height - 2, box
+                    if width in (320, 1366):
+                        host.screenshot(path=str(screenshots / f'screensaver-{motion}-{width}.png'))
+                start.click()
+                expect(saver).not_to_be_visible()
+                expect(host.locator('#start-button')).to_contain_text('Pause')
+                phone.get_by_role('button', name='Mettre en pause', exact=True).click()
+                expect(saver).to_be_visible()
+                saver.get_by_role('button', name='Reprendre le passage', exact=True).click()
+                expect(saver).not_to_be_visible()
+                for width, height in ((320, 568), (390, 844), (1366, 768)):
+                    host.set_viewport_size({'width': width, 'height': height})
+                    phone.set_viewport_size({'width': width, 'height': height})
+                    for page in (host, phone):
+                        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                    for selector in ('#previous-button', '#next-button'):
+                        box = host.locator(selector).bounding_box()
+                        assert box and box['height'] >= 44 and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, box
+                    host.screenshot(path=str(screenshots / f'timer-{motion}-{width}.png'))
+                    phone.screenshot(path=str(screenshots / f'phone-{motion}-{width}.png'))
+                assert not errors, errors
+                host_guard.assert_no_unexpected_api()
+                phone_guard.assert_no_unexpected_api()
+                print(f'PASS synchronized pages, local/phone pause and resume, single screensaver, six viewports: {motion}', flush=True)
+            except Exception:
+                host.screenshot(path=str(screenshots / f'failure-host-{motion}.png'))
+                phone.screenshot(path=str(screenshots / f'failure-phone-{motion}.png'))
+                print(f'FAILURE {screenshots}', flush=True)
+                raise
+            finally:
+                phone_context.close()
+                host_context.close()
+        browser.close()
+
+
 if __name__ == '__main__':
-    main()
+    synchronized_smoke() if os.environ.get('TIMER_SYNC_ONLY') == '1' else main()

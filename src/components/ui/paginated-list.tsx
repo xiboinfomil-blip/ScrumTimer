@@ -5,12 +5,13 @@ import { animate } from 'framer-motion';
 import { IconButton } from '@mui/material';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import { useSynchronizedList } from '@/providers/remote-host-provider';
 
 // Measure actual rendered rows so the meeting stage stays within the viewport.
-export function PaginatedList<T extends { id: string; name?: string; present?: boolean; mood?: number | null; postponed?: boolean; done?: boolean }>({ items, renderItem, className = 'checkin-list', ordered = false, activeId }: { items: T[]; renderItem: (item: T, index: number) => ReactNode; className?: string; ordered?: boolean; activeId?: string | null }) {
+export function PaginatedList<T extends { id: string; name?: string; present?: boolean; mood?: number | null; postponed?: boolean; done?: boolean }>({ items, renderItem, className = 'checkin-list', ordered = false, activeId, syncKey = '' }: { items: T[]; renderItem: (item: T, index: number) => ReactNode; className?: string; ordered?: boolean; activeId?: string | null; syncKey?: string }) {
   const ref = useRef<HTMLUListElement & HTMLOListElement>(null);
   const positions = useRef(new Map<string, number>());
-  const [capacity, setCapacity] = useState(100);
+  const [capacity, setCapacity] = useState(syncKey ? 3 : 100);
   const [page, setPage] = useState(0);
   const direction = useRef(1);
   useLayoutEffect(() => {
@@ -22,7 +23,8 @@ export function PaginatedList<T extends { id: string; name?: string; present?: b
       const css = getComputedStyle(list);
       const gap = parseFloat(css.rowGap) || 0;
       const available = list.clientHeight - (parseFloat(css.paddingTop) || 0) - (parseFloat(css.paddingBottom) || 0);
-      setCapacity(Math.max(1, Math.floor((available + gap) / (row.getBoundingClientRect().height + gap))));
+      if (list.clientHeight === 0) return;
+      setCapacity(Math.min(syncKey ? 3 : 100, Math.max(1, Math.floor((available + gap) / (row.getBoundingClientRect().height + gap)))));
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -30,9 +32,10 @@ export function PaginatedList<T extends { id: string; name?: string; present?: b
     const row = list.firstElementChild;
     if (row) observer.observe(row);
     return () => observer.disconnect();
-  }, [items.length, page]);
+  }, [items.length, page, syncKey]);
   const pages = Math.max(1, Math.ceil(items.length / capacity));
   const current = Math.min(page, pages - 1);
+  useSynchronizedList({ key: syncKey, ids: items.slice(current * capacity, (current + 1) * capacity).map(item => item.id), page: current, pages, changePage: setPage });
   const order = items.map(item => item.id).join('|');
   useLayoutEffect(() => {
     const rows = Array.from(ref.current?.children ?? []) as HTMLElement[];
