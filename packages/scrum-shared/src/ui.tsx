@@ -1,38 +1,22 @@
 'use client';
 
-import { useId, type ReactNode } from 'react';
-
-export function PendulumCradle({ className = '', variant = 'loader', motion = 'normal' }: { className?: string; variant?: 'loader' | 'timer'; motion?: 'normal' | 'warning' | 'critical' | 'paused' }) {
-  const id = useId();
-  const timer = variant === 'timer';
-  const animations = {
-    normal: ['origin-[48px_18px] motion-safe:animate-[cradle-left_2s_ease-in-out_infinite] motion-reduce:animate-none', 'origin-[128px_18px] motion-safe:animate-[cradle-right_2s_ease-in-out_infinite] motion-reduce:animate-none'],
-    warning: ['origin-[48px_18px] motion-safe:animate-[cradle-left_1200ms_ease-in-out_infinite] motion-reduce:animate-none', 'origin-[128px_18px] motion-safe:animate-[cradle-right_1200ms_ease-in-out_infinite] motion-reduce:animate-none'],
-    critical: ['origin-[48px_18px] motion-safe:animate-[cradle-left_700ms_ease-in-out_infinite] motion-reduce:animate-none', 'origin-[128px_18px] motion-safe:animate-[cradle-right_700ms_ease-in-out_infinite] motion-reduce:animate-none'],
-    paused: ['', ''],
-  }[motion];
-  return <svg viewBox="0 0 176 112" width="176" height="112" aria-hidden="true" focusable="false" data-cradle-graphic data-urgency={motion} className={`block h-auto max-w-full shrink-0 ${className}`}>
-    <defs>
-      <radialGradient id={`${id}-ball`} cx="32%" cy="25%" r="72%"><stop offset="0" stopColor={timer ? '#ffffff' : '#e5e7eb'} /><stop offset=".28" stopColor={timer ? '#a9bdcf' : '#777777'} /><stop offset="1" stopColor={timer ? '#526c83' : '#323232'} /></radialGradient>
-      <radialGradient id={`${id}-active-ball`} cx="32%" cy="25%" r="72%"><stop offset="0" stopColor="#fff4dc" /><stop offset=".28" stopColor="#f4a640" /><stop offset="1" stopColor="#bd6413" /></radialGradient>
-      <linearGradient id={`${id}-base`} x2="0" y2="1"><stop stopColor={timer ? '#f49a2d' : '#121212'} /><stop offset="1" stopColor={timer ? '#bc6414' : '#282828'} /></linearGradient>
-      <linearGradient id={`${id}-frame`}><stop stopColor={timer ? '#dce8f4' : '#444443'} /><stop offset="1" stopColor={timer ? '#9eb4c9' : '#777777'} /></linearGradient>
-    </defs>
-    <rect x="24" y="17" width="128" height="78" rx="14" fill="none" stroke={`url(#${id}-frame)`} strokeWidth="2" />
-    {[48, 64, 80, 96, 112, 128].map((position, index) => <g key={position} className={index === 0 ? animations[0] : index === 5 ? animations[1] : undefined}>
-      <path d={`M${position} 18V70`} stroke={timer ? '#b5c8da' : '#444443'} strokeWidth="1" />
-      <circle cx={position} cy="78" r="8" fill={timer && (index === 0 || index === 5) ? `url(#${id}-active-ball)` : `url(#${id}-ball)`} />
-    </g>)}
-    <rect x="20" y="90" width="136" height="16" rx="4" fill={`url(#${id}-base)`} />
-    <path d="M24 96H152" stroke={timer ? '#f8bd73' : '#444443'} strokeWidth="1" />
-  </svg>;
-}
+import { type ReactNode } from 'react';
 
 export function Loader({ label = 'Chargement…', size = 'md', className = '' }: { label?: string; size?: 'text' | 'sm' | 'md' | 'lg'; className?: string }) {
-  const dimensions = { sm: 'w-20', md: 'w-40', lg: 'w-56 [@media(max-height:650px)]:w-40' };
-  return <span role="status" aria-live="polite" aria-atomic="true" aria-label={label} data-loader="cradle" data-size={size} className={`inline-flex max-w-full shrink-0 flex-col items-center justify-center gap-1 text-center align-middle ${className}`}>
-    {size !== 'text' && <PendulumCradle className={dimensions[size]} />}
-    <span aria-hidden="true" className="max-w-full break-words text-xs font-medium leading-5 text-slate-600">{label.replace(/[.…]+$/u, '')}<span className="inline-flex w-4 justify-start"><span className="motion-safe:animate-[cradle-dot_1.2s_ease-in-out_infinite]">.</span><span className="motion-safe:animate-[cradle-dot_1.2s_ease-in-out_infinite] [animation-delay:200ms]">.</span><span className="motion-safe:animate-[cradle-dot_1.2s_ease-in-out_infinite] [animation-delay:400ms]">.</span></span></span>
+  const dimensions = { sm: 'w-9', md: 'w-16', lg: 'w-22 [@media(max-height:650px)]:w-16' };
+  return <span role="status" aria-live="polite" aria-atomic="true" aria-label={label} data-loader="dial" data-size={size} className={`inline-flex min-w-0 max-w-full shrink-0 flex-col items-center justify-center gap-3 text-center align-middle ${className}`}>
+    {size !== 'text' && <svg viewBox="0 0 96 96" width="96" height="96" aria-hidden="true" focusable="false" className={`block aspect-square h-auto max-w-full shrink-0 ${dimensions[size]}`}>
+      <circle cx="48" cy="48" r="40" fill="none" stroke="#e1eaf2" strokeWidth="4" />
+      <g className="origin-[48px_48px] motion-safe:animate-[loader-orbit_1.8s_linear_infinite]">
+        <circle cx="48" cy="48" r="40" fill="none" stroke="#205f9d" strokeWidth="4" strokeLinecap="round" strokeDasharray="76 176" transform="rotate(-90 48 48)" />
+        <circle cx="48" cy="8" r="4" fill="#ec8b23" />
+      </g>
+      <circle cx="48" cy="48" r="29" fill="#f4f8fc" />
+      <path d="M48 23V27M73 48H69M48 73V69M23 48H27" fill="none" stroke="#a7bdcf" strokeWidth="2" strokeLinecap="round" />
+      <path d="M48 34V48L57 53" fill="none" stroke="#205f9d" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="origin-[48px_48px] motion-safe:animate-[loader-hand_7.2s_linear_infinite]" />
+      <circle cx="48" cy="48" r="3" fill="#ec8b23" />
+    </svg>}
+    <span aria-hidden="true" className="max-w-full text-xs font-medium leading-5 text-slate-600 [overflow-wrap:anywhere]">{label}</span>
   </span>;
 }
 

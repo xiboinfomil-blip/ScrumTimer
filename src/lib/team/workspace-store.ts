@@ -55,6 +55,8 @@ function listResult(rows: Record<string, unknown>[], selectedId: string | null =
   return { teams, activeTeamId: selectedId ?? (rows.length ? String(rows[0].id) : null) };
 }
 export async function listTeams(db: Database) {
+  const workspace = await db.execute(sql`SELECT id FROM workspaces WHERE id=${sharedWorkspace}`);
+  if (workspace.rows.length) return listResult((await db.execute(listStatement())).rows);
   // Bootstrap only when the shared namespace is first inserted, never after
   // deleting its last team. Existing legacy teams remain the initial roster.
   const results = await batch(db, [
@@ -95,8 +97,6 @@ export async function deleteTeam(db: Database, value: unknown) {
   validateTeamName(input.name);
   const teamId = input.teamId; const name = input.name as string;
   const results = await batch(db, [
-    sql`INSERT INTO workspaces(id) VALUES(${sharedWorkspace}) ON CONFLICT DO NOTHING`,
-    sql`SELECT id FROM workspaces WHERE id=${sharedWorkspace} FOR UPDATE`,
     sql`SELECT id,name FROM teams WHERE id=${teamId} FOR UPDATE`,
     // Immediate NO ACTION references can be checked before indirect root
     // cascades finish. Remove these dependents first in the same transaction;
@@ -107,9 +107,9 @@ export async function deleteTeam(db: Database, value: unknown) {
     sql`DELETE FROM teams WHERE id=${teamId} AND name=${name} RETURNING id`,
     listStatement(),
   ]);
-  if (!results[2].rows.length) throw new WorkspaceError(404, 'Équipe introuvable.');
-  if (!results[6].rows.length) throw new WorkspaceError(409, 'Le nom de confirmation ne correspond pas au nom de l’équipe.');
-  return listResult(results[7].rows);
+  if (!results[0].rows.length) throw new WorkspaceError(404, 'Équipe introuvable.');
+  if (!results[4].rows.length) throw new WorkspaceError(409, 'Le nom de confirmation ne correspond pas au nom de l’équipe.');
+  return listResult(results[5].rows);
 }
 export async function selectTeam(db: Database, teamId: unknown) {
   if (!capabilityId(teamId)) throw forbidden();
@@ -128,14 +128,12 @@ export async function updateTeamDirectory(db: Database, value: unknown) {
   const teamId = input.teamId;
   const assignment = sql`category=${input.category}`;
   const results = await batch(db, [
-    sql`INSERT INTO workspaces(id) VALUES(${sharedWorkspace}) ON CONFLICT DO NOTHING`,
-    sql`SELECT id FROM workspaces WHERE id=${sharedWorkspace} FOR UPDATE`,
     sql`SELECT id FROM teams WHERE id=${teamId} FOR UPDATE`,
     sql`UPDATE teams SET ${assignment} WHERE id=${teamId} RETURNING id`,
     listStatement(),
   ]);
-  if (!results[3].rows.length) throw new WorkspaceError(404, 'Équipe introuvable.');
-  return listResult(results[4].rows, teamId);
+  if (!results[1].rows.length) throw new WorkspaceError(404, 'Équipe introuvable.');
+  return listResult(results[2].rows, teamId);
 }
 const dailyStatement = (teamId: string, day: string) => sql`SELECT meter_id AS "meterId",title FROM team_daily_meters WHERE team_id=${teamId} AND day=${day}::date`;
 function dailyResult(day: string, rows: Record<string, unknown>[]) {

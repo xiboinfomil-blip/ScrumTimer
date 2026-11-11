@@ -10,7 +10,9 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const db = database(); const id = await selectedTeam(request);
-    return NextResponse.json(await teamReadCache.read(teamReadKey('team', id), 5_000, () => readTeam(db, id)), { headers: { 'Cache-Control': 'no-store' } });
+    const team = request.headers.get('X-Team-Refresh') === '1' ? await readTeam(db, id)
+      : await teamReadCache.read(teamReadKey('team', id), 5_000, () => readTeam(db, id));
+    return NextResponse.json(team, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) { return databaseFailure(error); }
 }
 export async function PUT(request: Request) {

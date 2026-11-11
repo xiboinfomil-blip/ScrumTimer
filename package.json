@@ -18,6 +18,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:concurrency": "tsx scripts/test-live-concurrency.ts",
     "dev:participants": "npm run dev --workspace @infomil/scrum-participants -- --port 3002",
     "build:participants": "npm run build --workspace @infomil/scrum-participants",
     "start:participants": "npm run start --workspace @infomil/scrum-participants -- --port 3002",

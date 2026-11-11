@@ -44,10 +44,11 @@ export async function jiraFetch(url: string | URL | Request, init: RequestInit =
   const target = new URL(typeof url === 'string' ? url : url instanceof URL ? url.href : url.url);
   if (target.protocol !== 'https:' || !['auth.atlassian.com', 'api.atlassian.com'].includes(target.hostname) || target.port || target.username || target.password) throw new WorkspaceError(400, 'Adresse Jira interdite.');
   const response = await fetch(target, { ...init, redirect: 'error', cache: 'no-store', signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000) });
+  const tokenError = target.href === server.token_endpoint && [400, 403].includes(response.status);
   if (response.status === 401) throw loginRequired();
-  if (response.status === 403 || response.status === 404) throw new WorkspaceError(403, 'Votre compte Jira ne peut pas accéder à ce tableau ou à ce sprint.');
+  if (!tokenError && (response.status === 403 || response.status === 404)) throw new WorkspaceError(403, 'Votre compte Jira ne peut pas accéder à ce tableau ou à ce sprint.');
   if (response.status === 429) throw new WorkspaceError(429, 'Jira limite les requêtes. Réessayez dans quelques instants.');
-  if (!response.ok) throw new WorkspaceError(502, 'Jira est momentanément indisponible.');
+  if (!response.ok && !tokenError) throw new WorkspaceError(502, 'Jira est momentanément indisponible.');
   const reader = response.body?.getReader();
   if (!reader) throw new WorkspaceError(502, 'Réponse Jira vide.');
   const chunks: Uint8Array[] = []; let size = 0;
@@ -110,19 +111,24 @@ export async function jiraAccessToken(db: Database, request: Request) {
   if (!session.encryptedRefresh) throw loginRequired();
   const lease = randomBytes(16).toString('hex');
   const claim = await db.execute(sql`UPDATE jira_sessions SET refresh_lease=${lease},refresh_lease_until=now()+interval '30 seconds' WHERE id=${session.id} AND expires_at>now() AND (refresh_lease_until IS NULL OR refresh_lease_until<now()) AND access_token=${session.encryptedAccess} RETURNING id`);
-  if (!claim.rows.length) throw new WorkspaceError(409, 'Connexion Jira en cours de renouvellement. Réessayez.');
+  if (!claim.rows.length) throw new WorkspaceError(503, 'Connexion Jira en cours de renouvellement. Réessayez.');
   const config = jiraConfiguration();
   try {
     const response = await oauth.refreshTokenGrantRequest(server, config.client, oauth.ClientSecretPost(config.secret), openJiraToken(session.encryptedRefresh, `${session.id}:refresh`), oauthOptions());
     const tokens = await oauth.processRefreshTokenResponse(server, config.client, response);
     const expiry = Number(tokens.expires_in ?? 3600);
-    if (!(expiry > 0 && expiry <= 86400)) throw loginRequired();
+    if (!(expiry > 0 && expiry <= 86400)) throw new WorkspaceError(502, 'Réponse de renouvellement Jira invalide.');
     const saved = await db.execute(sql`UPDATE jira_sessions SET access_token=${sealJiraToken(tokens.access_token, `${session.id}:access`)},refresh_token=${tokens.refresh_token ? sealJiraToken(tokens.refresh_token, `${session.id}:refresh`) : session.encryptedRefresh},access_expires_at=${new Date(Date.now() + expiry * 1000).toISOString()}::timestamptz,refresh_lease=NULL,refresh_lease_until=NULL WHERE id=${session.id} AND refresh_lease=${lease} AND expires_at>now() RETURNING id`);
     if (!saved.rows.length) throw loginRequired();
     return tokens.access_token;
-  } catch {
-    await db.execute(sql`DELETE FROM jira_sessions WHERE id=${session.id} AND refresh_lease=${lease}`);
-    throw loginRequired();
+  } catch (error) {
+    if ((error instanceof oauth.ResponseBodyError && error.error === 'invalid_grant') || (error instanceof WorkspaceError && error.status === 401)) {
+      await db.execute(sql`DELETE FROM jira_sessions WHERE id=${session.id} AND refresh_lease=${lease}`);
+      throw loginRequired();
+    }
+    await db.execute(sql`UPDATE jira_sessions SET refresh_lease=NULL,refresh_lease_until=NULL WHERE id=${session.id} AND refresh_lease=${lease}`);
+    if (error instanceof WorkspaceError) throw error;
+    throw new WorkspaceError(503, 'Renouvellement Jira momentanément indisponible. Réessayez.');
   }
 }
 export async function endJiraLogin(db: Database, request: Request) {

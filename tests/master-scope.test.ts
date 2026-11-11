@@ -22,7 +22,8 @@ test('master timer still wires active-speaker notes and the read-only full-note 
   assert.match(timer, /<TimerPanel notes=\{notes\} timer=/);
   assert.match(timer, /useDailyHints\(activeTeamId\)/);
   assert.match(timer, /noteSpeaker = useRef\(\{ teamId: activeTeamId, participantId: timer\.activeId \}\)/);
-  assert.match(timer, /previous\.teamId === activeTeamId && previous\.participantId !== timer\.activeId && !notes\.loading\) refreshNotes\(\)/);
+  assert.match(timer, /if \(previous\.teamId === activeTeamId && notes\.loading\) return;\s+noteSpeaker\.current = \{ teamId: activeTeamId, participantId: timer\.activeId \};/);
+  assert.match(timer, /previous\.teamId === activeTeamId && previous\.participantId !== timer\.activeId\) refreshNotes\(\)/);
   assert.match(timer, /<DailyPrompts[^>]*speakerId=\{timer\.activeId\}.*note=\{note\?\.hint\}/);
   const panel = source('src/app/timer/_components/timer-panel.tsx');
   assert.match(panel, /hints\.find\(hint => hint\.participantId === person\?\.id\)/);

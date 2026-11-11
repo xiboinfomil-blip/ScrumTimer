@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
 import { SharedReadCache, teamReadKey } from '../src/lib/persistence/shared-read-cache.ts';
 
 function deferred<T>() {
@@ -67,6 +69,47 @@ test('keys cross both daily boundaries and preserve team isolation', () => {
   assert.notEqual(key('2026-10-15T19:59:59Z'), key('2026-10-15T20:00:00Z'));
   assert.notEqual(key('2026-10-15T23:59:59Z'), key('2026-10-16T00:00:00Z'));
   assert.notEqual(teamReadKey('team', 'a'), teamReadKey('team', 'b'));
+});
+
+test('actual team and history GET routes bypass cached results for authorized reconciliation reads', async () => {
+  for (const route of ['team', 'history']) {
+    const source = readFileSync(new URL(`../src/app/api/${route}/route.ts`, import.meta.url), 'utf8');
+    const cache = new SharedReadCache(); const connection = {};
+    let revision = 0, reads = 0, authorizations = 0, allowed = true;
+    const load = async (db: unknown, id: string) => {
+      assert.equal(db, connection); assert.equal(id, 'fixture-team'); reads++;
+      return route === 'team' ? { team: null, revision } : [{ id: `round-${revision}` }];
+    };
+    const modules: Record<string, unknown> = {
+      'next/server': { NextResponse: Response },
+      '@/lib/persistence/database': {
+        database: () => connection,
+        selectedTeam: async () => { authorizations++; if (!allowed) throw new Error('Forbidden'); return 'fixture-team'; },
+        databaseFailure: () => new Response(null, { status: 403 }),
+      },
+      '@/lib/team/team-validation': {},
+      '@/lib/persistence/relational-store': { readTeam: load, readHistory: load },
+      '@/lib/team/workspace-store': { mauritiusDay: () => '2026-10-15' },
+      '@/lib/persistence/shared-read-cache': { teamReadCache: cache, teamReadKey },
+      '@/lib/jira/jira-store': {},
+    };
+    const handlers: { GET?: (request: Request) => Promise<Response> } = {};
+    runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
+      exports: handlers, require: (name: string) => { assert.ok(Object.hasOwn(modules, name)); return modules[name]; },
+    });
+    const request = (fresh = false) => new Request(`https://example.test/api/${route}`, { headers: fresh ? { 'X-Team-Refresh': '1' } : {} });
+    const initial = await (await handlers.GET!(request())).json();
+    revision++;
+    assert.deepEqual(await (await handlers.GET!(request())).json(), initial);
+    assert.equal(reads, 1);
+    const fresh = await handlers.GET!(request(true));
+    assert.equal(fresh.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await fresh.json(), route === 'team' ? { team: null, revision: 1 } : { rounds: [{ id: 'round-1' }], day: '2026-10-15' });
+    assert.equal(reads, 2);
+    allowed = false;
+    assert.equal((await handlers.GET!(request(true))).status, 403);
+    assert.equal(reads, 2); assert.equal(authorizations, 4);
+  }
 });
 
 test('every durable mutation route invalidates shared reads; writes keep direct identity validation', () => {

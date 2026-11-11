@@ -3,7 +3,56 @@ import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { readFileSync } from 'node:fs';
+import type { SQL } from 'drizzle-orm';
 import { STORAGE_BUDGET_BYTES, STORAGE_WARNING_BYTES, storageBudgetFailure, storageUsageStatement } from '../src/lib/persistence/storage-budget.ts';
+import { deleteTeam, listTeams, updateTeamDirectory } from '../src/lib/team/workspace-store.ts';
+
+test('existing teams can be listed and deleted at capacity; management locks the team before writing', async () => {
+  const engine = new PGlite();
+  const statements: string[] = [];
+  const compile = (query: SQL) => {
+    const compiled = new PgDialect().sqlToQuery(query);
+    statements.push(compiled.sql);
+    return compiled;
+  };
+  const client = {
+    execute(query: SQL) {
+      return { query, then(resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) {
+        const compiled = compile(query);
+        return engine.query(compiled.sql, compiled.params).then(resolve, reject);
+      } };
+    },
+    batch(queries: { query: SQL }[]) {
+      return engine.transaction(async transaction => {
+        const results = [];
+        for (const { query } of queries) {
+          const compiled = compile(query);
+          results.push(await transaction.query(compiled.sql, compiled.params));
+        }
+        return results;
+      });
+    },
+  } as unknown as Parameters<typeof listTeams>[0];
+  try {
+    const journal = JSON.parse(readFileSync(new URL('../drizzle/meta/_journal.json', import.meta.url), 'utf8')) as { entries: { tag: string }[] };
+    for (const { tag } of journal.entries) await engine.exec(readFileSync(new URL(`../drizzle/${tag}.sql`, import.meta.url), 'utf8'));
+    const initial = await listTeams(client);
+    const teamId = initial.activeTeamId!;
+    statements.length = 0;
+    await updateTeamDirectory(client, { teamId, category: 'Tech' });
+    assert.match(statements[0], /SELECT id FROM teams .*FOR UPDATE/);
+    assert.ok(statements.every(statement => !statement.includes('workspaces')));
+    await engine.exec("SET app.storage_budget_bytes = '1'");
+    statements.length = 0;
+    assert.equal((await listTeams(client)).teams.length, 1);
+    assert.ok(statements.every(statement => statement.startsWith('SELECT')));
+    statements.length = 0;
+    assert.deepEqual((await deleteTeam(client, { teamId, name: initial.teams[0].name })).teams, []);
+    assert.match(statements[0], /SELECT id,name FROM teams .*FOR UPDATE/);
+    assert.ok(statements.every(statement => !/INSERT|UPDATE teams|workspaces/.test(statement)));
+    assert.deepEqual((await listTeams(client)).teams, []);
+  } finally { await engine.close(); }
+});
 
 test('storage reporting counts actual database and relation bytes without reading application data', async () => {
   const engine = new PGlite();

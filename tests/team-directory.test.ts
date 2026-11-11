@@ -125,10 +125,10 @@ test('PGlite: migration backfill, category creation, local-only favorites, isola
     assert.equal(categorized.activeTeamId, id);
     assert.equal(categorized.teams.find(team => team.id === id)!.category, 'Support');
     assert.equal('favorite' in categorized.teams.find(team => team.id === id)!, false, 'shared favorite values are never returned');
-    assert.match(statements[1], /FROM workspaces .*FOR UPDATE/);
-    assert.match(statements[2], /FROM teams .*FOR UPDATE/);
-    assert.match(statements[3], /^UPDATE teams SET category=/);
-    assert.doesNotMatch(statements[3], /revision|updated_at|write_transaction/);
+    assert.match(statements[0], /FROM teams .*FOR UPDATE/);
+    assert.ok(statements.every(statement => !statement.includes('workspaces')));
+    assert.match(statements[1], /^UPDATE teams SET category=/);
+    assert.doesNotMatch(statements[1], /revision|updated_at|write_transaction/);
     await assert.rejects(updateTeamDirectory(client, { teamId: id, favorite: false }), hasStatus(400));
     assert.deepEqual(await selectTeam(clientFor(engine), id), categorized, 'directory reads omit shared favorite metadata');
     assert.deepEqual((await engine.query('SELECT * FROM teams WHERE id=$1', [id])).rows[0], { ...beforeMigration, category: 'Support', favorite: true });

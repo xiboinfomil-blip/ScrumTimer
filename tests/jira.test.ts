@@ -121,6 +121,41 @@ test('Jira OAuth: one-use browser-bound state, encrypted session, refresh rotati
   } finally { globalThis.fetch = originalFetch; await engine.close(); }
 });
 
+test('Jira renewal preserves sessions on temporary failures, releases leases and removes rejected grants', async () => {
+  configuration(); const engine = new PGlite(); const originalFetch = globalThis.fetch;
+  const cookie = 'c'.repeat(43); const id = jiraHash(cookie);
+  const request = new Request('http://localhost:3001/api/jira', { headers: { cookie: `${jiraCookie}=${cookie}` } });
+  try {
+    const journal = JSON.parse(read('../drizzle/meta/_journal.json')) as { entries: { tag: string }[] };
+    for (const { tag } of journal.entries) await engine.exec(read(`../drizzle/${tag}.sql`));
+    await engine.query("INSERT INTO jira_sessions(id,account_id,display_name,access_token,refresh_token,access_expires_at,expires_at) VALUES($1,'fixture','Camille',$2,$3,now()-interval '1 second',now()+interval '8 hours')", [id, sealJiraToken('access', `${id}:access`), sealJiraToken('refresh', `${id}:refresh`)]);
+    const client = clientFor(engine);
+    for (const failure of [503, 429, new TypeError('network'), new DOMException('timeout', 'TimeoutError')]) {
+      const before = await jiraSession(client, request);
+      globalThis.fetch = async () => {
+        if (typeof failure !== 'number') throw failure;
+        return new Response(null, { status: failure });
+      };
+      await assert.rejects(jiraAccessToken(client, request), { status: failure === 429 ? 429 : typeof failure === 'number' ? 502 : 503 });
+      assert.deepEqual(await jiraSession(client, request), before);
+      assert.deepEqual((await engine.query('SELECT refresh_lease,refresh_lease_until FROM jira_sessions WHERE id=$1', [id])).rows[0], { refresh_lease: null, refresh_lease_until: null });
+      globalThis.fetch = async () => Response.json({ access_token: 'recovered', refresh_token: 'rotated', expires_in: 3600 });
+      assert.equal(await jiraAccessToken(client, request), 'recovered');
+      await engine.query("UPDATE jira_sessions SET access_expires_at=now()-interval '1 second' WHERE id=$1", [id]);
+    }
+    await engine.query("UPDATE jira_sessions SET refresh_lease='other',refresh_lease_until=now()+interval '30 seconds' WHERE id=$1", [id]);
+    await assert.rejects(jiraAccessToken(client, request), { status: 503 });
+    assert.ok(await jiraSession(client, request));
+    await engine.query('UPDATE jira_sessions SET refresh_lease=NULL,refresh_lease_until=NULL WHERE id=$1', [id]);
+    for (const status of [400, 403]) {
+      await engine.query("INSERT INTO jira_sessions(id,account_id,display_name,access_token,refresh_token,access_expires_at,expires_at) VALUES($1,'fixture','Camille',$2,$3,now()-interval '1 second',now()+interval '8 hours') ON CONFLICT DO NOTHING", [id, sealJiraToken('access', `${id}:access`), sealJiraToken('refresh', `${id}:refresh`)]);
+      globalThis.fetch = async () => Response.json({ error: 'invalid_grant', error_description: 'Unknown or invalid refresh token.' }, { status });
+      await assert.rejects(jiraAccessToken(client, request), { status: 401 });
+      assert.equal(await jiraSession(client, request, false), null);
+    }
+  } finally { globalThis.fetch = originalFetch; await engine.close(); }
+});
+
 test('Jira sprint creation is atomic; unauthenticated lists expose only locked entries, reads and manual roster edits are rejected', async () => {
   const engine = new PGlite();
   try {

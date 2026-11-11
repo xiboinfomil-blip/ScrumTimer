@@ -16,7 +16,7 @@ def assert_loader(page, loader, motion):
     expect(loader).to_have_attribute('role', 'status')
     expect(loader).to_have_attribute('aria-live', 'polite')
     svg = loader.locator('svg')
-    expect(svg.locator('circle')).to_have_count(6)
+    expect(svg.locator('circle')).to_have_count(5)
     assert loader.evaluate("""element => {
         const svg = element.querySelector('svg').getBoundingClientRect();
         const label = element.lastElementChild.getBoundingClientRect();
@@ -35,19 +35,13 @@ def assert_loader(page, loader, motion):
         assert animations == [], animations
     else:
         assert sorted(animation['name'] for animation in animations) == [
-            'cradle-dot', 'cradle-dot', 'cradle-dot', 'cradle-left', 'cradle-right'], animations
+            'loader-hand', 'loader-orbit'], animations
         assert all(animation['state'] == 'running' for animation in animations), animations
         initial = loader.locator('svg g').first.evaluate('element => getComputedStyle(element).transform')
         page.wait_for_function("""initial => {
-            const ball = document.querySelector('[data-loader] svg g');
-            return getComputedStyle(ball).transform !== initial;
+            const orbit = document.querySelector('[data-loader] svg g');
+            return getComputedStyle(orbit).transform !== initial;
         }""", arg=initial)
-        dot = loader.locator('span span span').first
-        opacity = dot.evaluate('element => getComputedStyle(element).opacity')
-        page.wait_for_function("""opacity => {
-            const dot = document.querySelector('[data-loader] > span > span > span');
-            return getComputedStyle(dot).opacity !== opacity;
-        }""", arg=opacity)
     assert svg.evaluate("""async element => {
         const source = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(element)], {type:'image/svg+xml'}));
         try {
@@ -55,17 +49,19 @@ def assert_loader(page, loader, motion):
             image.src = source;
             await image.decode();
             const canvas = document.createElement('canvas');
-            canvas.width = 176; canvas.height = 112;
+            canvas.width = 96; canvas.height = 96;
             const context = canvas.getContext('2d');
-            context.drawImage(image, 0, 0, 176, 112);
-            const pixels = context.getImageData(0, 0, 176, 112).data;
-            let dark = 0;
+            context.drawImage(image, 0, 0, 96, 96);
+            const pixels = context.getImageData(0, 0, 96, 96).data;
+            let blue = 0, orange = 0;
             for (let index = 0; index < pixels.length; index += 4) {
-                if (pixels[index + 3] && Math.max(...pixels.slice(index, index + 3)) < 180) dark++;
+                if (!pixels[index + 3]) continue;
+                if (pixels[index + 2] > pixels[index] * 2) blue++;
+                if (pixels[index] > pixels[index + 2] * 2) orange++;
             }
-            return dark > 100;
+            return blue > 100 && orange > 30;
         } finally { URL.revokeObjectURL(source); }
-    }"""), 'Blank cradle image'
+    }"""), 'Missing branded dial artwork'
 
 
 def run_case(browser, width, height, motion):
@@ -88,7 +84,7 @@ def run_case(browser, width, height, motion):
         with page.expect_request('**/api/teams'):
             page.goto(BASE + '/teams', wait_until='domcontentloaded')
         page.get_by_role('button', name='Fermer l\u2019introduction', exact=True).click()
-        loader = page.locator('[data-loader="cradle"]')
+        loader = page.locator('[data-loader="dial"]')
         expect(loader).to_have_count(1)
         assert_loader(page, loader, motion)
         if motion == 'no-preference':

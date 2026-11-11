@@ -44,6 +44,16 @@ Toutes ces commandes se lancent depuis la racine. Les scripts sans suffixe cible
 
 Les [tests de domaine](tests/domain.test.ts) couvrent la normalisation, les transformations de données, les prérequis de session, le mélange, les échéances et les chemins du catalogue ; ils ne prouvent pas un import automatique d’anciennes données navigateur. Node 22.6+ est conseillé pour utiliser toutes les commandes, même si le minimum de l’application est 20.9.
 
+### Concurrence Neon réelle (opt-in)
+
+Le [test de concurrence](scripts/test-live-concurrency.ts) utilise `CONCURRENCY_DATABASE_URL`, ou à défaut `DATABASE_URL`, chargé depuis la configuration locale. Préférer une base de test isolée avec les migrations déjà appliquées. **La commande écrit dans la base choisie** : elle crée trois équipes `TEST CONCURRENCY` avec un identifiant aléatoire, brièvement visibles dans l’annuaire partagé, puis supprime uniquement ces équipes et leurs dépendances. Obtenir l’autorisation avant de cibler une base utilisée par d’autres personnes. Aucun secret ne doit être transmis en argument ou affiché.
+
+```sh
+npm run test:concurrency -- --allow-disposable-teams
+```
+
+Sans ce drapeau explicite, aucune connexion ni écriture n’est effectuée. Les vérifications couvrent les sauvegardes concurrentes par révision, les métadonnées face à une sauvegarde, deux bilans du jour concurrents avec rejeu idempotent, et une suppression face à une sauvegarde. Les transactions utilisent des requêtes Neon indépendantes, une courte attente de test, des délais de verrou/requête bornés et une vérification de chevauchement sur des connexions PostgreSQL distinctes. Le nettoyage final vérifie l’absence des équipes temporaires et de leurs lignes dépendantes ; en cas d’interruption du processus, contrôler les fixtures du seul identifiant de test affiché avant toute suppression manuelle. Les équipes existantes ne servent jamais de fixtures. Ce contrôle borné n’est ni un test de charge soutenue, ni une validation OAuth Jira réelle, ni une preuve d’absence de tout interblocage possible.
+
 ### Page sans styles ou bloquée sur le chargement
 
 Pour modifier l’interface, privilégiez `npm run dev` : les changements sont actualisés automatiquement. Un serveur lancé avec `npm run start` utilise le build chargé à son démarrage. **Arrêtez tous les serveurs de production de ce projet avant `npm run build`, puis redémarrez-les une fois le build terminé.** Sinon, les anciennes pages peuvent demander des fichiers CSS/JavaScript remplacés et recevoir des erreurs HTTP 500.

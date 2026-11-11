@@ -1,11 +1,96 @@
 """Reset/re-entry/checkpoint invalidation; all API traffic isolated from Neon."""
 import os
+from datetime import date, timedelta
 
 from playwright.sync_api import expect, sync_playwright
 from browser_bootstrap import install_browser_bootstrap
 from postponement_smoke import WorkspaceMock, saved
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3001').rstrip('/')
+
+
+def run_archive_reconciliation(browser, width, height, failure):
+    context = browser.new_context(viewport={'width': width, 'height': height},
+                                  reduced_motion='reduce', service_workers='block')
+    bootstrap = install_browser_bootstrap(context)
+    db = WorkspaceMock()
+    for person in db.team['roster']:
+        person['mood'] = 2
+    db.team['session'] = [person['id'] for person in db.team['roster']]
+    context.route('**/api/**', db.api)
+    posts, reads, pending, refreshes = [], [], [], []
+    winner = None
+
+    def team(route):
+        if route.request.method == 'GET' and posts and failure == 'midnight':
+            assert route.request.headers.get('x-team-refresh') == '1'
+            refreshes.append(route.request)
+        route.fallback()
+
+    def history(route):
+        if route.request.method == 'POST':
+            posts.append(route.request.post_data_json)
+            assert len(posts) == 1, 'Reconciliation must not resubmit the archive'
+            route.fulfill(status=409, json={'error': 'Already completed elsewhere'})
+        elif not posts:
+            route.fulfill(json={'rounds': [], 'day': db.day})
+        else:
+            assert route.request.headers.get('x-team-refresh') == '1'
+            reads.append(route.request)
+            if failure == 'midnight' and len(reads) > 2:
+                route.fulfill(json={'rounds': [winner], 'day': db.day})
+            elif len(reads) == 1:
+                if failure == 'empty':
+                    route.fulfill(json={'rounds': [], 'day': db.day})
+                else:
+                    route.fulfill(status=503, json={'error': 'Temporarily unavailable'})
+            else:
+                pending.append(route)
+
+    context.route('**/api/history', history)
+    context.route('**/api/team', team)
+    page = context.new_page()
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    key = 'standup.timer.tab.v1:' + 'a' * 64
+    try:
+        page.goto(BASE + '/timer')
+        saved(page)
+        expect(page.locator('#start-button')).to_be_visible()
+        page.locator('#main-content').focus()
+        page.keyboard.press('n')
+        page.keyboard.press('n')
+        expect(page.locator('#timer-page[data-mode="results"]')).to_be_visible()
+        expect(page.get_by_text('Donn\u00e9es Neon indisponibles ou conflit de sauvegarde.', exact=False)).to_be_visible()
+        assert page.evaluate('(key) => sessionStorage.getItem(key) !== null', key)
+        page.wait_for_timeout(1200)
+        assert pending, 'A failed reconciliation must retry automatically'
+        assert len(posts) == 1 and len(reads) == 2
+        assert page.evaluate('(key) => sessionStorage.getItem(key) !== null', key)
+        winner = {**posts[0], 'id': 'remote-winner', 'people': [
+            {**person, 'speakingSeconds': 80, 'budgetSeconds': 120, 'score': 750}
+            for person in posts[0]['people']]}
+        if failure == 'midnight':
+            db.day = (date.fromisoformat(db.day) + timedelta(days=1)).isoformat()
+            db.team['session'] = []
+            for person in db.team['roster']:
+                person['mood'] = None
+                person['moodUpdatedAt'] = None
+        pending[0].fulfill(json={'rounds': [winner], 'day': db.day})
+        saved(page)
+        page.wait_for_function('(key) => sessionStorage.getItem(key) === null', arg=key)
+        expect(page.locator('#timer-page[data-mode="results"]')).to_have_count(0)
+        if failure == 'midnight':
+            expect(page.locator('.daily-score-list')).to_have_count(0)
+            assert refreshes and len(reads) == 3
+        else:
+            expect(page.locator('.daily-score-list')).to_be_visible()
+        assert len(posts) == 1
+        bootstrap.assert_no_unexpected_api()
+        assert not db.unexpected and not errors, (db.unexpected, errors)
+        print(f'PASS archive reconciliation {failure} {width}x{height}: fresh read retry, one POST, checkpoint retained until winner')
+    finally:
+        context.close()
 
 
 def show_votes(page, width):
@@ -226,6 +311,8 @@ if __name__ == '__main__':
     with sync_playwright() as p:
         browser = p.chromium.launch()
         for width, height in [(320, 568), (1366, 768)]:
+            for failure in ('empty', 'unavailable', 'midnight'):
+                run_archive_reconciliation(browser, width, height, failure)
             run_note_handoff(browser, width, height)
             run_timer_safety(browser, width, height)
             if os.environ.get('TIMER_SAFETY_ONLY') != '1':

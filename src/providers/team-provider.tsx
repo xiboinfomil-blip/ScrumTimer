@@ -104,6 +104,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   const uploading = useRef(false);
   const conflict = useRef(false);
   const pendingRounds = useRef<HistoryRound[]>([]);
+  const reconcilingRound = useRef<string | null>(null);
   const mounted = useRef(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryAttempt = useRef(0);
@@ -170,7 +171,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
           const response = await cloudFetch('/api/team', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId }, body: JSON.stringify({ team: snapshot, revision: revision.current }), signal: controller.signal });
           if (response.status === 409) {
             submittedTeam.current = previousSubmitted ?? snapshot;
-            const authoritative = await cloudFetch('/api/team', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal });
+            const authoritative = await cloudFetch('/api/team', { cache: 'no-store', headers: { 'X-Team-Id': teamId, 'X-Team-Refresh': '1' }, signal: controller.signal });
             if (!authoritative.ok) throw new CloudRequestError(authoritative);
             const saved = await authoritative.json();
             if (generation.current !== currentGeneration || controller.signal.aborted) return;
@@ -192,18 +193,29 @@ export function TeamProvider({ children }: { children: ReactNode }) {
           submittedTeam.current = null;
         } else {
           const round = pendingRounds.current[0];
-          const response = await cloudFetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId }, body: JSON.stringify(round), signal: controller.signal });
-          if (response.status === 409) {
-            const existing = await cloudFetch('/api/history', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal });
+          const response = reconcilingRound.current === round.id ? null : await cloudFetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId }, body: JSON.stringify(round), signal: controller.signal });
+          if (response === null || response.status === 409) {
+            reconcilingRound.current = round.id;
+            const existing = await cloudFetch('/api/history', { cache: 'no-store', headers: { 'X-Team-Id': teamId, 'X-Team-Refresh': '1' }, signal: controller.signal });
             if (!existing.ok) throw new CloudRequestError(existing);
             const history = await existing.json();
             if (generation.current !== currentGeneration || controller.signal.aborted) return;
-            const winner = normalizeHistory(history.rounds).find(item => new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(item.completedAt)) === history.day);
-            if (!winner) throw new Error('daily result unavailable');
+            const roundDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(round.completedAt));
+            const winner = normalizeHistory(history.rounds).find(item => new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(item.completedAt)) === roundDay);
+            if (!winner) throw new CloudRequestError(new Response(null, { status: 503 }));
             clearCheckpoint(teamId);
             timerMemory.current = null;
             setTodayRound(winner);
             pendingRounds.current = pendingRounds.current.filter(item => item.id !== round.id);
+            reconcilingRound.current = null;
+            if (roundDay !== history.day) {
+              clearRetry();
+              hydrated.current = false;
+              setReady(false);
+              setCloudStatus('loading');
+              setRetry(value => value + 1);
+              return;
+            }
             if (winner.id !== round.id) notify('Ce point quotidien a déjà été terminé sur un autre appareil. Le bilan enregistré est affiché.', 'warning');
             continue;
           }
@@ -228,11 +240,12 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     }
   }, [notify, clearRetry, scheduleRetry]);
 
-  const hydrateTeam = useCallback(async (teamId: string, controller: AbortController, token: number) => {
+  const hydrateTeam = useCallback(async (teamId: string, controller: AbortController, token: number, fresh = false) => {
     // Independent reads share the cancellation/generation gate, not a network waterfall.
+    const headers = { 'X-Team-Id': teamId, ...(fresh ? { 'X-Team-Refresh': '1' } : {}) };
     const [response, historyResponse] = await Promise.all([
-      cloudFetch('/api/team', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal }),
-      cloudFetch('/api/history', { cache: 'no-store', headers: { 'X-Team-Id': teamId }, signal: controller.signal }),
+      cloudFetch('/api/team', { cache: 'no-store', headers, signal: controller.signal }),
+      cloudFetch('/api/history', { cache: 'no-store', headers, signal: controller.signal }),
     ]);
     if (!response.ok) throw new Error('Chargement de l’équipe impossible.');
     if (!historyResponse.ok) throw new Error('Chargement du bilan du jour impossible.');
@@ -327,7 +340,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
           ?? new URL(window.location.href).searchParams.get('team'), list.activeTeamId);
         selectedId.current = teamId;
         setActiveTeamId(teamId);
-        if (await hydrateTeam(teamId, controller, token)) { clearRetry(); loadNotice.current = false; }
+        if (await hydrateTeam(teamId, controller, token, retry > 0)) { clearRetry(); loadNotice.current = false; }
       } catch (error) {
         if (mounted.current && generation.current === token) {
           setCloudStatus('error');

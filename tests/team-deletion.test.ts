@@ -157,15 +157,15 @@ test('PGlite: dependent-first team deletion cascades remaining ownership and pre
     statements.length = 0;
     const deleted = await deleteTeam(client, { teamId: target.id, name: target.name });
     assert.deepEqual(deleted, { teams: [{ id: second, name: 'Autre équipe', memberCount: 1, category: null }], activeTeamId: second });
-    assert.match(statements[1], /FROM workspaces .*FOR UPDATE/);
-    assert.match(statements[2], /FROM teams .*FOR UPDATE/);
-    assert.match(statements[3], /^DELETE FROM participant_check_ins /);
-    assert.match(statements[4], /^DELETE FROM team_daily_meters /);
-    assert.match(statements[5], /^DELETE FROM standup_sessions /);
-    for (const statement of statements.slice(3, 6)) {
+    assert.match(statements[0], /FROM teams .*FOR UPDATE/);
+    assert.ok(statements.every(statement => !statement.includes('workspaces')));
+    assert.match(statements[1], /^DELETE FROM participant_check_ins /);
+    assert.match(statements[2], /^DELETE FROM team_daily_meters /);
+    assert.match(statements[3], /^DELETE FROM standup_sessions /);
+    for (const statement of statements.slice(1, 4)) {
       assert.match(statement, /AND EXISTS\(SELECT 1 FROM teams WHERE id=\$\d+ AND name=\$\d+\)/, 'every pre-root mutation requires exact target ID and name');
     }
-    assert.match(statements[6], /^DELETE FROM teams WHERE id=\$\d+ AND name=\$\d+ RETURNING id/);
+    assert.match(statements[4], /^DELETE FROM teams WHERE id=\$\d+ AND name=\$\d+ RETURNING id/);
     assert.equal(statements.filter(statement => /^DELETE /i.test(statement)).length, 4, 'three dependent deletes precede the root cascade for remaining ownership');
     const after = await snapshot(engine, Object.keys(before));
     assert.deepEqual(after.teams, before.teams.filter(row => (row as { id: string }).id !== target.id));

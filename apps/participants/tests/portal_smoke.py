@@ -214,7 +214,7 @@ async def main_flow(page, api):
     await page.goto(PORTAL, wait_until="domcontentloaded")
     loader = page.get_by_role("status", name="Chargement de votre équipe…", exact=True)
     await expect(loader).to_be_visible()
-    await expect(loader.locator("svg circle")).to_have_count(6)
+    await expect(loader.locator("svg circle")).to_have_count(5)
     assert await loader.evaluate("""element => {
         const svg = element.querySelector('svg').getBoundingClientRect();
         const label = element.lastElementChild.getBoundingClientRect();
@@ -223,7 +223,7 @@ async def main_flow(page, api):
     }""")
     reduced = await page.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches")
     animations = await loader.evaluate("element => element.getAnimations({subtree:true}).map(animation => animation.animationName).sort()")
-    assert animations == ([] if reduced else ['cradle-dot', 'cradle-dot', 'cradle-dot', 'cradle-left', 'cradle-right']), animations
+    assert animations == ([] if reduced else ['loader-hand', 'loader-orbit']), animations
     if not reduced:
         await page.screenshot(path=os.path.join(gettempdir(), f"scrum-portal-loader-{page.viewport_size['width']}.png"))
     assert not api.puts
