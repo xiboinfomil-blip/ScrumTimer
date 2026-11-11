@@ -64,9 +64,10 @@ export function RemoteHostProvider({ children }: { children: ReactNode }) {
     if (action === 'list-previous' || action === 'list-next') {
       const list = sharedLists[targetIndex ?? -1];
       if (list) list.changePage(list.page + (action === 'list-next' ? 1 : -1));
+      else viewRef.current.dispatch(action, targetIndex);
     } else viewRef.current.dispatch(action, targetIndex);
   }, [sharedLists]);
-  const remote = useTimerRemote(teamId, { ...view.snapshot, lists: sharedLists.map(list => ({ key: list.key, indices: list.ids.map(id => view.participantIds!.indexOf(id)), page: list.page, pages: list.pages })), blocked: view.snapshot.blocked || pairingOpen }, { dispatch });
+  const remote = useTimerRemote(teamId, { ...view.snapshot, lists: sharedLists.length ? sharedLists.map(list => ({ key: list.key, indices: list.ids.map(id => view.participantIds!.indexOf(id)), page: list.page, pages: list.pages })) : view.snapshot.lists ?? [], blocked: view.snapshot.blocked || pairingOpen }, { dispatch });
   useEffect(() => { if (remote.phoneConnected) setPairingOpen(false); }, [remote.phoneConnected]);
   const openPairing = useCallback(() => {
     if (closeTimer.current) clearTimeout(closeTimer.current);

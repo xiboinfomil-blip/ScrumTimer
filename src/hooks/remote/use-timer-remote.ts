@@ -7,8 +7,12 @@ interface Pair { id: string; owner: string; control: string; expiresAt: number; 
 type HostSnapshot = Omit<RemoteSnapshot, 'version'>;
 
 function hasBlockingModal(snapshot: HostSnapshot): boolean {
-  const modal = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"], dialog[open]');
-  return Boolean(modal && !(snapshot.blackScreen && modal.querySelector('[data-testid="timer-screensaver"]')));
+  return [...document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"], dialog[open]')].some(modal => {
+    const style = getComputedStyle(modal);
+    return style.visibility !== 'hidden' && style.display !== 'none' && modal.getClientRects().length > 0
+      && !modal.closest('[aria-hidden="true"]')
+      && !(snapshot.blackScreen && modal.querySelector('[data-testid="timer-screensaver"]'));
+  });
 }
 
 export function useTimerRemote(teamId: string | null, snapshot: HostSnapshot, actions: { dispatch: (action: RemoteAction, targetIndex?: number) => void }) {

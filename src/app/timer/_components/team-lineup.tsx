@@ -3,13 +3,13 @@ import { Button, IconButton, Paper } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import { PaginatedList } from '@/components/ui/paginated-list';
+import { PaginatedList, type ListPagination } from '@/components/ui/paginated-list';
 import { countPill, textButton } from '@/components/ui/styles';
 import type { StandupTimer } from './timer-page';
 import { PostponedPeople } from './postponed-people';
 import { TimerIcon } from './timer-icon';
 
-export function TeamLineup({ timer, className = '', idPrefix = '' }: { timer: StandupTimer; className?: string; idPrefix?: string }) {
+export function TeamLineup({ timer, className = '', idPrefix = '', pagination }: { timer: StandupTimer; className?: string; idPrefix?: string; pagination?: ListPagination }) {
   const { people, activeId } = timer;
   const done = people.filter(person => person.done).length;
   const left = people.length - done;
@@ -30,6 +30,7 @@ export function TeamLineup({ timer, className = '', idPrefix = '' }: { timer: St
       <div id={elementId('person-list')} className="contents">
         <PaginatedList
           syncKey="timer"
+          pagination={pagination}
           items={people}
           className="person-list"
           ordered

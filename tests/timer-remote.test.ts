@@ -98,6 +98,13 @@ test('shared list pages validate bounds and allow only in-range versioned naviga
   ]) rejectsStatus(() => validateRemoteSnapshot({ ...snapshot, lists: [list] }), 400);
   rejectsStatus(() => validateRemoteSnapshot({ ...snapshot, lists: [lists[0], lists[0]] }), 400);
   rejectsStatus(() => validateRemoteSnapshot({ ...snapshot, lists: null }), 400);
+  const participants = Array.from({ length: 100 }, (_, index) => ({ ...snapshot.participants[index === 0 ? 0 : 1], name: `Personne ${index}` }));
+  for (const capacity of [4, 8, 20, 100]) {
+    const expanded = { ...snapshot, participants, participantCount: 100, total: 100, lists: [{ key: 'mood', indices: Array.from({ length: capacity }, (_, index) => index), page: 0, pages: Math.ceil(100 / capacity) }] };
+    assert.deepEqual(validateRemoteSnapshot(expanded), expanded);
+    rejectsStatus(() => validateRemoteSnapshot({ ...expanded, lists: [{ ...expanded.lists[0], indices: Array.from({ length: 101 }, (_, index) => index) }] }), 400);
+    rejectsStatus(() => validateRemoteSnapshot({ ...expanded, lists: [{ ...expanded.lists[0], indices: [100] }] }), 400);
+  }
 });
 
 test('opaque capabilities only come from Authorization and require the 32-byte base64url shape', () => {

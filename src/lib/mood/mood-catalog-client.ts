@@ -5,6 +5,38 @@ let catalogCache: { decks: MoodMeterDeck[]; expires: number } | undefined;
 let catalogPending: Promise<MoodMeterDeck[]> | undefined;
 const deckCache = new Map<string, { deck: MoodMeterDeck; expires: number }>();
 const deckPending = new Map<string, Promise<MoodMeterDeck>>();
+const svgCache = new Map<string, { svg: string; expires: number }>();
+const svgPending = new Map<string, Promise<string>>();
+const svgBudget = 40 * 1024 * 1024;
+
+export async function loadMoodSvg(image: string, signal: AbortSignal): Promise<string> {
+  signal.throwIfAborted();
+  const cached = svgCache.get(image);
+  if (cached && cached.expires > Date.now()) return cached.svg;
+  let pending = svgPending.get(image);
+  if (!pending) {
+    pending = readMoodSvg(image);
+    svgPending.set(image, pending);
+  }
+  try { const svg = await pending; signal.throwIfAborted(); return svg; }
+  finally { if (svgPending.get(image) === pending) svgPending.delete(image); }
+}
+
+async function readMoodSvg(image: string): Promise<string> {
+  const response = await fetch(image, { signal: AbortSignal.timeout(45_000) });
+  if (!response.ok) throw new Error('Diapositive indisponible.');
+  const svg = await response.text();
+  if (svg.length * 2 > svgBudget) throw new Error('Diapositive trop volumineuse.');
+  for (const [key, entry] of svgCache) if (entry.expires <= Date.now()) svgCache.delete(key);
+  let bytes = [...svgCache.values()].reduce((total, entry) => total + entry.svg.length * 2, 0);
+  while (svgCache.size >= 4 || bytes + svg.length * 2 > svgBudget) {
+    const key = svgCache.keys().next().value!;
+    bytes -= svgCache.get(key)!.svg.length * 2;
+    svgCache.delete(key);
+  }
+  svgCache.set(image.split('?')[0], { svg, expires: Date.now() + 300_000 });
+  return svg;
+}
 
 export async function loadMoodCatalog(signal: AbortSignal): Promise<MoodMeterDeck[]> {
   signal.throwIfAborted();

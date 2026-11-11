@@ -1,5 +1,7 @@
 import { validateTeamInput } from '../team/team-validation.ts';
 
+export const CLOUD_REQUEST_TIMEOUT_MS = 60_000;
+
 export class CloudRequestError extends Error {
   readonly status: number;
   readonly retryAfter: number | null;
@@ -32,7 +34,9 @@ export function cloudRetryDelay(attempt: number, retryAfter: number | null = nul
 
 /** Preserve 409 for endpoint-specific reconciliation; never blindly retry it. */
 export async function cloudFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const response = await fetch(input, init);
+  const deadline = AbortSignal.timeout(CLOUD_REQUEST_TIMEOUT_MS);
+  const signal = init?.signal ? AbortSignal.any([init.signal, deadline]) : deadline;
+  const response = await fetch(input, { ...init, signal });
   if (!response.ok && response.status !== 409) throw new CloudRequestError(response);
   return response;
 }

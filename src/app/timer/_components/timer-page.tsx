@@ -27,7 +27,7 @@ import SmartphoneRounded from '@mui/icons-material/SmartphoneRounded';
 import ScreenShareRounded from '@mui/icons-material/ScreenShareRounded';
 import { CurrentMoodCard } from './current-mood-card';
 import WallpaperRounded from '@mui/icons-material/WallpaperRounded';
-import { TimerScreensaver } from './timer-screensaver';
+import { TimerScreensaver } from '@/components/ui/timer-screensaver';
 import { TeamNavbarActions } from '@/components/layout/team-navbar-actions';
 
 export type StandupTimer = ReturnType<typeof useStandupTimer>;
@@ -38,8 +38,9 @@ export function TimerPage() {
   const timer = useStandupTimer();
   const [view, setView] = useState<'timer' | 'prompts'>('timer');
   const [presentationView, setPresentationView] = useState<'timer' | 'notes'>('timer');
-  const [railView, setRailView] = useState<'notes' | 'mood' | 'lineup'>('lineup');
   const [lineupOpen, setLineupOpen] = useState(false);
+  const [lineupPage, setLineupPage] = useState(0);
+  const [lineupCapacity, setLineupCapacity] = useState(1);
   const [sharing, setSharing] = useState(false);
   const [blackScreen, setBlackScreen] = useState(false);
   const previousRunning = useRef(timer.running);
@@ -67,6 +68,10 @@ export function TimerPage() {
   const presentation = usePresentation(target);
   const waitingForPostponed = !timer.activeId && timer.people.some(person => person.postponed && !person.done);
   const index = timer.people.findIndex(person => person.id === timer.activeId);
+  const lineupPages = Math.max(1, Math.ceil(timer.people.length / lineupCapacity));
+  const currentLineupPage = Math.min(lineupPage, lineupPages - 1);
+  const lineupPagination = { page: currentLineupPage, capacity: lineupCapacity, onPageChange: setLineupPage, onCapacityChange: setLineupCapacity };
+  useEffect(() => { setLineupPage(Math.floor(Math.max(0, index) / lineupCapacity)); }, [index, lineupCapacity]);
   const following = [...timer.people.slice(index + 1), ...timer.people.slice(0, Math.max(0, index))].find(person => !person.done && !person.postponed);
   const moodById = new Map(state.roster.map(person => [person.id, person.mood]));
   useRemotePage({
@@ -79,8 +84,11 @@ export function TimerPage() {
     completed: timer.people.filter(person => person.done).length, total: timer.people.length,
     blocked: timer.managing || timer.lateChecking || waitingForPostponed || lineupOpen || sharing || toolsOpen,
     blackScreen, manualPenalty: timer.person?.manualPenalty ?? 0,
-  }, action => {
+    lists: [{ key: 'timer', indices: timer.people.slice(currentLineupPage * lineupCapacity, (currentLineupPage + 1) * lineupCapacity).map((_, offset) => currentLineupPage * lineupCapacity + offset), page: currentLineupPage, pages: lineupPages }],
+  }, (action, targetIndex) => {
     switch (action) {
+      case 'list-previous': if (targetIndex === 0) setLineupPage(Math.max(0, currentLineupPage - 1)); break;
+      case 'list-next': if (targetIndex === 0) setLineupPage(Math.min(lineupPages - 1, currentLineupPage + 1)); break;
       case 'start': setBlackScreen(false); if (!timer.running) timer.toggle(); break;
       case 'pause': if (timer.running) timer.toggle(); break;
       case 'previous': timer.previous(); break;
@@ -107,9 +115,9 @@ export function TimerPage() {
           <MenuItem key="broadcast" sx={{ minHeight: 48 }} onClick={() => { if (presentation.presenting) { setPresentationView('timer'); void presentation.toggle(); } else setSharing(true); }}><ListItemIcon><ScreenShareRounded /></ListItemIcon><ListItemText>{presentation.presenting ? 'Quitter la présentation' : 'Diffusion'}</ListItemText></MenuItem>,
         ]} />, navbarActions)}
       <TimerScreensaver open={blackScreen} onClose={() => setBlackScreen(false)} onResume={() => { setBlackScreen(false); if (!timer.running) timer.toggle(); }} teamName={activeTeamName} speaker={timer.person?.name ?? ''} />
-      <Dialog open={lineupOpen && !timer.lateChecking && !waitingForPostponed} onClose={() => setLineupOpen(false)} aria-labelledby="lineup-dialog-title" fullWidth maxWidth="sm" slotProps={{ paper: { sx: { height: 'min(640px, calc(100dvh - 32px))', m: 2, width: 'calc(100% - 32px)', borderRadius: '14px', border: '1px solid #dce3e9' } } }}>
+      <Dialog keepMounted open={lineupOpen && !timer.lateChecking && !waitingForPostponed} onClose={() => setLineupOpen(false)} aria-labelledby="lineup-dialog-title" fullWidth maxWidth="sm" slotProps={{ paper: { sx: { height: 'min(640px, calc(100dvh - 32px))', m: 2, width: 'calc(100% - 32px)', borderRadius: '14px', border: '1px solid #dce3e9' } } }}>
         <DialogTitle id="lineup-dialog-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Le tour de parole</DialogTitle>
-        <DialogContent className="flex min-h-0 flex-1 flex-col"><p className="mb-3 shrink-0 text-xs text-muted">{timer.focusMode ? 'Votre passage reste sélectionné. Reprenez le minuteur une fois prêt.' : 'Choisissez la personne qui ouvrira le point.'}</p>{lineupOpen && <TeamLineup timer={timer} className="flex-1" />}</DialogContent>
+        <DialogContent className="flex min-h-0 flex-1 flex-col"><p className="mb-3 shrink-0 text-xs text-muted">{timer.focusMode ? 'Votre passage reste sélectionné. Reprenez le minuteur une fois prêt.' : 'Choisissez la personne qui ouvrira le point.'}</p><TeamLineup timer={timer} pagination={lineupPagination} className="flex-1" /></DialogContent>
         <DialogActions><Button onClick={() => setLineupOpen(false)} sx={{ minHeight: 44 }}>Revenir au passage</Button></DialogActions>
       </Dialog>
       <Dialog open={sharing} onClose={() => setSharing(false)} aria-labelledby="sharing-title" fullWidth maxWidth="xs" slotProps={{ paper: { sx: { borderRadius: '14px', border: '1px solid #dce3e9' } } }}>
@@ -136,11 +144,9 @@ export function TimerPage() {
       />}
       <div ref={panels} className="workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 min-[1100px]:grid-cols-[minmax(0,1.35fr)_minmax(320px,.75fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1" data-view={presentation.presenting ? presentationView : view}>
         <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`min-[1100px]:col-start-1 ${presentation.presenting ? presentationView === 'notes' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
-        <aside aria-label="Pense-bête et humeur" className={`notes-rail flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto overscroll-contain min-[1100px]:border-l min-[1100px]:border-line min-[1100px]:pl-3 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? presentationView === 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'prompts' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`}>
-          <ScreenTabs className={`${segmentedTabs} flex! shrink-0 [&>button]:min-h-11 [&>button]:min-w-0 [&>button]:px-2 [&>button]:text-xs`} label="Contenu du point" value={railView} onChange={setRailView} tabs={[{ value: 'notes', label: isSprint ? 'Tickets & notes' : 'Pense-bête' }, { value: 'mood', label: 'Humeur' }, { value: 'lineup', label: 'Tour de parole' }]} />
-          <div className={`min-h-0 flex-1 ${railView === 'notes' ? 'flex flex-col' : 'hidden'}`}><DailyPrompts compact={timer.focusMode} speakerId={timer.activeId} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => presentation.presenting ? setPresentationView('timer') : setView('timer')} /></div>
-          <div className={`min-h-0 flex-1 overflow-y-auto ${railView === 'mood' ? '' : 'hidden'}`}><CurrentMoodCard compact={timer.focusMode} timer={timer} /></div>
-          {!lineupOpen && <div className={`min-h-0 flex-1 ${railView === 'lineup' ? 'flex flex-col' : 'hidden'}`}><TeamLineup timer={timer} idPrefix="sidebar" className="flex-1 border-0! rounded-none!" /></div>}
+        <aside aria-label="Pense-bête et humeur" className={`notes-rail grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 overflow-hidden min-[1100px]:border-l min-[1100px]:border-line min-[1100px]:pl-3 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? presentationView === 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'prompts' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`}>
+          <DailyPrompts compact={timer.focusMode} speakerId={timer.activeId} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => presentation.presenting ? setPresentationView('timer') : setView('timer')} />
+          <CurrentMoodCard compact={timer.focusMode} timer={timer} />
         </aside>
       </div>
       <TimerManagementDialog timer={timer} />

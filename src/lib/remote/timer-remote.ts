@@ -142,7 +142,7 @@ export function validateRemoteSnapshot(value: unknown): RemoteSnapshot {
     const keys = new Set<string>();
     for (const value of data.lists) {
       const list = remoteObject(value, ['key', 'indices', 'page', 'pages']);
-      if (!text(list.key, 32, false) || keys.has(list.key) || !Array.isArray(list.indices) || list.indices.length > 3
+      if (!text(list.key, 32, false) || keys.has(list.key) || !Array.isArray(list.indices) || list.indices.length > 100
         || new Set(list.indices).size !== list.indices.length || !list.indices.every(index => Number.isInteger(index) && index >= 0 && index < (participants?.length ?? 0))
         || !Number.isInteger(list.pages) || (list.pages as number) < 1 || (list.pages as number) > 100
         || !Number.isInteger(list.page) || (list.page as number) < 0 || (list.page as number) >= (list.pages as number)) throw new RemoteError(400);

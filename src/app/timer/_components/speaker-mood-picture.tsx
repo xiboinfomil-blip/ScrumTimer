@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useReducedMotion } from 'framer-motion';
-import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood/mood-catalog-client';
+import { loadMoodCatalog, loadMoodDeck, loadMoodSvg } from '@/lib/mood/mood-catalog-client';
 import { extractMoodPictures, gifPlaybackDuration, selectMoodPicture } from '@/lib/mood/mood-picture';
 import type { Mood, MoodSlideContext } from '@/types/team';
 import { AnimatedImage } from '@/app/mood/_components/animated-image';
@@ -29,10 +29,7 @@ export function SpeakerMoodPicture({ context, mood, card = false }: { context: M
       let pictures = cache.get(first.image);
       if (!pictures) {
         if (/\.svg$/i.test(first.image)) {
-          const response = await fetch(first.image, { signal: controller.signal });
-          if (!response.ok) return;
-          const svg = await response.text();
-          if (svg.length > 20 * 1024 * 1024) return;
+          const svg = await loadMoodSvg(first.image, controller.signal);
           pictures = extractMoodPictures(svg);
         } else {
           pictures = ([1, 2, 3, 4] as const).map(value => selectMoodPicture(first.overlays.map(overlay => ({

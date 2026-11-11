@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CloudRequestError, cloudFetch, cloudRetryDelay, isTransientCloudError, parseRetryAfter, sameCloudTeam } from '../src/lib/persistence/cloud-retry.ts';
+import { CLOUD_REQUEST_TIMEOUT_MS, CloudRequestError, cloudFetch, cloudRetryDelay, isTransientCloudError, parseRetryAfter, sameCloudTeam } from '../src/lib/persistence/cloud-retry.ts';
 import { defaultTeam } from '../src/lib/team/team-storage.ts';
 
 test('exponential backoff starts at one second and remains capped indefinitely', () => {
@@ -41,6 +41,40 @@ test('cloud transport retains HTTP status/cooldown and exposes 409 for reconcili
     globalThis.fetch = async () => { throw new TypeError('offline'); };
     await assert.rejects(cloudFetch('/api/team'), TypeError);
   } finally { globalThis.fetch = original; }
+});
+
+test('cloud requests have independent deadlines longer than the Windows proxy and preserve caller cancellation', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalTimeout = AbortSignal.timeout;
+  const deadlines: AbortController[] = [];
+  const signals: AbortSignal[] = [];
+  AbortSignal.timeout = milliseconds => {
+    assert.equal(milliseconds, CLOUD_REQUEST_TIMEOUT_MS);
+    assert.ok(milliseconds > 45_000);
+    const deadline = new AbortController();
+    deadlines.push(deadline);
+    return deadline.signal;
+  };
+  globalThis.fetch = async (_, options) => {
+    const signal = options!.signal!;
+    signals.push(signal);
+    return new Promise<Response>((_, reject) => {
+      signal.throwIfAborted();
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    });
+  };
+  try {
+    const caller = new AbortController();
+    const first = cloudFetch('/api/team', { signal: caller.signal });
+    const second = cloudFetch('/api/history', { signal: caller.signal });
+    assert.notEqual(signals[0], signals[1]);
+    deadlines[0].abort(new DOMException('Deadline expired', 'TimeoutError'));
+    await assert.rejects(first, { name: 'TimeoutError' });
+    assert.equal(signals[1].aborted, false);
+    assert.equal(caller.signal.aborted, false);
+    caller.abort();
+    await assert.rejects(second, { name: 'AbortError' });
+  } finally { globalThis.fetch = originalFetch; AbortSignal.timeout = originalTimeout; }
 });
 
 test('acknowledgement comparison ignores transient state, not genuine durable conflicts', () => {

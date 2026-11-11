@@ -7,12 +7,23 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useSynchronizedList } from '@/providers/remote-host-provider';
 
+export interface ListPagination {
+  page: number;
+  capacity: number;
+  onPageChange: (page: number) => void;
+  onCapacityChange: (capacity: number) => void;
+}
+
 // Measure actual rendered rows so the meeting stage stays within the viewport.
-export function PaginatedList<T extends { id: string; name?: string; present?: boolean; mood?: number | null; postponed?: boolean; done?: boolean }>({ items, renderItem, className = 'checkin-list', ordered = false, activeId, syncKey = '' }: { items: T[]; renderItem: (item: T, index: number) => ReactNode; className?: string; ordered?: boolean; activeId?: string | null; syncKey?: string }) {
+export function PaginatedList<T extends { id: string; name?: string; present?: boolean; mood?: number | null; postponed?: boolean; done?: boolean }>({ items, renderItem, className = 'checkin-list', ordered = false, activeId, syncKey = '', pagination }: { items: T[]; renderItem: (item: T, index: number) => ReactNode; className?: string; ordered?: boolean; activeId?: string | null; syncKey?: string; pagination?: ListPagination }) {
   const ref = useRef<HTMLUListElement & HTMLOListElement>(null);
   const positions = useRef(new Map<string, number>());
-  const [capacity, setCapacity] = useState(syncKey ? 3 : 100);
-  const [page, setPage] = useState(0);
+  const [localCapacity, setLocalCapacity] = useState(1);
+  const [localPage, setLocalPage] = useState(0);
+  const capacity = pagination?.capacity ?? localCapacity;
+  const page = pagination?.page ?? localPage;
+  const setCapacity = pagination?.onCapacityChange ?? setLocalCapacity;
+  const setPage = pagination?.onPageChange ?? setLocalPage;
   const direction = useRef(1);
   useLayoutEffect(() => {
     const list = ref.current;
@@ -24,7 +35,7 @@ export function PaginatedList<T extends { id: string; name?: string; present?: b
       const gap = parseFloat(css.rowGap) || 0;
       const available = list.clientHeight - (parseFloat(css.paddingTop) || 0) - (parseFloat(css.paddingBottom) || 0);
       if (list.clientHeight === 0) return;
-      setCapacity(Math.min(syncKey ? 3 : 100, Math.max(1, Math.floor((available + gap) / (row.getBoundingClientRect().height + gap)))));
+      setCapacity(Math.min(100, Math.max(1, Math.floor((available + gap) / (row.getBoundingClientRect().height + gap)))));
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -32,7 +43,7 @@ export function PaginatedList<T extends { id: string; name?: string; present?: b
     const row = list.firstElementChild;
     if (row) observer.observe(row);
     return () => observer.disconnect();
-  }, [items.length, page, syncKey]);
+  }, [items.length, page, syncKey, setCapacity]);
   const pages = Math.max(1, Math.ceil(items.length / capacity));
   const current = Math.min(page, pages - 1);
   useSynchronizedList({ key: syncKey, ids: items.slice(current * capacity, (current + 1) * capacity).map(item => item.id), page: current, pages, changePage: setPage });
@@ -63,7 +74,7 @@ export function PaginatedList<T extends { id: string; name?: string; present?: b
     return () => animation.stop();
   }, [current]);
   useEffect(() => {
-    if (!activeId) return;
+    if (!activeId || pagination) return;
     const index = items.findIndex(item => item.id === activeId);
     if (index >= 0) setPage(Math.floor(index / capacity));
     // Only follow speaker changes or resizing, not manual pagination.

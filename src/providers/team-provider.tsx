@@ -159,7 +159,6 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     const currentGeneration = generation.current;
     const controller = new AbortController();
     writeController.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 15000);
     uploading.current = true;
     setCloudStatus('saving');
     try {
@@ -224,7 +223,6 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         if (conflict.current) notify('Conflit de sauvegarde : changement d’équipe bloqué. Vos modifications restent en attente.', 'error');
       }
     } finally {
-      clearTimeout(timeout);
       if (writeController.current === controller) writeController.current = null;
       uploading.current = false;
     }
@@ -316,7 +314,6 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     setTeamBusy(true);
     setReady(false);
     setCloudStatus('loading');
-    const timeout = setTimeout(() => controller.abort(), 15000);
     void (async () => {
       try {
         const response = await cloudFetch('/api/teams', { cache: 'no-store', signal: controller.signal });
@@ -342,7 +339,6 @@ export function TeamProvider({ children }: { children: ReactNode }) {
           }
         }
       } finally {
-        clearTimeout(timeout);
         controller.abort();
         if (generation.current === token) {
           busy.current = false;
@@ -351,7 +347,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         }
       }
     })();
-    return () => { if (generation.current === token) generation.current = token + 1; clearTimeout(timeout); controller.abort(); loadController.current?.abort(); writeController.current?.abort(); };
+    return () => { if (generation.current === token) generation.current = token + 1; controller.abort(); loadController.current?.abort(); writeController.current?.abort(); };
   }, [retry, flush, hydrateTeam, notify, clearSelection, clearRetry, scheduleRetry]);
 
   useEffect(() => {
@@ -383,7 +379,6 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     const controller = new AbortController();
     loadController.current = controller;
     const token = ++generation.current;
-    const timeout = setTimeout(() => controller.abort(), sync || ('sprint' in body && body.sprint) ? 60_000 : 15_000);
     let selected = false;
     try {
       if (sync) {
@@ -417,7 +412,6 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       }
       return false;
     } finally {
-      clearTimeout(timeout);
       if (generation.current === token) {
         busy.current = false;
         setTeamBusy(false);
@@ -452,7 +446,6 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     const controller = new AbortController();
     directoryController.current = controller;
     const token = generation.current;
-    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const response = await cloudFetch('/api/teams', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(update), signal: controller.signal });
       if (!response.ok) throw new Error('Classement non confirmé. Réessayez pour retrouver le choix partagé.');
@@ -465,7 +458,6 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       if (mounted.current) notify('Classement non confirmé. Réessayez ou rechargez pour vérifier le choix enregistré.', 'error');
       return false;
     } finally {
-      clearTimeout(timeout);
       if (directoryController.current === controller) directoryController.current = null;
       if (mounted.current && generation.current === token) {
         busy.current = false; setTeamBusy(false);
@@ -494,7 +486,6 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     const controller = new AbortController();
     loadController.current?.abort(); loadController.current = controller;
     const token = ++generation.current;
-    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const response = await cloudFetch('/api/teams', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teamId: id, name }), signal: controller.signal });
       const body = await response.json();
@@ -523,7 +514,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         notify(error instanceof Error && error.name !== 'AbortError' ? error.message : 'Suppression non confirmée. Réessayez Neon pour recharger les équipes.', 'error');
       }
       return false;
-    } finally { clearTimeout(timeout); if (generation.current === token) { busy.current = false; setTeamBusy(false); } }
+    } finally { if (generation.current === token) { busy.current = false; setTeamBusy(false); } }
   }, [teams, notify, hydrateTeam, clearSelection, scheduleRetry]);
 
   useEffect(() => {
@@ -587,7 +578,6 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     setTeamBusy(true);
     const controller = new AbortController();
     loadController.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const response = await cloudFetch('/api/history', { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId }, body: JSON.stringify({ roundId: todayRound.id }), signal: controller.signal });
       if (!response.ok) throw new Error();
@@ -603,7 +593,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       scheduleRetry('load', error);
       notify('Réinitialisation non confirmée. Réessayez Neon pour recharger le bilan.', 'error');
       return false;
-    } finally { clearTimeout(timeout); busy.current = false; setTeamBusy(false); }
+    } finally { busy.current = false; setTeamBusy(false); }
   }, [todayRound, hydrateTeam, notify, scheduleRetry]);
   const activeTeamName = teams.find(team => team.id === activeTeamId)?.name ?? '';
   return <TeamContext.Provider value={{ getTimerCheckpoint, storeTimerCheckpoint, rejoinLateParticipant, participantOrder, setParticipantOrder, teams, activeTeamId, activeTeamName, teamBusy, dailyReady, todayRound, resetToday, setDailyReady, switchTeam, createTeam, syncSprint, updateTeamDirectory, setTeamFavorite, deleteTeam, state, ready, cloudStatus, retryCloud, saveRound, updateTeam }}>{children}</TeamContext.Provider>;

@@ -6,7 +6,7 @@ import {
   chooseUnusedDeck, displayTitle, groupMoodMeters, moodMeterId, isAnimatedImage, overlayCropStyle,
   overlayMatrix, type MoodMeterDeck, type MoodMeterSlide,
 } from '../../../lib/mood/mood-meter';
-import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood/mood-catalog-client';
+import { loadMoodCatalog, loadMoodDeck, loadMoodSvg } from '@/lib/mood/mood-catalog-client';
 import { AnimatedImage } from './animated-image';
 import { useTeam } from '@/providers/team-provider';
 import { DefaultMoodMeter, MoodMeterLoading } from './default-mood-meter';
@@ -38,6 +38,7 @@ export function MeterSlide({ slide, title, paused, idPrefix = 'meter', onSettled
   const [snapshotWarning, setSnapshotWarning] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [waitingRetry, setWaitingRetry] = useState(false);
+  const [svgSource, setSvgSource] = useState<string | null>(null);
   const settled = useRef(onSettled);
   useEffect(() => { settled.current = onSettled; }, [onSettled]);
   const backgroundAnimated = isAnimatedImage(slide.image);
@@ -46,6 +47,20 @@ export function MeterSlide({ slide, title, paused, idPrefix = 'meter', onSettled
     if (attempt < MOOD_RETRY_DELAYS.length) setWaitingRetry(true);
     else { setFailed(true); settled.current?.(); }
   }, [attempt]);
+
+  useEffect(() => {
+    if (!/\.svg$/i.test(slide.image)) return;
+    const controller = new AbortController();
+    let source: string | undefined;
+    setSvgSource(null);
+    const image = attempt ? `${slide.image}?retry=${attempt}` : slide.image;
+    loadMoodSvg(image, controller.signal).then(svg => {
+      if (controller.signal.aborted) return;
+      source = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+      setSvgSource(source);
+    }).catch(() => { if (!controller.signal.aborted) backgroundError(); });
+    return () => { controller.abort(); if (source) URL.revokeObjectURL(source); };
+  }, [slide.image, attempt, backgroundError]);
 
   useEffect(() => {
     if (!waitingRetry) return;
@@ -95,7 +110,7 @@ export function MeterSlide({ slide, title, paused, idPrefix = 'meter', onSettled
     <div className={meterStage} ref={stageRef}>
       {failed ? <DefaultMoodMeter /> : loading ? <MoodMeterLoading /> : null}
       <div id={`${idPrefix}-slide-wrapper`} className="relative max-h-full max-w-full shrink-0 overflow-hidden" hidden={failed} style={{ width: size.width, height: size.height }}>
-        {!waitingRetry && <AnimatedImage key={attempt} id={`${idPrefix}-slide`} className={backgroundImage} src={attempt ? `${slide.image}${slide.image.includes('?') ? '&' : '?'}retry=${attempt}` : slide.image} alt={title} paused={paused}
+        {!waitingRetry && (!/\.svg$/i.test(slide.image) || svgSource) && <AnimatedImage key={attempt} id={`${idPrefix}-slide`} className={backgroundImage} src={svgSource ?? (attempt ? `${slide.image}${slide.image.includes('?') ? '&' : '?'}retry=${attempt}` : slide.image)} alt={title} paused={paused}
           animated={backgroundAnimated} fetchPriority="high" onLoad={loaded} onError={backgroundError}
           onSnapshotError={snapshotError} />}
         <div id={`${idPrefix}-overlays`} className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">

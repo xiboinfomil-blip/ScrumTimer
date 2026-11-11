@@ -4,11 +4,14 @@ No request to an application API is allowed through to Neon/Redis. Run directly
 with Python; BROWSER_TEST_URL may only select localhost development port 3001.
 """
 from copy import deepcopy
+import base64
 import os
 from pathlib import Path
 import re
 import tempfile
 import time
+import struct
+import zlib
 from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import expect, sync_playwright
@@ -971,14 +974,36 @@ def synchronized_smoke():
         for motion in ('reduce', 'no-preference'):
             api = MockAPIs()
             api.team = team_fixture([f'Participant {index:02d}' for index in range(1, 13)])
+            deck_id = 'deck-1234567890abcdef1234'
+            slide_root = f'/mood-meters/slides/{deck_id}'
+            api.daily['meter'] = {'meterId': deck_id, 'title': 'Baromètre partagé'}
+            meter_context = {'meterId': deck_id, 'title': 'Baromètre partagé', 'image': f'{slide_root}/second.svg', 'slideNumber': 2}
+            api.team['currentMoodSlide'] = deepcopy(meter_context)
             for person in api.team['roster']:
-                person.update(mood=2, moodUpdatedAt=None)
+                person.update(mood=2, moodUpdatedAt=None, moodSlide=deepcopy(meter_context))
             host_context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion=motion, service_workers='block')
             phone_context = browser.new_context(viewport={'width': 390, 'height': 844}, reduced_motion=motion, service_workers='block')
             host_guard = install_browser_bootstrap(host_context)
             phone_guard = install_browser_bootstrap(phone_context, intro=False, fullscreen=False)
             api.register(host_context)
             api.register(phone_context)
+            def chunk(kind, data):
+                return struct.pack('!I', len(data)) + kind + data + struct.pack('!I', zlib.crc32(kind + data))
+            png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('!IIBBBBB', 1, 1, 8, 2, 0, 0, 0))
+            png += chunk(b'IDAT', zlib.compress(b'\x00\x20\x5f\x9d')) + chunk(b'IEND', b'')
+            picture = 'data:image/png;base64,' + base64.b64encode(png).decode()
+            artwork = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540">' + ''.join(
+                f'<image x="{left}" y="{top}" width="300" height="200" href="{picture}"/>'
+                for left, top in ((50, 20), (50, 300), (600, 300), (600, 20))) + '</svg>'
+            downloads = []
+            host_context.route('**/api/daily-hints', lambda route: route.fulfill(json={'day': mauritius_day(), 'hints': [{'participantId': person['id'], 'hint': '**Avancement partagé**\n\n- API terminée\n- Tests en cours', 'revision': 1} for person in api.team['roster']]}))
+            host_context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=[{'remoteId': deck_id, 'title': 'Baromètre partagé', 'slides': []}]))
+            host_context.route(f'**/api/mood-meters/decks/{deck_id}', lambda route: route.fulfill(json={'title': 'Baromètre partagé', 'slides': [f'{slide_root[1:]}/first.svg', f'{slide_root[1:]}/second.svg']}))
+            host_context.route(f'**/api/mood-meters/decks/{deck_id}/titles', lambda route: route.fulfill(json={'titles': ['Un', 'Deux', 'Trois', 'Quatre']}))
+            def slide_api(route):
+                downloads.append(urlsplit(route.request.url).path)
+                route.fulfill(content_type='image/svg+xml', body=artwork)
+            host_context.route(f'**{slide_root}/*.svg*', slide_api)
             host, phone = host_context.new_page(), phone_context.new_page()
             errors = []
             for page in (host, phone):
@@ -990,6 +1015,7 @@ def synchronized_smoke():
                 expect(phone.get_by_text('En ligne', exact=True)).to_be_visible()
 
                 def matching(host_rows, phone_list):
+                    host.wait_for_function("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))")
                     expect(phone_list.get_by_role('listitem')).to_have_count(host_rows.count())
                     names = host_rows.locator('strong, .person-name').all_text_contents()
                     if not names:
@@ -997,11 +1023,36 @@ def synchronized_smoke():
                     for name in names:
                         expect(phone_list).to_contain_text(name.strip())
 
+                def fitted_rows(section):
+                    return section.locator('.paginated-list > ul, .paginated-list > ol').evaluate("""list => {
+                        const rows = [...list.children];
+                        const css = getComputedStyle(list);
+                        const gap = parseFloat(css.rowGap) || 0;
+                        const available = list.clientHeight - (parseFloat(css.paddingTop) || 0) - (parseFloat(css.paddingBottom) || 0);
+                        const rowHeight = rows[0].getBoundingClientRect().height;
+                        const capacity = Math.max(1, Math.floor((available + gap) / (rowHeight + gap)));
+                        const box = list.getBoundingClientRect();
+                        return {capacity, count:rows.length, fits:rows.every(row => {
+                            const rect = row.getBoundingClientRect();
+                            return rect.top >= box.top - 1 && rect.bottom <= box.bottom + 1;
+                        })};
+                    }""")
+
                 presence = phone.get_by_role('list', name='Présences de l’équipe', exact=True)
                 host_presence = host.locator('#attendance-present')
-                expect(presence.get_by_role('listitem')).to_have_count(3)
+                capacities = []
+                for width, height in ((390, 568), (1366, 768), (1920, 1080)):
+                    host.set_viewport_size({'width': width, 'height': height})
+                    matching(host_presence.locator('li'), presence)
+                    measured = fitted_rows(host_presence)
+                    assert measured['fits'] and measured['count'] == min(12, measured['capacity']), (width, height, measured)
+                    capacities.append(measured['count'])
+                    phone.screenshot(path=str(screenshots / f'adaptive-phone-{motion}-{height}.png'))
+                    host.screenshot(path=str(screenshots / f'adaptive-host-{motion}-{height}.png'))
+                assert capacities[0] < capacities[1] <= capacities[2] and capacities[1] > 3, capacities
+                host.set_viewport_size({'width': 1366, 'height': 768})
+                matching(host_presence.locator('li'), presence)
                 host_presence.get_by_role('button', name='Page suivante', exact=True).click()
-                expect(presence).to_contain_text('Participant 04')
                 matching(host_presence.locator('li'), presence)
                 phone.get_by_role('button', name='Page précédente · presence-present', exact=True).click()
                 expect(host_presence).to_contain_text('Participant 01')
@@ -1010,7 +1061,11 @@ def synchronized_smoke():
                 host.get_by_role('navigation', name='Navigation du point quotidien', exact=True).get_by_role('link', name='Humeurs', exact=True).click()
                 mood_list = phone.get_by_role('list', name='Humeurs de l’équipe', exact=True)
                 expect(mood_list).to_be_visible()
+                expect(host.locator('#meter-page-1-slide')).to_have_js_property('complete', True)
+                expect(host.locator('#meter-page-2-slide')).to_have_js_property('complete', True)
                 mood_section = host.locator('section[aria-labelledby="mood-team-title"]')
+                matching(mood_section.locator('li'), mood_list)
+                assert fitted_rows(mood_section)['fits']
                 host_next = mood_section.get_by_role('button', name='Page suivante', exact=True)
                 host_next.click()
                 host_names = mood_section.locator('li strong').all_text_contents()
@@ -1021,21 +1076,27 @@ def synchronized_smoke():
                 host.get_by_role('button', name='Continuer vers le minuteur', exact=True).click()
                 expect(host.locator('#timer-page')).to_be_visible()
                 order = phone.get_by_role('list', name='Ordre de parole', exact=True)
-                sidebar = host.locator('#sidebar-person-list')
-                expect(sidebar.locator('li').first).to_be_visible()
-                expect(order.get_by_role('listitem')).to_have_count(sidebar.locator('li').count())
-                sidebar.get_by_role('button', name='Page suivante', exact=True).click()
+                hidden_lineup = host.locator('[aria-labelledby="lineup-dialog-title"]')
+                matching(hidden_lineup.locator('.person-row'), order)
+                assert order.get_by_role('listitem').count() > 3
+                host.get_by_role('button', name='Réglages et outils', exact=True).click()
+                host.get_by_role('menuitem', name='Voir le tour de parole', exact=True).click()
+                lineup = host.get_by_role('dialog', name='Le tour de parole', exact=True)
+                measured = fitted_rows(lineup)
+                assert measured['fits'] and measured['count'] == min(12, measured['capacity']), measured
+                lineup.get_by_role('button', name='Page suivante', exact=True).click()
+                matching(lineup.locator('.person-row'), order)
+                lineup.get_by_role('button', name='Revenir au passage', exact=True).click()
                 expect(phone.get_by_role('button', name='Page précédente · timer', exact=True)).to_be_enabled()
-                matching(sidebar.locator('li'), order)
                 phone.get_by_role('button', name='Page précédente · timer', exact=True).click()
-                expect(sidebar.get_by_role('button', name='Page précédente', exact=True)).to_be_disabled()
-                rail_tabs = host.get_by_role('group', name='Contenu du point', exact=True)
-                rail_tabs.get_by_role('button', name='Pense-bête', exact=True).click()
+                expect(order).to_contain_text('Participant 01')
+                expect(host.get_by_role('group', name='Contenu du point', exact=True)).to_have_count(0)
                 expect(host.locator('.daily-prompts')).to_be_visible()
-                rail_tabs.get_by_role('button', name='Humeur', exact=True).click()
+                expect(host.locator('.daily-prompts')).to_contain_text('Avancement partagé')
                 expect(host.locator('[data-testid="current-speaker-mood"]')).to_be_visible()
-                rail_tabs.get_by_role('button', name='Tour de parole', exact=True).click()
-                expect(sidebar).to_be_visible()
+                expect(host.locator('[data-mood-picture] img')).to_have_attribute('src', picture)
+                assert downloads.count(f'{slide_root}/first.svg') == 1, downloads
+                assert downloads.count(f'{slide_root}/second.svg') == 1, downloads
 
                 start = phone.get_by_role('button', name='Démarrer / reprendre', exact=True)
                 start.click()
@@ -1050,7 +1111,11 @@ def synchronized_smoke():
                 scene = saver.locator('[data-testid="timer-screensaver"]')
                 expect(scene).to_have_attribute('data-motion', 'paused' if motion == 'reduce' else 'running')
                 if motion == 'no-preference':
-                    host.wait_for_function("document.getAnimations().some(animation => animation.playState === 'running' && animation.effect.getTiming().iterations === Infinity)")
+                    assert host.locator('[data-screensaver-decor]').evaluate("""async el => {
+                        const before = el.firstElementChild.style.transform;
+                        for (let frame = 0; frame < 20; frame++) await new Promise(requestAnimationFrame);
+                        return before !== el.firstElementChild.style.transform;
+                    }""")
                 for width, height in SIZES:
                     host.set_viewport_size({'width': width, 'height': height})
                     expect(saver.get_by_role('button', name='Reprendre le passage', exact=True)).to_be_in_viewport()
@@ -1074,12 +1139,47 @@ def synchronized_smoke():
                     for selector in ('#previous-button', '#next-button'):
                         box = host.locator(selector).bounding_box()
                         assert box and box['height'] >= 44 and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, box
+                    if width < 1100:
+                        host.get_by_role('button', name='Pense-bête & humeur', exact=True).click()
+                    notes_box = host.locator('.daily-prompts').bounding_box()
+                    mood_box = host.locator('[data-testid="current-speaker-mood"]').bounding_box()
+                    assert notes_box and mood_box and notes_box['height'] >= 80 and notes_box['y'] + notes_box['height'] <= mood_box['y'] + 1, (width, notes_box, mood_box)
+                    expect(host.locator('[data-testid="current-speaker-mood"]')).to_be_in_viewport()
+                    host.screenshot(path=str(screenshots / f'column-{motion}-{width}.png'))
+                    if width < 1100:
+                        host.get_by_role('button', name='Minuteur', exact=True).click()
                     host.screenshot(path=str(screenshots / f'timer-{motion}-{width}.png'))
                     phone.screenshot(path=str(screenshots / f'phone-{motion}-{width}.png'))
                 assert not errors, errors
                 host_guard.assert_no_unexpected_api()
                 phone_guard.assert_no_unexpected_api()
-                print(f'PASS synchronized pages, local/phone pause and resume, single screensaver, six viewports: {motion}', flush=True)
+                host.locator('#next-button').click()
+                expect(host.locator('#speaker-name')).to_have_text('Participant 02')
+                expect(host.locator('[data-mood-picture] img')).to_have_attribute('src', picture)
+                assert len(downloads) == 2, downloads
+                for number in range(2, 13):
+                    expect(host.locator('#speaker-name')).to_have_text(f'Participant {number:02}')
+                    host.locator('#next-button').click()
+                completed = host.get_by_role('dialog', name='Point terminé', exact=True)
+                expect(completed).to_be_visible()
+                expect(completed.get_by_role('heading', name='Classement du jour', exact=True)).to_be_visible()
+                expect(completed.locator('[data-completed]')).to_have_attribute('data-completed', 'true')
+                assert len(api.archived) == 1, api.archived
+                assert len(api.archived[0]['people']) == 12
+                host.screenshot(path=str(screenshots / f'completed-{motion}.png'))
+                completed.get_by_role('button', name='Revenir au bilan', exact=True).first.click()
+                expect(completed).not_to_be_visible()
+                expect(host.locator('.daily-score-list')).to_be_visible()
+                expect(host.get_by_role('button', name='Voir le bilan du jour', exact=True)).to_have_count(0)
+                host.reload()
+                expect(host.get_by_role('heading', name='Bilan du jour', exact=True)).to_be_visible()
+                expect(host.get_by_test_id('timer-screensaver')).to_have_count(0)
+                expect(host.locator('.daily-score-list')).to_be_visible()
+                assert len(api.archived) == 1
+                assert not errors, errors
+                host_guard.assert_no_unexpected_api()
+                phone_guard.assert_no_unexpected_api()
+                print(f'PASS adaptive capacities {capacities}, mirrored phone pages, shared SVG reuse, stacked notes/mood, pause/resume, automatic completion leaderboard and reload without duplicate archive: {motion}', flush=True)
             except Exception:
                 host.screenshot(path=str(screenshots / f'failure-host-{motion}.png'))
                 phone.screenshot(path=str(screenshots / f'failure-phone-{motion}.png'))

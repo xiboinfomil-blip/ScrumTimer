@@ -5,7 +5,35 @@ import { PGlite } from '@electric-sql/pglite';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import { loadCachedMoodPages, MOOD_CACHE_WEEK_MS, readMoodFetchCache } from '../src/lib/mood/mood-fetch-cache.ts';
-import { loadMoodCatalog, loadMoodDeck } from '../src/lib/mood/mood-catalog-client.ts';
+import { loadMoodCatalog, loadMoodDeck, loadMoodSvg } from '../src/lib/mood/mood-catalog-client.ts';
+
+test('downloaded SVGs are reused across views, coalesce reads and isolate consumer cancellation', async () => {
+  const originalFetch = globalThis.fetch;
+  const image = '/mood-meters/slides/cache-test/page.svg';
+  let reads = 0;
+  let finish!: (response: Response) => void;
+  globalThis.fetch = async () => { reads++; return new Promise<Response>(resolve => { finish = resolve; }); };
+  try {
+    const first = new AbortController();
+    const second = new AbortController();
+    const cancelled = loadMoodSvg(image, first.signal);
+    const shared = loadMoodSvg(image, second.signal);
+    first.abort();
+    finish(new Response('<svg xmlns="http://www.w3.org/2000/svg"/>'));
+    await assert.rejects(cancelled, { name: 'AbortError' });
+    const svg = await shared;
+    assert.equal(await loadMoodSvg(image, second.signal), svg);
+    assert.equal(reads, 1);
+    const failed = loadMoodSvg(`${image}?retry=1`, second.signal);
+    finish(new Response('', { status: 503 }));
+    await assert.rejects(failed);
+    const recovered = loadMoodSvg(`${image}?retry=1`, second.signal);
+    finish(new Response(svg));
+    assert.equal(await recovered, svg);
+    assert.equal(await loadMoodSvg(image, second.signal), svg);
+    assert.equal(reads, 3);
+  } finally { globalThis.fetch = originalFetch; }
+});
 
 test('browser mood reads share pending metadata without one aborted consumer cancelling others', async () => {
   const originalFetch = globalThis.fetch;

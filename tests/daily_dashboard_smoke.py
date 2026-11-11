@@ -20,6 +20,7 @@ with sync_playwright() as p:
         context.route('**/api/teams', lambda route: route.fulfill(json=team_options('Équipe dashboard', member_count=40)))
         context.route('**/api/team', lambda route: route.fulfill(json={'team': team, 'revision': 1}))
         context.route('**/api/history', lambda route: route.fulfill(json={'rounds': [record]}))
+        context.route('**/api/timer-remote', lambda route: route.fulfill(status=503, json={'error': 'Télécommande indisponible dans ce test isolé.'}))
         context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json=[]))
         context.route('**/mood-meters/slides/test/meter.svg', lambda route: route.fulfill(content_type='image/svg+xml', body='<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#e0f2fe"/><text x="80" y="180" font-size="40">Mood meter 1 4 / 2 3</text></svg>'))
         page = context.new_page()
@@ -27,27 +28,14 @@ with sync_playwright() as p:
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(BASE + '/timer')
         expect(page.get_by_role('heading', name='Bilan du jour', exact=True)).to_be_visible()
-        for width, height in [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]:
-            page.set_viewport_size({'width': width, 'height': height})
-            overview = page.get_by_role('region', name='Synthèse du point')
-            expect(overview).to_be_visible()
-            expect(overview).to_contain_text('40 sur 40 passages dans le temps prévu.')
-            expect(overview).to_contain_text('Un repère, pas un jugement.')
-            toggle = page.get_by_role('button', name='Voir le bilan du jour', exact=True)
-            expect(toggle).to_have_attribute('aria-expanded', 'false')
-            for button in [toggle, page.get_by_role('button', name='Réinitialiser aujourd’hui', exact=True)]:
-                box = button.bounding_box()
-                assert box and box['height'] >= 43.9 and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (width, height, box)
-            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight')
-            if width in [320, 1366] and motion == 'reduce':
-                page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-daily-overview-{width}.png'))
-        page.get_by_role('button', name='Voir le bilan du jour', exact=True).click()
+        expect(page.get_by_role('button', name='Voir le bilan du jour', exact=True)).to_have_count(0)
+        expect(page.get_by_role('dialog')).to_have_count(0)
         expect(page.get_by_role('term').filter(has_text='Score moyen')).to_be_visible()
         expect(page.locator('[aria-label="Indicateurs du bilan du jour"] > div')).to_have_count(4)
         for width, height in [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]:
             page.set_viewport_size({'width': width, 'height': height})
             if width < 1024:
-                page.get_by_role('button', name='Points & détails', exact=True).click()
+                page.get_by_role('button', name='Classement', exact=True).click()
             scores = page.locator('[data-dashboard-column=scores]')
             expect(scores).to_be_visible()
             page.wait_for_function("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))))")
@@ -61,7 +49,7 @@ with sync_playwright() as p:
             list_box = scores.locator('.daily-score-list').bounding_box()
             assert row and list_box and row['y'] >= list_box['y'] - 1 and row['y'] + row['height'] <= list_box['y'] + list_box['height'] + 1, (width, height, row, list_box)
             if width < 1024:
-                page.get_by_role('button', name='Mood meters', exact=True).click()
+                page.get_by_role('button', name='Humeurs', exact=True).click()
             moods = page.locator('[data-dashboard-column=moods]')
             expect(moods).to_be_visible()
             if height <= 650:
@@ -85,10 +73,61 @@ with sync_playwright() as p:
                 assert box['height'] >= 44 and box['y'] + box['height'] <= height + 1
             if width in [320, 1366] and motion == 'reduce':
                 page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-compact-daily-{width}.png'))
-        page.get_by_role('button', name='Masquer le bilan', exact=True).click()
-        expect(page.get_by_role('region', name='Synthèse du point')).to_be_visible()
+            page.get_by_role('button', name='Économiseur d’écran', exact=True).click()
+            saver = page.get_by_test_id('timer-screensaver')
+            expect(saver).to_have_attribute('data-completed', 'true')
+            expect(saver.get_by_role('heading', name='Classement du jour')).to_be_visible()
+            expect(saver.locator('[data-screensaver-person]').first).to_be_visible()
+            page.wait_for_function("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))")
+            for button in saver.get_by_role('button').all():
+                box = button.bounding_box()
+                assert box and box['height'] >= 43.9 and box['x'] >= -1 and box['y'] >= -1 and box['x'] + box['width'] <= width + 1 and box['y'] + box['height'] <= height + 1, (width, height, box)
+            ranking_box = saver.locator('.screensaver-score-list').bounding_box()
+            row_box = saver.locator('[data-screensaver-person]').first.bounding_box()
+            assert row_box and ranking_box and row_box['y'] >= ranking_box['y'] - 1 and row_box['y'] + row_box['height'] <= ranking_box['y'] + ranking_box['height'] + 1, (width, height, row_box, ranking_box)
+            saver.get_by_role('button', name='Page suivante', exact=True).click()
+            expect(saver.locator('[data-screensaver-person="p0"]')).to_have_count(0)
+            saver.get_by_role('button', name='Page précédente', exact=True).click()
+            expect(saver.locator('[data-screensaver-person="p0"]')).to_be_visible()
+            movement = """async el => {
+                const snapshot = () => [...el.querySelectorAll('div, span')].map(node => getComputedStyle(node).transform).join('|');
+                for (let frame = 0; frame < 3; frame++) await new Promise(requestAnimationFrame);
+                const before = snapshot();
+                for (let frame = 0; frame < 24; frame++) await new Promise(requestAnimationFrame);
+                return before !== snapshot();
+            }"""
+            if motion == 'reduce':
+                assert not page.locator('[data-screensaver-decor]').evaluate(movement)
+            else:
+                expect(saver).to_have_attribute('data-motion', 'running')
+                assert page.locator('[data-screensaver-decor]').evaluate(movement)
+                saver.get_by_role('button', name='Arrêter les animations', exact=True).click()
+                expect(saver).to_have_attribute('data-motion', 'paused')
+                assert not page.locator('[data-screensaver-decor]').evaluate(movement)
+                saver.get_by_role('button', name='Animer le décor', exact=True).click()
+                expect(saver).to_have_attribute('data-motion', 'running')
+            if width in [320, 1366] and motion == 'reduce':
+                page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-completed-saver-{width}.png'))
+            saver.get_by_role('button', name='Revenir au bilan', exact=True).first.click()
+            expect(saver).not_to_be_visible()
+            expect(page.locator('#daily-screensaver-button')).to_be_focused()
+        for width, height in [(568, 320), (844, 390)]:
+            page.set_viewport_size({'width': width, 'height': height})
+            page.locator('#daily-screensaver-button').click()
+            saver = page.get_by_test_id('timer-screensaver')
+            expect(saver.locator('[data-screensaver-person]').first).to_be_in_viewport()
+            for button in saver.get_by_role('button').all():
+                box = button.bounding_box()
+                assert box and box['height'] >= 43.9 and box['x'] >= -1 and box['y'] >= -1 and box['x'] + box['width'] <= width + 1 and box['y'] + box['height'] <= height + 1, (width, height, box)
+            saver.get_by_role('button', name='Revenir au bilan', exact=True).first.click()
+            expect(saver).not_to_be_visible()
+        page.set_viewport_size({'width': 1366, 'height': 768})
+        page.reload()
+        expect(page.get_by_role('heading', name='Bilan du jour', exact=True)).to_be_visible()
+        expect(page.get_by_role('dialog')).to_have_count(0)
+        expect(page.locator('.daily-score-list')).to_be_visible()
         assert not errors, errors
         bootstrap.assert_no_unexpected_api()
         context.close()
     browser.close()
-    print('PASS: overview and detailed dashboard at six sizes, 44px actions, fully visible score rows, 40 participants, score details, mood filters, both motion preferences; all APIs mocked')
+    print('PASS: always-visible dashboard and animated completion leaderboard at six sizes, 44px actions, shared ranks, paging, score details, mood filters, reload without screensaver, both motion preferences; all APIs mocked')
