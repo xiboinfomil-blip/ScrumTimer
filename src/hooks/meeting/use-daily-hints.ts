@@ -83,7 +83,7 @@ export function useDailyHints(teamId: string | null) {
     const valid = () => active && generation === context.generation;
     setLoading(true);
     setReadError('');
-    void (async () => {
+    const load = async () => {
       try {
         const response = await fetch('/api/daily-hints', {
           cache: 'no-store', credentials: 'same-origin', signal: controller.signal,
@@ -104,8 +104,9 @@ export function useDailyHints(teamId: string | null) {
         context.cleanups.delete(cleanup);
         if (valid()) setLoading(false);
       }
-    })();
-    return () => { active = false; cleanup(); context.cleanups.delete(cleanup); };
+    };
+    const initial = setTimeout(() => void load(), 0);
+    return () => { clearTimeout(initial); active = false; cleanup(); context.cleanups.delete(cleanup); };
   }, [teamId, day, refresh]);
 
   const retry = useCallback(() => {

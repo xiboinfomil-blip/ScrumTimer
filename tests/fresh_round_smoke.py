@@ -263,6 +263,7 @@ def run_speaker_navigation(browser, width, height, motion='reduce'):
         assert page.locator('#speaker-name').evaluate('el=>parseFloat(getComputedStyle(el).fontSize)') > page.locator('#upcoming-speaker').evaluate('el=>parseFloat(getComputedStyle(el).fontSize)')
         assert header.bounding_box()['y'] < page.locator('#timer-stage').bounding_box()['y']
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        expect(page.locator('[data-testid="stopwatch-timer"]')).to_have_css('transform', 'none')
         assert page.locator('[data-testid="stopwatch-timer"]').bounding_box()['height'] >= 90
         if motion == 'reduce':
             page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-timer-dock-{width}.png'))

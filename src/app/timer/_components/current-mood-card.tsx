@@ -6,10 +6,8 @@ import { Paper } from '@mui/material';
 import MoodRounded from '@mui/icons-material/MoodRounded';
 import type { StandupTimer } from './timer-page';
 import { SpeakerMoodPicture } from './speaker-mood-picture';
-import { loadMoodCatalog } from '@/lib/mood/mood-catalog-client';
+import { loadMoodCatalog, loadMoodTitles } from '@/lib/mood/mood-catalog-client';
 import type { Mood, MoodSlideContext } from '@/types/team';
-
-const titlesCache = new Map<string, { titles: (string | null)[]; subtitles: (string | null)[] }>();
 
 function MoodTitle({ context, mood, fallback }: { context?: MoodSlideContext | null; mood: Mood; fallback: string }) {
   const [text, setText] = useState<{ title: string | null; subtitle: string | null }>({ title: null, subtitle: null });
@@ -21,19 +19,7 @@ function MoodTitle({ context, mood, fallback }: { context?: MoodSlideContext | n
       const catalog = await loadMoodCatalog(controller.signal);
       const deck = catalog.find(item => item.remoteId && context!.image.startsWith(`/mood-meters/slides/${item.remoteId}/`));
       if (!deck?.remoteId) return;
-      let texts = titlesCache.get(deck.remoteId);
-      if (!texts) {
-        const response = await fetch(`/api/mood-meters/decks/${deck.remoteId}/titles`, { signal: controller.signal });
-        if (!response.ok) return;
-        const body: unknown = await response.json();
-        if (!body || typeof body !== 'object') return;
-        const value = body as { titles?: unknown; subtitles?: unknown };
-        if (!Array.isArray(value.titles) || value.titles.length !== 4 || !value.titles.every(item => item === null || typeof item === 'string' && item.length <= 120)
-          || value.subtitles !== undefined && (!Array.isArray(value.subtitles) || value.subtitles.length !== 4 || !value.subtitles.every(item => item === null || typeof item === 'string' && item.length <= 300))) return;
-        texts = { titles: value.titles, subtitles: value.subtitles ?? [null, null, null, null] };
-        if (titlesCache.size >= 20) titlesCache.delete(titlesCache.keys().next().value!);
-        titlesCache.set(deck.remoteId, texts);
-      }
+      const texts = await loadMoodTitles(deck.remoteId, controller.signal);
       if (!controller.signal.aborted) setText({ title: texts.titles[mood - 1], subtitle: texts.subtitles[mood - 1] });
     }
     load().catch(() => {}).finally(() => clearTimeout(timeout));

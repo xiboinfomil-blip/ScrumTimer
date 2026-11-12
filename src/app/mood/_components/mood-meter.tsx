@@ -239,8 +239,8 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
         clearTimeout(timeout);
       }
     }
-    void load();
-    return () => { active = false; clearTimeout(timeout); controller.abort(); };
+    const initial = setTimeout(() => void load(), 0);
+    return () => { clearTimeout(initial); active = false; clearTimeout(timeout); controller.abort(); };
   }, [activeTeamId, catalogRetry, locked]);
 
   const deck = catalog[selection.deck];

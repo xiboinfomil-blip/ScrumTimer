@@ -5,7 +5,41 @@ import { PGlite } from '@electric-sql/pglite';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import { loadCachedMoodPages, MOOD_CACHE_WEEK_MS, readMoodFetchCache } from '../src/lib/mood/mood-fetch-cache.ts';
-import { loadMoodCatalog, loadMoodDeck, loadMoodSvg } from '../src/lib/mood/mood-catalog-client.ts';
+import { loadMoodCatalog, loadMoodDeck, loadMoodSvg, loadMoodTitles } from '../src/lib/mood/mood-catalog-client.ts';
+
+test('mood titles coalesce pending reads, isolate cancellation, expire and do not cache failures', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalNow = Date.now;
+  let clock = originalNow();
+  Date.now = () => clock;
+  let reads = 0;
+  let finish!: (response: Response) => void;
+  globalThis.fetch = async () => { reads++; return new Promise<Response>(resolve => { finish = resolve; }); };
+  const remoteId = `deck-${'7'.repeat(20)}`;
+  const body = { titles: ['Un', 'Deux', null, 'Quatre'] };
+  try {
+    const first = new AbortController(); const second = new AbortController();
+    const cancelled = loadMoodTitles(remoteId, first.signal);
+    const shared = loadMoodTitles(remoteId, second.signal);
+    first.abort(); finish(Response.json(body));
+    await assert.rejects(cancelled, { name: 'AbortError' });
+    assert.deepEqual(await shared, { ...body, subtitles: [null, null, null, null] });
+    await loadMoodTitles(remoteId, second.signal);
+    assert.equal(reads, 1);
+    clock += 300_001;
+    const expired = loadMoodTitles(remoteId, second.signal);
+    finish(new Response(null, { status: 503 }));
+    await assert.rejects(expired);
+    const invalid = loadMoodTitles(remoteId, second.signal);
+    finish(Response.json({ titles: ['Invalid'] }));
+    await assert.rejects(invalid);
+    const retry = loadMoodTitles(remoteId, second.signal);
+    finish(Response.json(body));
+    await retry;
+    await loadMoodTitles(remoteId, second.signal);
+    assert.equal(reads, 4);
+  } finally { globalThis.fetch = originalFetch; Date.now = originalNow; }
+});
 
 test('downloaded SVGs are reused across views, coalesce reads and isolate consumer cancellation', async () => {
   const originalFetch = globalThis.fetch;

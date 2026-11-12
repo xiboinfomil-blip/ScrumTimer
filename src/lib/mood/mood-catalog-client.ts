@@ -5,9 +5,40 @@ let catalogCache: { decks: MoodMeterDeck[]; expires: number } | undefined;
 let catalogPending: Promise<MoodMeterDeck[]> | undefined;
 const deckCache = new Map<string, { deck: MoodMeterDeck; expires: number }>();
 const deckPending = new Map<string, Promise<MoodMeterDeck>>();
+type MoodTitles = { titles: (string | null)[]; subtitles: (string | null)[] };
+const titlesCache = new Map<string, { texts: MoodTitles; expires: number }>();
+const titlesPending = new Map<string, Promise<MoodTitles>>();
 const svgCache = new Map<string, { svg: string; expires: number }>();
 const svgPending = new Map<string, Promise<string>>();
 const svgBudget = 40 * 1024 * 1024;
+
+export async function loadMoodTitles(remoteId: string, signal: AbortSignal): Promise<MoodTitles> {
+  signal.throwIfAborted();
+  const cached = titlesCache.get(remoteId);
+  if (cached && cached.expires > Date.now()) return cached.texts;
+  let pending = titlesPending.get(remoteId);
+  if (!pending) {
+    pending = readMoodTitles(remoteId);
+    titlesPending.set(remoteId, pending);
+  }
+  try { const texts = await pending; signal.throwIfAborted(); return texts; }
+  finally { if (titlesPending.get(remoteId) === pending) titlesPending.delete(remoteId); }
+}
+
+async function readMoodTitles(remoteId: string): Promise<MoodTitles> {
+  const response = await fetch(`/api/mood-meters/decks/${remoteId}/titles`, { signal: AbortSignal.timeout(45_000) });
+  if (!response.ok) throw new Error('Titres indisponibles.');
+  const body: unknown = await response.json();
+  if (!body || typeof body !== 'object') throw new Error('Titres invalides.');
+  const value = body as { titles?: unknown; subtitles?: unknown };
+  if (!Array.isArray(value.titles) || value.titles.length !== 4 || !value.titles.every(item => item === null || typeof item === 'string' && item.length <= 120)
+    || value.subtitles !== undefined && (!Array.isArray(value.subtitles) || value.subtitles.length !== 4 || !value.subtitles.every(item => item === null || typeof item === 'string' && item.length <= 300))) throw new Error('Titres invalides.');
+  const texts = { titles: value.titles, subtitles: value.subtitles ?? [null, null, null, null] };
+  for (const [key, entry] of titlesCache) if (entry.expires <= Date.now()) titlesCache.delete(key);
+  if (titlesCache.size >= 20) titlesCache.delete(titlesCache.keys().next().value!);
+  titlesCache.set(remoteId, { texts, expires: Date.now() + 300_000 });
+  return texts;
+}
 
 export async function loadMoodSvg(image: string, signal: AbortSignal): Promise<string> {
   signal.throwIfAborted();

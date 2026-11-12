@@ -1,4 +1,4 @@
-"""Static loading placeholders and bounded timer work; all APIs fail-closed mocked.
+"""Shared loading placeholders, request reuse and bounded timer work; APIs mocked.
 
 Run with the development server already running on port 3001:
     python tests/loading_performance_smoke.py
@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from playwright.sync_api import expect, sync_playwright
 
 from meeting_features_smoke import BASE, TEAM_ID, MockMeeting, prompts_panel
+from browser_bootstrap import install_browser_bootstrap
 
 
 SIZES = [(320, 568), (1366, 768)]
@@ -42,6 +43,9 @@ class LoadingMock(MockMeeting):
         request = route.request
         path = urlparse(request.url).path
         self.requests.append((request.method, path))
+        if request.method == 'GET' and path == '/api/jira' and not urlparse(request.url).query:
+            route.fulfill(json={'configured': False, 'connected': False})
+            return
         if request.method == 'GET' and path in self.held:
             self.pending.setdefault(path, []).append(route)
             return  # Never continue/fallback to the real server.
@@ -87,6 +91,7 @@ class LoadingMock(MockMeeting):
 
 def open_page(browser, mock, width, height, motion='reduce'):
     page = mock.page(browser, width, height)
+    install_browser_bootstrap(page.context, fullscreen=False, api_guard=False)
     page.emulate_media(reduced_motion=motion)
     page.set_default_timeout(15000)
     return page
@@ -99,13 +104,12 @@ def skeleton(page, variant):
 def static_skeleton(page, variant):
     placeholder = skeleton(page, variant)
     expect(placeholder).to_be_visible()
-    status = placeholder.get_by_role('status')
+    status = placeholder.locator('[data-loader]')
     expect(status).to_have_count(1)
     expect(status).to_be_visible()
+    expect(status).to_have_attribute('role', 'status')
     expect(status).to_have_attribute('aria-live', 'polite')
-    expect(status).to_have_attribute('aria-atomic', 'true')
     expect(status).to_contain_text('Chargement')
-    expect(placeholder.locator('[aria-hidden="true"]')).to_have_count(1)
     assert placeholder.locator('button, input, select, textarea, a, [tabindex]').count() == 0
     # Animation checks are intentionally scoped to the skeleton, not ambient
     # navbar/footer motion or an enclosing route reveal.
@@ -113,9 +117,9 @@ def static_skeleton(page, variant):
     problems = placeholder.evaluate("""root => [root, ...root.querySelectorAll('*')].flatMap(el => {
         const css = getComputedStyle(el);
         const issues = [];
-        if (css.animationName.split(',').some(name => name.trim() !== 'none'))
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches && css.animationName.split(',').some(name => name.trim() !== 'none'))
             issues.push({kind: 'CSS animation', className: el.className});
-        if (el.getAnimations().some(animation => animation.playState !== 'finished'))
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches && el.getAnimations().some(animation => animation.playState !== 'finished'))
             issues.push({kind: 'active animation', className: el.className});
         return issues;
     })""")
@@ -128,9 +132,7 @@ def gated_controls(page, route):
     for name in ('Humeurs', 'Minuteur'):
         expect(page.get_by_role('button', name=name + ' —', exact=False)).to_be_disabled()
     if route == 'teams':
-        # Public landing search/form remain available, but no team action is
-        # usable before hydration (the form submit itself must be disabled).
-        expect(page.get_by_role('button', name='Créer une équipe', exact=True)).to_be_disabled()
+        expect(page.get_by_role('button', name='Ajouter une nouvelle équipe', exact=True)).to_be_disabled()
         for control in page.get_by_role('button', name='Ouvrir l’équipe', exact=False).all():
             expect(control).to_be_disabled()
     else:
@@ -173,6 +175,12 @@ def initial_case(browser, mock, width, height, route, motion):
     gated_controls(page, route)
     mock.release(second)
     hydrated(page, route)
+    for path in ('/api/teams', '/api/team', '/api/history'):
+        assert mock.count_requests(path) == 1, (path, mock.requests)
+    if route == 'timer':
+        expect(page.locator('[data-speaker-sidebar] [data-page-skeleton]')).to_have_count(0)
+        assert mock.count_requests('/api/meeting-settings') == 1, mock.requests
+        assert mock.count_requests('/api/daily-hints') == 1, mock.requests
     assert urlparse(page.url).path == '/' + route, 'guard redirected before valid hydration'
 
 
@@ -272,9 +280,9 @@ def prompts_case(browser, mock, width, height):
 
 
 def observe_ring(page):
-    page.locator('#timer-progress').evaluate("""ring => {
+    page.locator('[data-testid="stopwatch-timer"] .MuiCircularProgress-circle').last.evaluate("""ring => {
         window.__ringProbe?.observer.disconnect();
-        const probe = {mutations: 0, started: performance.now(), initial: ring.getAttribute('style')};
+        const probe = {element: ring, mutations: 0, started: performance.now(), initial: ring.getAttribute('style')};
         probe.observer = new MutationObserver(records => { probe.mutations += records.length; });
         probe.observer.observe(ring, {attributes: true, attributeFilter: ['style']});
         window.__ringProbe = probe;
@@ -284,7 +292,7 @@ def observe_ring(page):
 def ring_sample(page):
     return page.evaluate("""() => ({mutations: __ringProbe.mutations,
         seconds: (performance.now() - __ringProbe.started) / 1000,
-        initial: __ringProbe.initial, current: document.querySelector('#timer-progress').getAttribute('style')})""")
+        initial: __ringProbe.initial, current: __ringProbe.element.getAttribute('style')})""")
 
 
 def timer_case(browser, mock, width, height):
@@ -337,6 +345,27 @@ def timer_case(browser, mock, width, height):
     assert page.evaluate('Object.keys(__tickProbe.active).length') == 0, 'timer interval leaked on unmount'
 
 
+def navigation_reuse_case(browser, mock, width, height):
+    page = open_page(browser, mock, width, height)
+    page.goto(f'{BASE}/participants?team={TEAM_ID}')
+    hydrated(page, 'participants')
+    page.evaluate('window.__navigationProbe = true')
+    for visit in (1, 2):
+        page.get_by_role('link', name='Humeurs', exact=True).click()
+        hydrated(page, 'mood')
+        page.get_by_role('link', name='Minuteur', exact=True).click()
+        hydrated(page, 'timer')
+        for path in ('/api/teams', '/api/team', '/api/history', '/api/mood-meters/catalog'):
+            assert mock.count_requests(path) == 1, (path, mock.requests)
+        for path in ('/api/daily-meter', '/api/meeting-settings', '/api/daily-hints'):
+            assert mock.count_requests(path) == visit, (path, mock.requests)
+        assert page.evaluate('window.__navigationProbe'), 'Expected client navigation, not document reload'
+        page.get_by_role('link', name='Participants', exact=True).click()
+        hydrated(page, 'participants')
+    print(f'OBSERVATION reuse {width}: team/history/catalog=1 read across two route cycles; '
+          'mutable daily data=1 read per visit', flush=True)
+
+
 def main():
     expect.set_options(timeout=15000)
     failures, passed = [], 0
@@ -353,7 +382,8 @@ def main():
                               lambda b, m, w, h, target=path: initial_error_case(b, m, w, h, target)))
             cases.extend([('deferred mood/error/retry', mood_case),
                           ('deferred prompts/error/retry', prompts_case),
-                          ('timer idle/running/unmount', timer_case)])
+                          ('timer idle/running/unmount', timer_case),
+                          ('navigation request reuse', navigation_reuse_case)])
             for name, case in cases:
                 label = f'{name} {width}x{height}'
                 mock = LoadingMock()

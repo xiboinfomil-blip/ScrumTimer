@@ -51,7 +51,7 @@ function TeamPrompts({ teamId, sprint, className, compact, speakerId, note, note
     if (!teamId) return;
     const controller = new AbortController();
     request.current = controller;
-    void (async () => {
+    const load = async () => {
       try {
         const response = await fetch('/api/meeting-settings', { headers: { 'X-Team-Id': teamId }, cache: 'no-store', signal: controller.signal });
         const body = await response.json();
@@ -61,8 +61,9 @@ function TeamPrompts({ teamId, sprint, className, compact, speakerId, note, note
       } catch (failure) {
         if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'Questions indisponibles.');
       }
-    })();
-    return () => { controller.abort(); request.current?.abort(); };
+    };
+    const initial = setTimeout(() => void load(), 0);
+    return () => { clearTimeout(initial); controller.abort(); request.current?.abort(); };
   }, [teamId, reload]);
   const retry = () => {
     request.current?.abort(); setEditing(false); setLoaded(false); setError(''); setNotice(''); setReload(value => value + 1);

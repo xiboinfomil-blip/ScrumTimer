@@ -327,7 +327,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     setTeamBusy(true);
     setReady(false);
     setCloudStatus('loading');
-    void (async () => {
+    const load = async () => {
       try {
         const response = await cloudFetch('/api/teams', { cache: 'no-store', signal: controller.signal });
         if (!response.ok) throw new Error('Liste des équipes indisponible.');
@@ -359,8 +359,9 @@ export function TeamProvider({ children }: { children: ReactNode }) {
           if (hydrated.current && dirty.current) void flush();
         }
       }
-    })();
-    return () => { if (generation.current === token) generation.current = token + 1; controller.abort(); loadController.current?.abort(); writeController.current?.abort(); };
+    };
+    const initial = setTimeout(() => void load(), 0);
+    return () => { clearTimeout(initial); if (generation.current === token) generation.current = token + 1; controller.abort(); loadController.current?.abort(); writeController.current?.abort(); };
   }, [retry, flush, hydrateTeam, notify, clearSelection, clearRetry, scheduleRetry]);
 
   useEffect(() => {
