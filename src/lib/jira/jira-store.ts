@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
 import type { TeamSummary } from '../team/team-directory.ts';
-import type { JiraSprintSelection } from './jira.ts';
+import { validateJiraDisplay, type JiraSprintSelection } from './jira.ts';
 import { JiraService } from './jira-service.ts';
 import { jiraAccessToken, jiraRequestCookie } from './jira-auth.ts';
 import { readTeam, teamWriteStatements } from '../persistence/relational-store.ts';
@@ -17,9 +17,19 @@ export function jiraService(db: Database, request: Request) {
   return service;
 }
 export async function jiraTeamSprint(db: Database, teamId: string): Promise<JiraTeamSprint | null> {
-  const { rows } = await db.execute(sql`SELECT team_id,cloud_id,board_id,sprint_id,sprint_name FROM jira_team_sprints WHERE team_id=${teamId}`);
+  const { rows } = await db.execute(sql`SELECT team_id,cloud_id,board_id,sprint_id,sprint_name,display_board_id,display_scope FROM jira_team_sprints WHERE team_id=${teamId}`);
   const row = rows[0];
-  return row ? { teamId, cloudId: String(row.cloud_id), boardId: Number(row.board_id), sprintId: Number(row.sprint_id), name: String(row.sprint_name) } : null;
+  return row ? { teamId, cloudId: String(row.cloud_id), boardId: Number(row.board_id), sprintId: Number(row.sprint_id), name: String(row.sprint_name), ...(row.display_board_id == null ? {} : { display: { boardId: Number(row.display_board_id), scope: row.display_scope as 'board' | 'backlog' } }) } : null;
+}
+export async function saveJiraDisplay(db: Database, request: Request, teamId: string, value: unknown) {
+  let display;
+  try { display = validateJiraDisplay(value); } catch { throw new WorkspaceError(400, 'Affichage Jira invalide.'); }
+  const sprint = await authorizeJiraTeam(db, request, teamId);
+  if (!sprint) throw new WorkspaceError(400, 'Cette équipe n’est pas liée à Jira.');
+  await (await jiraService(db, request)).authorize(sprint.cloudId, display.boardId, true);
+  const result = await db.execute(sql`UPDATE jira_team_sprints SET display_board_id=${display.boardId},display_scope=${display.scope} WHERE team_id=${teamId} AND cloud_id=${sprint.cloudId} RETURNING team_id`);
+  if (!result.rows.length) throw new WorkspaceError(409, 'Équipe modifiée. Rechargez avant de réessayer.');
+  return { display };
 }
 export async function authorizeJiraTeam(db: Database, request: Request, teamId: string) {
   const sprint = await jiraTeamSprint(db, teamId);

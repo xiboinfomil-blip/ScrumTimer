@@ -1,4 +1,5 @@
-export type JiraSprintSelection = { cloudId: string; boardId: number; sprintId: number };
+export type JiraDisplaySelection = { boardId: number; scope: 'board' | 'backlog' };
+export type JiraSprintSelection = { cloudId: string; boardId: number; sprintId: number; display?: JiraDisplaySelection };
 export type JiraOption = { id: string; name: string };
 export type JiraStatusCategory = 'new' | 'indeterminate' | 'done';
 export type JiraTicket = { id: string; key: string; summary: string; status: string; statusCategory?: JiraStatusCategory; issueType?: string; priority: string | null; assigneeId: string | null; assigneeName: string | null; url: string };
@@ -16,10 +17,15 @@ export function jiraText(value: unknown, maximum = 1000): string {
 }
 export function validateJiraSelection(value: unknown): JiraSprintSelection {
   const input = jiraObject(value);
-  if (Object.keys(input).sort().join(',') !== 'boardId,cloudId,sprintId' || typeof input.cloudId !== 'string' || !/^[a-f0-9-]{36}$/i.test(input.cloudId)
+  if (Object.keys(input).some(key => !['boardId', 'cloudId', 'sprintId', 'display'].includes(key)) || typeof input.cloudId !== 'string' || !/^[a-f0-9-]{36}$/i.test(input.cloudId)
     || !Number.isSafeInteger(input.boardId) || Number(input.boardId) < 1 || Number(input.boardId) > 2_147_483_647
     || !Number.isSafeInteger(input.sprintId) || Number(input.sprintId) < 1 || Number(input.sprintId) > 2_147_483_647) throw new Error('Sprint Jira invalide.');
-  return { cloudId: input.cloudId, boardId: Number(input.boardId), sprintId: Number(input.sprintId) };
+  return { cloudId: input.cloudId, boardId: Number(input.boardId), sprintId: Number(input.sprintId), ...(input.display === undefined ? {} : { display: validateJiraDisplay(input.display) }) };
+}
+export function validateJiraDisplay(value: unknown): JiraDisplaySelection {
+  const input = jiraObject(value);
+  if (Object.keys(input).sort().join(',') !== 'boardId,scope' || !Number.isSafeInteger(input.boardId) || Number(input.boardId) < 1 || Number(input.boardId) > 2_147_483_647 || typeof input.scope !== 'string' || !['board', 'backlog'].includes(input.scope)) throw new Error('Affichage Jira invalide.');
+  return { boardId: Number(input.boardId), scope: input.scope as JiraDisplaySelection['scope'] };
 }
 export function jiraTickets(value: unknown, siteUrl: string): JiraTicket[] {
   const origin = new URL(siteUrl);

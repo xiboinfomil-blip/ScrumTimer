@@ -1,0 +1,3 @@
+ALTER TABLE "jira_team_sprints" ADD COLUMN "display_board_id" integer;--> statement-breakpoint
+ALTER TABLE "jira_team_sprints" ADD COLUMN "display_scope" text DEFAULT 'board' NOT NULL;--> statement-breakpoint
+ALTER TABLE "jira_team_sprints" ADD CONSTRAINT "jira_team_sprints_display" CHECK (("jira_team_sprints"."display_board_id" IS NULL OR "jira_team_sprints"."display_board_id" > 0) AND "jira_team_sprints"."display_scope" IN ('board', 'backlog'));

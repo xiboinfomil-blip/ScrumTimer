@@ -31,6 +31,8 @@ class JiraMock(DirectoryMock):
         self.ticket_statuses = []
         self.ticket_sources = []
         self.detail_sources = []
+        self.display_saves = []
+        self.display_error = False
         self.ticket_error = False
         self.detail_reads = []
         self.long_title = False
@@ -39,6 +41,7 @@ class JiraMock(DirectoryMock):
                   {'id': '98765432-4321-4321-4321-cba987654321', 'name': 'Autre site Jira'}]
         self.site_error = False
         self.board_reads = []
+        self.display_board_reads = []
         self.daily = {'day': mauritius_day(), 'meter': None}
         self.revision = 1
 
@@ -48,6 +51,18 @@ class JiraMock(DirectoryMock):
         path, method = parsed.path, request.method
         query = parse_qs(parsed.query)
         if path == '/api/jira':
+            if method == 'PATCH':
+                assert request.headers.get('x-team-id') == SPRINT
+                body = request.post_data_json
+                assert set(body) == {'display'} and set(body['display']) == {'boardId', 'scope'}
+                assert body['display']['boardId'] in (1, 2) and body['display']['scope'] in ('board', 'backlog')
+                if self.display_error:
+                    route.fulfill(status=403, json={'error': 'Tableau inaccessible.'})
+                    return
+                self.display_saves.append(deepcopy(body['display']))
+                self.selection['display'] = deepcopy(body['display'])
+                route.fulfill(json=body)
+                return
             if method == 'POST':
                 body = request.post_data_json
                 assert body == {'action': 'sync', 'revision': self.revision,
@@ -55,7 +70,7 @@ class JiraMock(DirectoryMock):
                 assert request.headers.get('x-team-id') == SPRINT
                 self.syncs.append(deepcopy(body))
                 self.revision += 1
-                self.selection = body['sprint']
+                self.selection.update(body['sprint'])
                 route.fulfill(json={'count': 2})
                 return
             action = query.get('action', ['status'])[0]
@@ -68,11 +83,9 @@ class JiraMock(DirectoryMock):
                 payload = {'options': self.sites}
             elif action == 'boards':
                 assert query['cloudId'] == [CLOUD]
-                self.board_reads.append(query['cloudId'][0])
-                payload = {'options': [{'id': '1', 'name': 'Scrum produit'}]}
-            elif action == 'display-boards':
-                assert request.headers.get('x-team-id') == SPRINT
-                payload = {'boardId': 1, 'options': [{'id': '1', 'name': 'Scrum produit'}, {'id': '2', 'name': 'Support personnalisé'}]}
+                display = query.get('display') == ['1']
+                (self.display_board_reads if display else self.board_reads).append(query['cloudId'][0])
+                payload = {'options': [{'id': '1', 'name': 'Scrum produit'}] + ([{'id': '2', 'name': 'Support personnalisé'}] if display else [])}
             elif action == 'sprints':
                 assert query['cloudId'] == [CLOUD]
                 assert query['boardId'] == ['1']
@@ -85,13 +98,15 @@ class JiraMock(DirectoryMock):
                 assert request.headers.get('x-team-id') == SPRINT
                 key = query['key'][0]
                 self.detail_reads.append(key)
-                self.detail_sources.append(query.get('boardId', ['1'])[0])
+                assert 'boardId' not in query and 'scope' not in query
+                saved = self.selection.get('display', {'boardId': 1, 'scope': 'board'})
+                self.detail_sources.append((str(saved['boardId']), saved['scope']))
                 assert re.fullmatch(r'(DEV|BOB|FREE)-\d+', key)
                 unassigned = key.startswith('FREE')
                 person = None if unassigned else 'jira:a' if key.startswith('DEV') else 'jira:b'
                 payload = {'ticket': {'id': key, 'key': key,
                     'summary': 'W' * 255 if self.long_title else f'{person or "Non attribué"} ticket {key.split("-")[1]} <texte sûr>',
-                    'description': '' if unassigned else 'Fiabiliser la synchronisation des données entre les appareils.\n\nCritères d’acceptation\n• Conserver les modifications pendant une reconnexion.\n• Afficher un état cohérent sur tous les écrans.\n• Couvrir les erreurs et la reprise avec des tests.\n\n<img src=x onerror=alert(1)> reste du texte, jamais du HTML.',
+                    'description': '' if unassigned else 'Fiabiliser la synchronisation des données entre les appareils.\n\nCritères d’acceptation\n• Conserver les modifications pendant une reconnexion.\n• Afficher un état cohérent sur tous les écrans.\n• Couvrir les erreurs et la reprise avec des tests.\n\n<img src=x onerror=alert(1)> reste du texte, jamais du HTML.\n\n' * 8,
                     'estimate': None if unassigned or key.endswith('-2') else {'label': 'Story Points', 'value': 8},
                     'estimateUnavailable': key.endswith('-2'),
                     'status': 'En cours', 'statusCategory': 'indeterminate', 'issueType': 'Story', 'priority': 'Haute',
@@ -101,8 +116,9 @@ class JiraMock(DirectoryMock):
                     'url': f'https://example.atlassian.net/browse/{key}'}}
             elif action == 'tickets':
                 assert request.headers.get('x-team-id') == SPRINT
-                assert query.get('scope') in (['board'], ['backlog']) and 'participantId' not in query
-                source = (query.get('boardId', ['1'])[0], query['scope'][0])
+                assert query.get('scope') == ['display'] and 'participantId' not in query and 'boardId' not in query
+                saved = self.selection.get('display', {'boardId': 1, 'scope': 'board'})
+                source = (str(saved['boardId']), saved['scope'])
                 assert source[0] in ('1', '2')
                 self.ticket_sources.append(source)
                 status = query.get('status', [''])[0]
@@ -126,8 +142,9 @@ class JiraMock(DirectoryMock):
             return
         if path == '/api/teams' and method == 'POST':
             body = request.post_data_json
-            assert body == {'name': 'Équipe sprint', 'category': None,
-                            'kind': 'sprint', 'sprint': SELECTION}, body
+            assert {key: value for key, value in body.items() if key != 'sprint'} == {'name': 'Équipe sprint', 'category': None, 'kind': 'sprint'}, body
+            assert {key: value for key, value in body['sprint'].items() if key != 'display'} == SELECTION
+            self.selection = deepcopy(body['sprint'])
             self.creations.append(deepcopy(body))
             self.active = SPRINT
             self.teams.append({'id': SPRINT, 'name': body['name'], 'category': None,
@@ -419,6 +436,10 @@ def ticket_layout_case(browser, width, height, motion, screenshots):
         sidebar = page.locator('[data-speaker-sidebar]')
         first_ticket = sidebar.get_by_role('button', name=re.compile(first_prefix + '-1 :'))
         expect(first_ticket).to_be_visible()
+        pagination = sidebar.get_by_role('navigation', name='Pagination des tickets Jira', exact=True)
+        expect(pagination).to_be_in_viewport(ratio=1)
+        if motion == 'reduce':
+            page.screenshot(path=str(screenshots / f'jira-pagination-{width}.png'))
         first_ticket.click()
         dialog = page.get_by_role('dialog', name=re.compile('ticket 1'))
         expect(dialog).to_be_visible()
@@ -436,6 +457,15 @@ def ticket_layout_case(browser, width, height, motion, screenshots):
         expect(dialog.locator('script, iframe, img')).to_have_count(0)
         expect(dialog.get_by_role('link', name='Ouvrir dans Jira', exact=True)).to_have_attribute('href', f'https://example.atlassian.net/browse/{first_prefix}-1')
         expect(dialog.get_by_role('button', name='Fermer le ticket', exact=True)).to_be_focused()
+        expect(dialog).to_contain_text('Lecture seule')
+        expect(dialog.locator('input, textarea, select, [contenteditable=true]')).to_have_count(0)
+        description = dialog.get_by_role('region', name='Description', exact=True)
+        assert description.evaluate('element => element.scrollHeight > element.clientHeight && element.clientHeight >= 80 && element.scrollWidth <= element.clientWidth')
+        description.focus()
+        page.keyboard.press('End')
+        expect(description).to_be_focused()
+        page.wait_for_function("() => document.querySelector('[aria-labelledby=jira-description-heading][role=region]').scrollTop > 0")
+        dialog.get_by_role('button', name='Fermer le ticket', exact=True).focus()
         active = page.locator('#speaker-name').inner_text()
         page.keyboard.press('n')
         expect(page.locator('#speaker-name')).to_have_text(active)
@@ -460,18 +490,27 @@ def ticket_layout_case(browser, width, height, motion, screenshots):
         detail_search.fill('')
         sidebar.get_by_role('button', name='Tickets suivants', exact=True).click()
         expect(sidebar.get_by_role('button', name=re.compile(first_prefix + '-6 :'))).to_be_visible()
+        pagination = sidebar.get_by_role('navigation', name='Pagination des tickets Jira', exact=True)
+        expect(pagination).to_contain_text('Page 2 sur 2')
+        expect(pagination).to_contain_text('6–7 sur 7 tickets')
+        expect(pagination.get_by_role('button', name='Tickets suivants', exact=True)).to_have_count(0)
+        expect(pagination.get_by_role('button', name='Tickets précédents', exact=True)).to_be_enabled()
         status = sidebar.get_by_role('combobox', name='Sous-statut des tickets Jira', exact=True)
         expect(status.locator('optgroup')).to_have_count(3)
         for value, label in [('Terminé', 'Terminé'), ('Ouvert', 'Ouvert'), ('Validation métier', 'Validation métier'), ('En recette', 'En recette'), ('En attente externe', 'En attente externe')]:
             status.select_option(value)
             expect(sidebar.get_by_role('list')).to_contain_text(label)
             expect(sidebar.get_by_role('listitem')).to_have_count(1)
+            expect(pagination).to_have_count(0)
         assert db.ticket_reads == ['initial'], db.ticket_reads
         status.select_option('')
+        expect(pagination).to_contain_text('Page 1 sur 2')
+        expect(pagination.get_by_role('button', name='Tickets suivants', exact=True)).to_have_text('Suivants')
         scope = sidebar.get_by_role('combobox', name='Filtrer les tickets Jira', exact=True)
         scope.select_option('all')
         search = sidebar.get_by_role('searchbox', name='Rechercher un ticket Jira')
         search.fill('FREE-1')
+        expect(pagination).to_have_count(0)
         sidebar.get_by_role('button', name=re.compile('FREE-1 :')).click()
         unassigned = page.get_by_role('dialog', name=re.compile('Non attribué ticket'))
         expect(unassigned).to_contain_text('Aucune description renseignée.')
@@ -509,40 +548,130 @@ def ticket_layout_case(browser, width, height, motion, screenshots):
         if motion == 'reduce':
             assert_contrast(page, f'Jira compact layout {width}')
             page.screenshot(path=str(screenshots / f'jira-redesign-{width}.png'))
-        before_selection = len(db.ticket_reads)
+        before_handoff = len(db.ticket_reads)
         board_choice = sidebar.get_by_role('combobox', name='Tableau Jira à afficher', exact=True)
         view_choice = sidebar.get_by_role('combobox', name='Vue du tableau Jira', exact=True)
-        board_choice.select_option('2')
-        expect(sidebar.get_by_title('Support personnalisé', exact=True)).to_be_visible()
-        view_choice.select_option('backlog')
-        expect(sidebar.get_by_role('listitem')).to_have_count(2)
-        assert db.ticket_sources[-2:] == [('2', 'board'), ('2', 'backlog')]
-        sidebar.get_by_role('button', name=re.compile(first_prefix + '-1 :')).click()
-        selected_detail = page.get_by_role('dialog', name=re.compile('ticket 1'))
-        expect(selected_detail.get_by_role('heading', name='Description', exact=True)).to_be_visible()
-        assert db.detail_sources[-1] == '2'
-        selected_detail.get_by_role('button', name='Fermer le ticket', exact=True).click()
-        view_choice.select_option('board')
-        expect(sidebar.get_by_role('button', name='Tickets suivants', exact=True)).to_be_enabled()
-        view_choice.select_option('backlog')
-        expect(sidebar.get_by_role('listitem')).to_have_count(2)
-        assert len(db.ticket_reads) == before_selection + 2, db.ticket_sources
+        expect(board_choice).to_have_count(0)
+        expect(view_choice).to_have_count(0)
+        assert not db.display_board_reads
+        assert all(source == ('1', 'board') for source in db.ticket_sources + db.detail_sources)
         if motion == 'reduce':
             page.screenshot(path=str(screenshots / f'jira-source-{width}.png'))
         if compact:
-            sidebar.get_by_role('button', name='Revenir au minuteur').click()
+            if height <= 400:
+                page.get_by_role('button', name='Minuteur', exact=True).click()
+            else:
+                sidebar.get_by_role('button', name='Revenir au minuteur').click()
         page.locator('#next-button').click()
         expect(page.locator('#speaker-name')).not_to_have_text(first)
         if compact:
             page.get_by_role('button', name='Tickets & pense-bête', exact=True).click()
         expect(scope).to_have_value('speaker')
-        expect(board_choice).to_have_value('2')
-        expect(view_choice).to_have_value('backlog')
-        assert len(db.ticket_reads) == before_selection + 2
+        expect(board_choice).to_have_count(0)
+        expect(view_choice).to_have_count(0)
+        assert len(db.ticket_reads) == before_handoff
         expect(sidebar.get_by_role('button', name=re.compile(('BOB' if first_prefix == 'DEV' else 'DEV') + '-1 :'))).to_be_visible()
         bootstrap.assert_no_unexpected_api()
         assert not errors, errors
         print(f'PASS compact Jira {width}x{height} {motion}: detail modal/loading/retry/safe text/keyboard/focus/empty fields, filters/pagination/handoff')
+    finally:
+        context.close()
+
+
+def display_settings_case(browser, width, height, motion, screenshots):
+    context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion=motion, service_workers='block')
+    bootstrap = install_browser_bootstrap(context)
+    db = JiraMock()
+    context.route('**/api/**', db.api)
+    context.route('**/api/meeting-settings', lambda route: route.fulfill(json={'prompts': ['Hier ?', 'Aujourd’hui ?', 'Des blocages ?'], 'revision': 0}))
+    context.route('**/api/daily-hints', lambda route: route.fulfill(json={'day': mauritius_day(), 'hints': []}))
+    context.route('**/api/timer-remote', lambda route: route.fulfill(status=503, json={'error': 'Télécommande indisponible dans ce test.'}))
+    context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
+    page = context.new_page()
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    try:
+        page.goto(BASE + '/teams')
+        page.get_by_role('button', name='Ajouter une nouvelle équipe', exact=True).click()
+        panel = page.get_by_role('dialog', name='Ajouter une nouvelle équipe', exact=True)
+        name = panel.get_by_role('textbox', name='Nom de l’équipe', exact=True)
+        panel.get_by_role('button', name=re.compile('Sprint Jira')).click()
+        name.fill('Équipe sprint')
+        panel.get_by_role('combobox', name='Tableau Scrum', exact=True).select_option('1')
+        panel.get_by_role('combobox', name='Sprint actif', exact=True).select_option('2')
+        panel.get_by_role('combobox', name='Tableau Jira à afficher', exact=True).select_option('2')
+        panel.get_by_role('combobox', name='Vue du tableau Jira', exact=True).select_option('backlog')
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        if motion == 'reduce':
+            page.screenshot(path=str(screenshots / f'jira-display-creation-{width}.png'))
+        panel.get_by_role('button', name='Créer l’équipe', exact=True).click()
+        expect(page).to_have_url(re.compile('/manage-team\\?team=' + SPRINT))
+        board = page.get_by_role('combobox', name='Tableau Jira à afficher', exact=True)
+        view = page.get_by_role('combobox', name='Vue du tableau Jira', exact=True)
+        expect(board).to_have_value('2')
+        expect(view).to_have_value('backlog')
+        original = deepcopy(db.states[SPRINT])
+        revision = db.revision
+        save = page.get_by_role('button', name='Enregistrer l’affichage', exact=True)
+        expect(save).to_be_disabled()
+        board.select_option('1')
+        view.select_option('board')
+        save.click()
+        expect(page.get_by_role('status').filter(has_text='Affichage enregistré.')).to_be_visible()
+        board.select_option('2')
+        view.select_option('backlog')
+        db.display_error = True
+        save.click()
+        expect(page.get_by_role('status').filter(has_text='Affichage non enregistré.')).to_be_visible()
+        assert db.selection['display'] == {'boardId': 1, 'scope': 'board'}
+        db.display_error = False
+        save.click()
+        expect(page.get_by_role('status').filter(has_text='Affichage enregistré.')).to_be_visible()
+        assert db.display_saves == [{'boardId': 1, 'scope': 'board'}, {'boardId': 2, 'scope': 'backlog'}]
+        assert db.states[SPRINT] == original and db.revision == revision and not db.syncs
+        page.reload()
+        expect(board).to_have_value('2')
+        expect(view).to_have_value('backlog')
+        expect(save).to_be_disabled()
+        save.scroll_into_view_if_needed()
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        if motion == 'reduce':
+            page.screenshot(path=str(screenshots / f'jira-display-management-{width}.png'))
+        for person in db.states[SPRINT]['roster']:
+            person['mood'] = 2
+        page.goto(BASE + '/mood?team=' + SPRINT)
+        if width <= 800:
+            page.get_by_role('button', name='Humeurs de l’équipe', exact=True).click()
+        page.get_by_role('button', name='Continuer vers le minuteur', exact=False).click()
+        page.locator('#start-button').click()
+        compact = width < 1100 or height <= 650
+        if compact:
+            page.get_by_role('button', name='Tickets & pense-bête', exact=True).click()
+        sidebar = page.locator('[data-speaker-sidebar]')
+        expect(page.get_by_role('combobox', name='Tableau Jira à afficher', exact=True)).to_have_count(0)
+        expect(page.get_by_role('combobox', name='Vue du tableau Jira', exact=True)).to_have_count(0)
+        expect(sidebar.get_by_title('Support personnalisé', exact=True)).to_be_visible()
+        expect(sidebar.get_by_role('listitem')).to_have_count(2)
+        assert db.ticket_sources == [('2', 'backlog')]
+        expect(sidebar.get_by_role('navigation', name='Pagination des tickets Jira', exact=True)).to_have_count(0)
+        sidebar.get_by_role('listitem').first.get_by_role('button').click()
+        dialog = page.get_by_role('dialog', name=re.compile('ticket 1'))
+        expect(dialog.get_by_role('heading', name='Description', exact=True)).to_be_visible()
+        assert db.detail_sources == [('2', 'backlog')]
+        dialog.get_by_role('button', name='Fermer le ticket', exact=True).click()
+        expect(dialog).not_to_be_visible()
+        if compact:
+            sidebar.get_by_role('button', name='Revenir au minuteur').click()
+        first = page.locator('#speaker-name').inner_text()
+        page.locator('#next-button').click()
+        expect(page.locator('#speaker-name')).not_to_have_text(first)
+        if compact:
+            page.get_by_role('button', name='Tickets & pense-bête', exact=True).click()
+        expect(sidebar.get_by_role('listitem')).to_have_count(2)
+        assert db.ticket_sources == [('2', 'backlog')]
+        bootstrap.assert_no_unexpected_api()
+        assert not errors, errors
+        print(f'PASS Jira display setup {width}x{height} {motion}: creation, management save/retry/reload, no roster changes, timer has no source selectors; all APIs mocked')
     finally:
         context.close()
 
@@ -552,11 +681,18 @@ def main():
         raise ValueError('Local mocked preview only')
     parser = ArgumentParser()
     parser.add_argument('--tickets-only', action='store_true', help='Validate the timer sidebar independently of team creation.')
+    parser.add_argument('--settings-only', action='store_true', help='Validate saved Jira display settings in creation and management, then the read-only timer source.')
     args = parser.parse_args()
     screenshots = Path(tempfile.mkdtemp(prefix='scrum-jira-'))
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         try:
+            if args.settings_only:
+                for motion in ('reduce', 'no-preference'):
+                    for width, height in (SIZES[0], SIZES[3]):
+                        display_settings_case(browser, width, height, motion, screenshots)
+                print(f'PASS saved Jira display journeys. Screenshots: {screenshots}', flush=True)
+                return
             if args.tickets_only:
                 for motion in ('reduce', 'no-preference'):
                     for width, height in SIZES + [(568, 320)]:

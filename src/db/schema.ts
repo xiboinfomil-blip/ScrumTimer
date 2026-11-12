@@ -87,9 +87,11 @@ export const jiraTeamSprints = pgTable('jira_team_sprints', {
   teamId: text('team_id').primaryKey().references(() => teams.id, { onDelete: 'cascade' }),
   cloudId: text('cloud_id').notNull(), boardId: integer('board_id').notNull(), sprintId: integer('sprint_id').notNull(),
   sprintName: text('sprint_name').notNull(),
+  displayBoardId: integer('display_board_id'), displayScope: text('display_scope').notNull().default('board'),
 }, table => [check('jira_team_sprints_cloud', sql`${table.cloudId} ~ '^[a-fA-F0-9-]{36}$'`),
   check('jira_team_sprints_ids', sql`${table.boardId} > 0 AND ${table.sprintId} > 0`),
-  check('jira_team_sprints_name', sql`length(${table.sprintName}) BETWEEN 1 AND 200`)]);
+  check('jira_team_sprints_name', sql`length(${table.sprintName}) BETWEEN 1 AND 200`),
+  check('jira_team_sprints_display', sql`(${table.displayBoardId} IS NULL OR ${table.displayBoardId} > 0) AND ${table.displayScope} IN ('board', 'backlog')`)]);
 
 export const jiraOAuthStates = pgTable('jira_oauth_states', {
   id: text('id').primaryKey(), expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),

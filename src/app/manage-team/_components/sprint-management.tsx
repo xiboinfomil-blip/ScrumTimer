@@ -3,14 +3,17 @@
 import { useState } from 'react';
 import { Loader } from '@infomil/scrum-shared/ui';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import LoginIcon from '@mui/icons-material/Login';
 import { useTeam } from '@/providers/team-provider';
 import { useJiraResource } from '@/hooks/jira/use-jira-resource';
 import { SprintPicker } from '@/components/jira/sprint-picker';
+import { JiraDisplayPicker } from '@/components/jira/display-picker';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { primaryButton, secondaryButton } from '@/components/ui/styles';
 import type { JiraSprintSelection } from '@/lib/jira/jira';
 import { jiraResourceCache } from '@/lib/jira/jira-resource-cache';
+import { cloudFetch } from '@/lib/persistence/cloud-retry';
 
 type Sprint = JiraSprintSelection & { name: string };
 export function SprintManagement() {
@@ -25,11 +28,24 @@ export function SprintManagement() {
   </section>;
 }
 function SprintForm({ sprint, onSaved }: { sprint: Sprint; onSaved: () => void }) {
-  const { state, ready, teamBusy, cloudStatus, syncSprint, getTimerCheckpoint } = useTeam();
+  const { activeTeamId, state, ready, teamBusy, cloudStatus, syncSprint, getTimerCheckpoint } = useTeam();
   const [selection, setSelection] = useState<JiraSprintSelection>({ cloudId: sprint.cloudId, boardId: sprint.boardId, sprintId: sprint.sprintId });
+  const [display, setDisplay] = useState(sprint.display ?? { boardId: sprint.boardId, scope: 'board' as const });
+  const [savedDisplay, setSavedDisplay] = useState(display);
   const [confirm, setConfirm] = useState(false); const [pending, setPending] = useState(false); const [notice, setNotice] = useState('');
   const locked = !!state.session.length || !!getTimerCheckpoint()?.session.length;
   const disabled = locked || pending || teamBusy || !ready || cloudStatus !== 'saved';
+  const displayDisabled = pending || teamBusy || !ready || cloudStatus !== 'saved';
+  async function saveDisplay() {
+    if (!activeTeamId || displayDisabled) return;
+    setPending(true); setNotice('');
+    try {
+      const response = await cloudFetch('/api/jira', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Team-Id': activeTeamId }, body: JSON.stringify({ display }) });
+      if (!response.ok) throw new Error('Affichage non enregistré. Vérifiez vos droits Jira et réessayez.');
+      jiraResourceCache.clear(); setSavedDisplay(display); setNotice('Affichage enregistré.');
+    } catch { setNotice('Affichage non enregistré. Vérifiez vos droits Jira et réessayez.'); }
+    finally { setPending(false); }
+  }
   async function sync() {
     setPending(true); setNotice('');
     const success = await syncSprint(selection);
@@ -42,6 +58,8 @@ function SprintForm({ sprint, onSaved }: { sprint: Sprint; onSaved: () => void }
     <SprintPicker value={selection} onChange={setSelection} disabled={disabled} fixedBoard />
     {locked && <p role="status" className="text-xs text-muted">Point préparé · Synchronisation verrouillée</p>}
     <button type="button" disabled={disabled || !selection.sprintId} className={primaryButton} onClick={() => setConfirm(true)}><RefreshIcon fontSize="small" />{pending ? 'Synchronisation…' : 'Synchroniser les participants'}</button>
+    <JiraDisplayPicker cloudId={sprint.cloudId} boardId={sprint.boardId} value={display} onChange={setDisplay} disabled={displayDisabled} />
+    <button type="button" disabled={displayDisabled || display.boardId === savedDisplay.boardId && display.scope === savedDisplay.scope} className={secondaryButton} onClick={() => void saveDisplay()}><SaveOutlinedIcon fontSize="small" />Enregistrer l’affichage</button>
     {notice && <p role="status" className="text-xs text-muted">{notice}</p>}
     <ConfirmDialog open={confirm} title="Synchroniser le sprint Jira ?" description="La liste des participants sera remplacée par les responsables des tickets visibles dans ce sprint. Les humeurs seront effacées. Les bilans archivés seront conservés." confirmLabel="Synchroniser" onClose={() => setConfirm(false)} onConfirm={() => { setConfirm(false); void sync(); }} />
   </>;

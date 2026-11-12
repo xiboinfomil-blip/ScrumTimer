@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { database, databaseFailure, readJson, sameOrigin, selectedTeam } from '@/lib/persistence/database';
 import { endJiraLogin, jiraConfigured, jiraCookie, jiraSession } from '@/lib/jira/jira-auth';
-import { jiraService, jiraTeamSprint, syncJiraRoster } from '@/lib/jira/jira-store';
+import { jiraService, jiraTeamSprint, saveJiraDisplay, syncJiraRoster } from '@/lib/jira/jira-store';
 import { validateJiraSelection } from '@/lib/jira/jira';
 import { strictObject, WorkspaceError } from '@/lib/team/workspace-store';
 import { teamReadCache } from '@/lib/persistence/shared-read-cache';
@@ -23,25 +23,18 @@ export async function GET(request: Request) {
     }
     const service = await jiraService(database(), request);
     if (action === 'sites') return response({ options: (await service.sites()).map(({ id, name }) => ({ id, name })) });
-    if (action === 'display-boards') {
-      const id = await selectedTeam(request);
-      const sprint = await jiraTeamSprint(database(), id);
-      if (!sprint) throw new WorkspaceError(400, 'Cette équipe n’est pas liée à Jira.');
-      return response({ boardId: sprint.boardId, options: await service.boards(sprint.cloudId, true) });
-    }
     const cloudId = query.get('cloudId') ?? '';
     if (!/^[a-f0-9-]{36}$/i.test(cloudId) && action !== 'tickets' && action !== 'ticket') throw new WorkspaceError(400, 'Site Jira invalide.');
-    if (action === 'boards') return response({ options: await service.boards(cloudId) });
+    if (action === 'boards') return response({ options: await service.boards(cloudId, query.get('display') === '1') });
     const boardId = Number(query.get('boardId'));
     if (action === 'sprints' && Number.isSafeInteger(boardId) && boardId > 0 && boardId <= 2_147_483_647) return response({ options: await service.sprints(cloudId, boardId) });
     if (action === 'tickets' || action === 'ticket') {
       const id = await selectedTeam(request); const sprint = await jiraTeamSprint(database(), id);
       if (!sprint) throw new WorkspaceError(400, 'Cette équipe n’est pas liée à un sprint Jira.');
-      const boardId = query.get('boardId');
-      if (boardId !== null && (!/^[1-9]\d{0,9}$/.test(boardId) || Number(boardId) > 2_147_483_647)) throw new WorkspaceError(400, 'Tableau Jira invalide.');
-      const selection = { ...sprint, boardId: boardId === null ? sprint.boardId : Number(boardId) };
-      if (action === 'ticket') return response({ ticket: await service.ticket(selection, query.get('key') ?? '', query.get('scope') === 'backlog') });
-      if (query.get('scope') === 'board' || query.get('scope') === 'backlog') return response(await service.boardTickets(selection, query.get('status') ?? 'all', request.headers.get('X-Jira-Refresh') === '1', query.get('scope') === 'backlog'));
+      const selection = { ...sprint, boardId: sprint.display?.boardId ?? sprint.boardId };
+      const backlog = sprint.display?.scope === 'backlog';
+      if (action === 'ticket') return response({ ticket: await service.ticket(selection, query.get('key') ?? '', backlog) });
+      if (['display', 'board', 'backlog'].includes(query.get('scope') ?? '')) return response(await service.boardTickets(selection, query.get('status') ?? 'all', request.headers.get('X-Jira-Refresh') === '1', backlog));
       const participantId = query.get('participantId');
       if (!participantId?.startsWith('jira:') || participantId.length > 100) throw new WorkspaceError(400, 'Participant Jira invalide.');
       const imported = await service.tickets(sprint, false, request.headers.get('X-Jira-Refresh') === '1');
@@ -67,4 +60,12 @@ export async function POST(request: Request) {
     const id = await selectedTeam(request);
     return response(await teamReadCache.mutate(() => syncJiraRoster(database(), request, id, Number(input.revision), sprint)));
   } catch (error) { return databaseFailure(error instanceof SyntaxError ? new WorkspaceError(400, 'Requête Jira invalide.') : error); }
+}
+export async function PATCH(request: Request) {
+  if (!sameOrigin(request)) return new NextResponse(null, { status: 403 });
+  try {
+    const input = strictObject(await readJson(request), ['display']);
+    const id = await selectedTeam(request);
+    return response(await teamReadCache.mutate(() => saveJiraDisplay(database(), request, id, input.display)));
+  } catch (error) { return databaseFailure(error instanceof SyntaxError ? new WorkspaceError(400, 'Affichage Jira invalide.') : error); }
 }

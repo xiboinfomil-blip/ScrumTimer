@@ -18,6 +18,7 @@ import { NavIcon } from '@/components/layout/nav-icon';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { filterTeams } from '@/lib/team/team-directory';
 import { SprintPicker } from '@/components/jira/sprint-picker';
+import { JiraDisplayPicker } from '@/components/jira/display-picker';
 import { JiraAccount } from '@/components/jira/jira-account';
 import { useJiraResource } from '@/hooks/jira/use-jira-resource';
 import type { JiraConnection, JiraSprintSelection } from '@/lib/jira/jira';
@@ -168,7 +169,7 @@ export function TeamsPage() {
               <span aria-hidden="true" className={`row-span-2 grid size-9 shrink-0 place-items-center rounded-lg ${kind === value ? 'bg-white text-brand' : 'bg-slate-100 text-muted'}`}>{value === 'ordinary' ? <NavIcon name="people" width="20" height="20" /> : <AccountTreeOutlinedIcon sx={{ fontSize: 20 }} />}</span><span className="min-w-0 self-end text-xs font-semibold">{value === 'ordinary' ? 'Ordinaire' : 'Sprint Jira'}</span><span aria-hidden="true" className={`col-start-3 row-start-1 grid size-4 shrink-0 place-items-center rounded-full border ${kind === value ? 'border-brand bg-brand text-white' : 'border-slate-300'}`}>{kind === value && <NavIcon name="check" width="12" height="12" />}</span><span className="col-span-2 col-start-2 row-start-2 min-w-0 self-start text-[10px] leading-4 text-muted">{value === 'ordinary' ? 'Équipe classique' : 'Sprint Jira actif'}</span>
             </button>)}</div></fieldset>
           </form>
-          {kind === 'sprint' && <div className="mt-4 flex flex-col gap-4 border-t border-line pt-4"><JiraAccount connection={connection.data} loading={connection.loading} error={connection.error} onRetry={connection.retry} /><SprintPicker value={sprint} onChange={setSprint} disabled={pending} connected={!!connection.data?.connected} /></div>}
+          {kind === 'sprint' && <div className="mt-4 flex flex-col gap-4 border-t border-line pt-4"><JiraAccount connection={connection.data} loading={connection.loading} error={connection.error} onRetry={connection.retry} /><SprintPicker value={sprint} onChange={setSprint} disabled={pending} connected={!!connection.data?.connected} /><JiraDisplayPicker cloudId={connection.data?.connected ? sprint.cloudId : ''} boardId={sprint.boardId} value={sprint.display} onChange={display => setSprint(value => ({ ...value, display }))} disabled={pending || !sprint.boardId} /></div>}
           {createError && <p id="team-create-error" role="alert" className="mt-3 text-sm text-danger">{createError}</p>}
         </DialogContent>
         <DialogActions className="flex-col-reverse gap-2 border-t border-line bg-slate-50/70 px-5 py-4 sm:flex-row sm:px-7">

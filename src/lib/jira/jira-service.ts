@@ -135,6 +135,7 @@ export class JiraService {
     throw new WorkspaceError(502, 'Jira a renvoyé des tickets incomplets. Aucun import effectué.');
   }
   async importSprint(selection: JiraSprintSelection) {
+    if (selection.display) await this.authorize(selection.cloudId, selection.display.boardId, true);
     const imported = await this.tickets(selection, true);
     try { return { ...selection, name: imported.name, roster: sprintParticipants(imported.tickets) }; }
     catch (error) { throw new WorkspaceError(422, error instanceof Error ? error.message : 'Participants Jira invalides.'); }

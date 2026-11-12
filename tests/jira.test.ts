@@ -6,10 +6,10 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import { beginJiraLogin, endJiraLogin, finishJiraLogin, jiraAccessToken, jiraCookie, jiraHash, jiraRequestCookie, jiraSession, jiraStateCookie, openJiraToken, sealJiraToken } from '../src/lib/jira/jira-auth.ts';
 import { JiraService } from '../src/lib/jira/jira-service.ts';
-import { assertJiraRoster, authorizeJiraTeam, jiraTeamSprint, syncJiraRoster, visibleJiraTeams } from '../src/lib/jira/jira-store.ts';
+import { assertJiraRoster, authorizeJiraTeam, jiraTeamSprint, saveJiraDisplay, syncJiraRoster, visibleJiraTeams } from '../src/lib/jira/jira-store.ts';
 import { createTeam, deleteTeam, listTeams } from '../src/lib/team/workspace-store.ts';
 import { readTeam, writeTeam } from '../src/lib/persistence/relational-store.ts';
-import { jiraTicketDetails, jiraTickets, sprintParticipants } from '../src/lib/jira/jira.ts';
+import { jiraTicketDetails, jiraTickets, sprintParticipants, validateJiraDisplay, validateJiraSelection } from '../src/lib/jira/jira.ts';
 import { validateTeamCreation } from '../src/lib/team/team-directory.ts';
 import { JiraResourceCache } from '../src/lib/jira/jira-resource-cache.ts';
 
@@ -47,6 +47,16 @@ test('Jira resource cache does not retain failures or refill cleared entries', a
 });
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+test('Jira display selection validates strict creation payloads and keeps old defaults', () => {
+  const selection = { cloudId: '12345678-1234-1234-1234-123456789abc', boardId: 1, sprintId: 2 };
+  assert.deepEqual(validateJiraSelection(selection), selection);
+  const display = { boardId: 8, scope: 'backlog' as const };
+  assert.deepEqual(validateTeamCreation({ name: 'Sprint', category: null, kind: 'sprint', sprint: { ...selection, display } }).sprint, { ...selection, display });
+  for (const invalid of [{ boardId: 0, scope: 'board' }, { boardId: 2_147_483_648, scope: 'board' }, { boardId: '8', scope: 'board' }, { boardId: 8, scope: ['board'] }, { boardId: 8, scope: 'other' }, { ...display, cloudId: selection.cloudId }, null]) {
+    assert.throws(() => validateJiraDisplay(invalid));
+    assert.throws(() => validateJiraSelection({ ...selection, display: invalid }));
+  }
+});
 test('Jira ticket details discover the board estimate field and remain board-authorized', async () => {
   const originalFetch = globalThis.fetch;
   const cloudId = '12345678-1234-1234-1234-123456789abc';
@@ -231,6 +241,10 @@ test('Jira sprint creation is atomic; unauthenticated lists expose only locked e
     const teamId = imported.activeTeamId!; const stored = await readTeam(client, teamId);
     assert.equal(stored.team?.roster[0].id, 'jira:1');
     assert.equal(stored.team?.roster.length, 1);
+    assert.equal((await jiraTeamSprint(client, teamId))?.display, undefined);
+    const display = { boardId: 8, scope: 'backlog' as const };
+    const configured = await createTeam(client, 'Affichage personnalisé', null, { ...selection, display, name: 'Sprint 2', roster: [{ id: 'jira:1', name: 'Camille', present: true, mood: null, moodUpdatedAt: null, moodSlide: null }] });
+    assert.deepEqual((await jiraTeamSprint(client, configured.activeTeamId!))?.display, display);
     const lockedList = await visibleJiraTeams(client, request, imported);
     assert.deepEqual(lockedList.teams.find(team => team.id === teamId), { id: teamId, name: 'Sprint', memberCount: 0, category: null, kind: 'sprint', jiraLocked: true });
     assert.notEqual(lockedList.activeTeamId, teamId);
@@ -399,7 +413,7 @@ test('Jira access is caller-scoped; explicit roster refresh preserves attendance
   globalThis.fetch = async input => {
     const url = new URL(String(input));
     if (url.pathname.endsWith('accessible-resources')) return Response.json([{ id: selection.cloudId, name: 'Site', url: 'https://example.atlassian.net', scopes: ['read:board-scope:jira-software'] }]);
-    if (url.pathname.endsWith('/board')) return Response.json({ startAt: 0, isLast: true, values: [{ id: 1, name: 'Scrum', type: 'scrum' }] });
+    if (url.pathname.endsWith('/board')) return Response.json({ startAt: 0, isLast: true, values: [{ id: 1, name: 'Scrum', type: 'scrum' }, ...(!url.searchParams.has('type') ? [{ id: 8, name: 'Support', type: 'kanban' }] : [])] });
     if (url.pathname.endsWith('/sprint')) return Response.json({ startAt: 0, isLast: true, values: [{ id: 3, name: 'Sprint 3', state: 'active' }] });
     assert.ok(url.pathname.endsWith('/sprint/3/issue'));
     return Response.json({ isLast: true, issues: empty ? [] : ['retained', 'new'].map((accountId, index) => ({ id: String(index + 1), key: `DEV-${index + 1}`, fields: { summary: 'Ticket', status: { name: 'Ouvert' }, assignee: { accountId, displayName: accountId === 'retained' ? 'Camille Jira' : 'Nouveau' } } })) });
@@ -422,6 +436,15 @@ test('Jira access is caller-scoped; explicit roster refresh preserves attendance
     const stored = await readTeam(client, teamId);
     const before = { ...stored.team!, roster: stored.team!.roster.map(person => ({ ...person, present: false, mood: 2 as const, moodUpdatedAt: new Date().toISOString() })) };
     const revision = await writeTeam(client, teamId, stored.revision, before);
+    const unchanged = await readTeam(client, teamId);
+    const display = { boardId: 8, scope: 'backlog' as const };
+    await assert.rejects(saveJiraDisplay(client, new Request('http://localhost:3001/api/jira'), teamId, display), { status: 401 });
+    await assert.rejects(saveJiraDisplay(client, request(), teamId, { ...display, boardId: 99 }), { status: 403 });
+    await assert.rejects(saveJiraDisplay(client, request(), teamId, { ...display, scope: 'other' }), { status: 400 });
+    assert.deepEqual(await saveJiraDisplay(client, request(), teamId, display), { display });
+    assert.deepEqual((await jiraTeamSprint(client, teamId))?.display, display);
+    assert.deepEqual(await readTeam(client, teamId), unchanged);
+    assert.equal((await jiraTeamSprint(client, hidden.activeTeamId!))?.display, undefined);
     await assert.rejects(syncJiraRoster(client, request(), teamId, stored.revision, { ...selection, sprintId: 3 }), { status: 409 });
     assert.equal((await jiraTeamSprint(client, teamId))?.sprintId, 2);
     await engine.exec("CREATE FUNCTION reject_jira_members() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture write failure'; END $$; CREATE TRIGGER reject_jira_members BEFORE INSERT ON team_members FOR EACH ROW EXECUTE FUNCTION reject_jira_members();");
@@ -434,6 +457,7 @@ test('Jira access is caller-scoped; explicit roster refresh preserves attendance
     assert.deepEqual(after.team?.roster.map(person => [person.id, person.name, person.present, person.mood]), [['jira:retained', 'Camille Jira', false, null], ['jira:new', 'Nouveau', true, null]]);
     assert.equal(after.revision, revision + 1);
     assert.equal((await jiraTeamSprint(client, teamId))?.sprintId, 3);
+    assert.deepEqual((await jiraTeamSprint(client, teamId))?.display, display);
     empty = true;
     await assert.rejects(syncJiraRoster(client, request(), teamId, after.revision, { ...selection, sprintId: 3 }), { status: 422 });
     assert.equal((await readTeam(client, teamId)).revision, after.revision);
