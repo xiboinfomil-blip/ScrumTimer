@@ -19,7 +19,7 @@ import SubjectRounded from '@mui/icons-material/SubjectRounded';
 import TuneRounded from '@mui/icons-material/TuneRounded';
 import { Button, Dialog, DialogContent, DialogTitle, IconButton } from '@mui/material';
 import { useJiraResource } from '@/hooks/jira/use-jira-resource';
-import type { JiraStatusCategory, JiraTicket, JiraTicketDetails } from '@/lib/jira/jira';
+import type { JiraOption, JiraStatusCategory, JiraTicket, JiraTicketDetails } from '@/lib/jira/jira';
 import { secondaryButton } from '@/components/ui/styles';
 import { useViewMotion } from '@/hooks/motion/use-view-motion';
 
@@ -27,11 +27,22 @@ type TicketData = { name: string; tickets: JiraTicket[] };
 
 export function JiraTickets({ teamId, participantId }: { teamId: string | null; participantId?: string | null }) {
   const [status, setStatus] = useState('');
-  const resource = useJiraResource<TicketData>(teamId ? '/api/jira?action=tickets&scope=board&status=all' : null, teamId);
-  return <TicketList key={participantId ?? 'none'} teamId={teamId} resource={resource} participantId={participantId} status={status} onStatus={setStatus} />;
+  const [boardId, setBoardId] = useState('');
+  const [scope, setScope] = useState('board');
+  const boards = useJiraResource<{ boardId: number; options: JiraOption[] }>(teamId ? '/api/jira?action=display-boards' : null, teamId);
+  const defaultBoardId = String(boards.data?.boardId ?? '');
+  const resource = useJiraResource<TicketData>(teamId ? `/api/jira?action=tickets&scope=${scope}&status=all${boardId ? `&boardId=${boardId}` : ''}` : null, teamId);
+  return <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+    <div className="grid shrink-0 grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-2 border-b border-line pb-3">
+      <label className="grid min-w-0 gap-1 text-[11px] font-semibold text-muted">Tableau<select aria-label="Tableau Jira à afficher" disabled={boards.loading} value={boardId} onChange={event => { setBoardId(event.target.value); setStatus(''); }} className="min-h-11 min-w-0 rounded-md border border-control bg-white px-2 text-xs font-semibold text-ink"><option value="">{boards.data?.options.find(board => board.id === defaultBoardId)?.name ?? 'Tableau de l’équipe'}</option>{boards.data?.options.filter(board => board.id !== defaultBoardId).map(board => <option key={board.id} value={board.id}>{board.name}</option>)}</select></label>
+      <label className="grid min-w-0 gap-1 text-[11px] font-semibold text-muted">Vue<select aria-label="Vue du tableau Jira" value={scope} onChange={event => { setScope(event.target.value); setStatus(''); }} className="min-h-11 min-w-0 rounded-md border border-control bg-white px-2 text-xs font-semibold text-ink"><option value="board">Tableau complet</option><option value="backlog">Backlog</option></select></label>
+    </div>
+    {boards.error && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 text-xs text-danger"><span>{boards.error}</span><Button startIcon={<RefreshIcon />} onClick={boards.retry} sx={{ minHeight: 44, fontSize: 12, textTransform: 'none' }}>Recharger les tableaux</Button></div>}
+    <TicketList key={`${participantId ?? 'none'}-${boardId}-${scope}`} boardId={boardId} scope={scope} teamId={teamId} resource={resource} participantId={participantId} status={status} onStatus={setStatus} />
+  </div>;
 }
 
-function TicketList({ teamId, resource, participantId, status, onStatus }: { teamId: string | null; resource: ReturnType<typeof useJiraResource<TicketData>>; participantId?: string | null; status: string; onStatus: (status: string) => void }) {
+function TicketList({ teamId, boardId, scope, resource, participantId, status, onStatus }: { teamId: string | null; boardId: string; scope: string; resource: ReturnType<typeof useJiraResource<TicketData>>; participantId?: string | null; status: string; onStatus: (status: string) => void }) {
   const [page, setPage] = useState(0); const pageSize = 5;
   const [selected, setSelected] = useState<JiraTicket | null>(null);
   const [query, setQuery] = useState('');
@@ -76,13 +87,13 @@ function TicketList({ teamId, resource, participantId, status, onStatus }: { tea
         <button type="button" className={`${secondaryButton} size-11 p-0`} disabled={current === pages - 1} onClick={() => setPage(current + 1)} aria-label="Tickets suivants" title="Tickets suivants"><ArrowForwardIcon fontSize="small" /></button>
       </nav>
     </>}
-    {selected && <TicketDialog key={selected.key} ticket={selected} teamId={teamId} onClose={() => setSelected(null)} />}
+    {selected && <TicketDialog key={selected.key} ticket={selected} boardId={boardId} scope={scope} teamId={teamId} onClose={() => setSelected(null)} />}
   </section>;
 }
 
-function TicketDialog({ ticket, teamId, onClose }: { ticket: JiraTicket; teamId: string | null; onClose: () => void }) {
+function TicketDialog({ ticket, teamId, boardId, scope, onClose }: { ticket: JiraTicket; teamId: string | null; boardId: string; scope: string; onClose: () => void }) {
   const closeButton = useRef<HTMLButtonElement>(null);
-  const resource = useJiraResource<{ ticket: JiraTicketDetails }>(`/api/jira?action=ticket&key=${encodeURIComponent(ticket.key)}`, teamId);
+  const resource = useJiraResource<{ ticket: JiraTicketDetails }>(`/api/jira?action=ticket&key=${encodeURIComponent(ticket.key)}&scope=${scope}${boardId ? `&boardId=${boardId}` : ''}`, teamId);
   useEffect(() => { if (!resource.loading) closeButton.current?.focus(); }, [resource.loading]);
   const detail = resource.data?.ticket;
   const date = (value: string | null | undefined) => value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat('fr', { dateStyle: 'medium' }).format(new Date(value)) : 'Non renseignée';

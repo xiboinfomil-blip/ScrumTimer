@@ -23,6 +23,12 @@ export async function GET(request: Request) {
     }
     const service = await jiraService(database(), request);
     if (action === 'sites') return response({ options: (await service.sites()).map(({ id, name }) => ({ id, name })) });
+    if (action === 'display-boards') {
+      const id = await selectedTeam(request);
+      const sprint = await jiraTeamSprint(database(), id);
+      if (!sprint) throw new WorkspaceError(400, 'Cette équipe n’est pas liée à Jira.');
+      return response({ boardId: sprint.boardId, options: await service.boards(sprint.cloudId, true) });
+    }
     const cloudId = query.get('cloudId') ?? '';
     if (!/^[a-f0-9-]{36}$/i.test(cloudId) && action !== 'tickets' && action !== 'ticket') throw new WorkspaceError(400, 'Site Jira invalide.');
     if (action === 'boards') return response({ options: await service.boards(cloudId) });
@@ -31,8 +37,11 @@ export async function GET(request: Request) {
     if (action === 'tickets' || action === 'ticket') {
       const id = await selectedTeam(request); const sprint = await jiraTeamSprint(database(), id);
       if (!sprint) throw new WorkspaceError(400, 'Cette équipe n’est pas liée à un sprint Jira.');
-      if (action === 'ticket') return response({ ticket: await service.ticket(sprint, query.get('key') ?? '') });
-      if (query.get('scope') === 'board') return response(await service.boardTickets(sprint, query.get('status') ?? 'indeterminate', request.headers.get('X-Jira-Refresh') === '1'));
+      const boardId = query.get('boardId');
+      if (boardId !== null && (!/^[1-9]\d{0,9}$/.test(boardId) || Number(boardId) > 2_147_483_647)) throw new WorkspaceError(400, 'Tableau Jira invalide.');
+      const selection = { ...sprint, boardId: boardId === null ? sprint.boardId : Number(boardId) };
+      if (action === 'ticket') return response({ ticket: await service.ticket(selection, query.get('key') ?? '', query.get('scope') === 'backlog') });
+      if (query.get('scope') === 'board' || query.get('scope') === 'backlog') return response(await service.boardTickets(selection, query.get('status') ?? 'all', request.headers.get('X-Jira-Refresh') === '1', query.get('scope') === 'backlog'));
       const participantId = query.get('participantId');
       if (!participantId?.startsWith('jira:') || participantId.length > 100) throw new WorkspaceError(400, 'Participant Jira invalide.');
       const imported = await service.tickets(sprint, false, request.headers.get('X-Jira-Refresh') === '1');

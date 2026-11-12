@@ -43,13 +43,14 @@ test('master timer still wires active-speaker notes and the read-only full-note 
 test('master keeps DailyRound and SessionResults summary interfaces and wiring', () => {
   const shell = source('src/components/layout/app-shell.tsx');
   assert.match(shell, /todayRound && \(pathname === '\/mood' \|\| pathname === '\/timer'\)/);
-  assert.match(shell, /<DailyRound key=\{todayRound\.id\} autoScreensaver=\{dailyTransition\.justFinished\}\s*\/>/);
+  assert.match(shell, /<DailyRound key=\{todayRound\.id\}\s*\/>/);
   const daily = source('src/components/layout/daily-round.tsx');
-  assert.match(daily, /export function DailyRound\(\{ autoScreensaver = false \}/);
+  assert.match(daily, /export function DailyRound\(\)/);
   assert.match(daily, /<DailyDashboard round=\{round\}\s*\/>/);
   assert.doesNotMatch(daily, /Voir le bilan|Masquer le bilan|setView/);
-  assert.match(daily, /<TimerScreensaver open=\{screensaverOpen\}/);
-  assert.match(daily, /teamName=\{activeTeamName\} round=\{round\}/);
+  assert.doesNotMatch(daily, /TimerScreensaver|autoScreensaver/);
+  assert.match(daily, /usePresentation\(target\)/);
+  assert.match(daily, /presentation\.toggle\(\)/);
   assert.match(source('src/components/layout/team-navbar-actions.tsx'), /await resetToday\(\)/);
   const timer = source('src/app/timer/_components/timer-page.tsx');
   assert.match(timer, /people\.every\(person => person\.done\)\) return <SessionResults timer=\{\{ \.\.\.timer, people: roundSpeakers\(timer\.people\) \}\}\s*\/>/);

@@ -145,6 +145,23 @@ def run_timer_safety(browser, width, height):
         page.keyboard.press('n')
         assert timer_state()['activeId'] == 'alice'
         page.locator('#manage-timer-button').click()
+        settings = page.get_by_role('dialog', name='Modifier le minuteur', exact=True)
+        expect(settings.get_by_text('En attente', exact=True)).to_have_count(0)
+        expect(settings.get_by_text('En pause', exact=True)).to_be_visible()
+        expect(settings.get_by_role('button', name='Termin\u00e9', exact=True)).to_be_in_viewport()
+        settings.locator('#duration-minutes').fill('3')
+        settings.locator('#duration-seconds').fill('15')
+        settings.locator('#apply-duration').click()
+        assert timer_state()['remaining'] == 195
+        settings.locator('#warning-seconds').select_option('15')
+        settings.locator('#add-time-button').click()
+        assert timer_state()['remaining'] == 225 and not timer_state()['running']
+        settings.locator('#duration-minutes').fill('2')
+        settings.locator('#duration-seconds').fill('0')
+        settings.locator('#apply-duration').click()
+        settings.locator('#duration-minutes').scroll_into_view_if_needed()
+        page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-timer-settings-{width}.png'))
+        assert settings.evaluate('element => element.scrollWidth <= element.clientWidth')
         page.locator('#add-time-button').click()
         page.get_by_role('button', name='Fermer les r\u00e9glages', exact=True).click()
         expect(page.get_by_role('dialog', name='Modifier le minuteur', exact=True)).not_to_be_visible()

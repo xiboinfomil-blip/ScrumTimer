@@ -54,17 +54,18 @@ export class JiraService {
     }
     throw new WorkspaceError(502, 'Jira a renvoyé une liste incomplète. Aucun import effectué.');
   }
-  async boards(cloudId: string) {
+  async boards(cloudId: string, allTypes = false) {
     await this.site(cloudId);
-    let result = this.boardsPromise.get(cloudId);
+    const key = `${cloudId}:${allTypes ? 'all' : 'scrum'}`;
+    let result = this.boardsPromise.get(key);
     if (!result) {
-      result = this.options(`/ex/jira/${cloudId}/rest/agile/1.0/board?type=scrum`).then(values => values.filter(board => board.type === 'scrum').map(board => ({ id: String(board.id), name: jiraText(board.name, 255) })));
-      this.boardsPromise.set(cloudId, result);
+      result = this.options(`/ex/jira/${cloudId}/rest/agile/1.0/board${allTypes ? '' : '?type=scrum'}`).then(values => values.filter(board => allTypes ? board.type === 'scrum' || board.type === 'kanban' : board.type === 'scrum').map(board => ({ id: String(board.id), name: jiraText(board.name, 255) })));
+      this.boardsPromise.set(key, result);
     }
     return result;
   }
-  async authorize(cloudId: string, boardId: number) {
-    if (!(await this.boards(cloudId)).some(board => board.id === String(boardId))) throw new WorkspaceError(403, 'Tableau Scrum inaccessible avec votre compte Jira.');
+  async authorize(cloudId: string, boardId: number, allTypes = false) {
+    if (!(await this.boards(cloudId, allTypes)).some(board => board.id === String(boardId))) throw new WorkspaceError(403, 'Tableau inaccessible avec votre compte Jira.');
   }
   async sprints(cloudId: string, boardId: number, activeOnly = true) {
     await this.authorize(cloudId, boardId);
@@ -83,19 +84,19 @@ export class JiraService {
     const load = () => this.issues(`/ex/jira/${selection.cloudId}/rest/software/1.0/board/${selection.boardId}/sprint/${selection.sprintId}/issue`, site.url, sprint.name);
     return this.cachedTickets(`${selection.cloudId}:${selection.boardId}:${selection.sprintId}`, activeOnly || refresh, load);
   }
-  async boardTickets(selection: Pick<JiraSprintSelection, 'cloudId' | 'boardId'>, status: string = 'indeterminate', refresh = false) {
+  async boardTickets(selection: Pick<JiraSprintSelection, 'cloudId' | 'boardId'>, status: string = 'indeterminate', refresh = false, backlog = false) {
     if (status !== 'all' && status !== 'new' && status !== 'indeterminate' && status !== 'done') throw new WorkspaceError(400, 'Statut Jira invalide.');
     const categories: Record<JiraStatusCategory, string> = { new: '"To Do"', indeterminate: '"In Progress"', done: '"Done"' };
     const site = await this.site(selection.cloudId);
-    const board = (await this.boards(selection.cloudId)).find(board => board.id === String(selection.boardId));
+    const board = (await this.boards(selection.cloudId, true)).find(board => board.id === String(selection.boardId));
     if (!board) throw new WorkspaceError(403, 'Tableau Scrum inaccessible avec votre compte Jira.');
-    const load = () => this.issues(`/ex/jira/${selection.cloudId}/rest/software/1.0/board/${selection.boardId}/issue`, site.url, board.name, status === 'all' ? undefined : `statusCategory = ${categories[status]}`);
-    return this.cachedTickets(`${selection.cloudId}:${selection.boardId}:board:${status}`, refresh, load);
+    const load = () => this.issues(`/ex/jira/${selection.cloudId}/rest/software/1.0/board/${selection.boardId}/${backlog ? 'backlog' : 'issue'}`, site.url, board.name, status === 'all' ? undefined : `statusCategory = ${categories[status]}`);
+    return this.cachedTickets(`${selection.cloudId}:${selection.boardId}:${backlog ? 'backlog' : 'board'}:${status}`, refresh, load);
   }
-  async ticket(selection: Pick<JiraSprintSelection, 'cloudId' | 'boardId'>, key: string) {
+  async ticket(selection: Pick<JiraSprintSelection, 'cloudId' | 'boardId'>, key: string, backlog = false) {
     if (!/^[A-Z][A-Z0-9_]*-\d+$/.test(key) || key.length > 100) throw new WorkspaceError(400, 'Clé Jira invalide.');
     const site = await this.site(selection.cloudId);
-    await this.authorize(selection.cloudId, selection.boardId);
+    await this.authorize(selection.cloudId, selection.boardId, true);
     let configuration: Record<string, unknown> = {};
     let estimateUnavailable = false;
     try { configuration = jiraObject(await this.get(`/ex/jira/${selection.cloudId}/rest/agile/1.0/board/${selection.boardId}/configuration`)); }
@@ -109,7 +110,7 @@ export class JiraService {
     if (estimateField && !/^(?:customfield_\d+|[a-zA-Z]+)$/.test(estimateField.id)) throw new WorkspaceError(502, 'Champ d’estimation Jira invalide.');
     const fields = ['summary', 'status', 'priority', 'assignee', 'issuetype', 'description', 'reporter', 'labels', 'components', 'updated', 'duedate', 'parent', ...(estimateField ? [estimateField.id] : [])];
     const query = new URLSearchParams({ maxResults: '1', jql: `key = "${key}"`, fields: fields.join(',') });
-    const result = jiraObject(await this.get(`/ex/jira/${selection.cloudId}/rest/software/1.0/board/${selection.boardId}/issue?${query}`));
+    const result = jiraObject(await this.get(`/ex/jira/${selection.cloudId}/rest/software/1.0/board/${selection.boardId}/${backlog ? 'backlog' : 'issue'}?${query}`));
     if (!Array.isArray(result.issues) || result.issues.length !== 1 || jiraObject(result.issues[0]).key !== key) throw new WorkspaceError(404, 'Ce ticket n’est plus disponible sur ce tableau.');
     return { ...jiraTicketDetails(result.issues[0], site.url, estimateField), estimateUnavailable };
   }

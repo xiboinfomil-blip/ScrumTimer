@@ -66,10 +66,12 @@ with sync_playwright() as p:
     context.route('**/api/teams', lambda route: route.fulfill(json=team_options('Test guide', member_count=1)))
     context.route('**/api/team', lambda route: route.fulfill(json={'team': team, 'revision': 1}))
     context.route('**/api/history', lambda route: route.fulfill(json={'rounds': [round_record], 'day': mauritius_day()}))
+    context.route('**/api/timer-remote', lambda route: route.fulfill(status=503, json={'error': 'Télécommande indisponible dans ce test isolé.'}))
     for width, height in [(320, 568), (1366, 768)]:
         page.set_viewport_size({'width': width, 'height': height})
         page.goto(BASE + '/timer')
-        page.get_by_role('button', name='Voir le bilan du jour', exact=True).click()
+        expect(page.locator('#daily-dashboard')).to_be_visible()
+        expect(page.get_by_role('button', name='Voir le bilan du jour', exact=True)).to_have_count(0)
         page.get_by_role('button', name='Comprendre le score de Alice').click()
         dialog = page.get_by_role('dialog')
         expect(dialog).to_contain_text('Score enregistré : 867 pts')

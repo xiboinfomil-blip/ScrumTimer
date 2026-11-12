@@ -337,6 +337,50 @@ test('Jira board tickets share all assignees and pages without skipping fresh au
   } finally { globalThis.fetch = originalFetch; }
 });
 
+test('Jira display boards include Kanban; backlog pages and caches remain scoped and authorized', async () => {
+  const originalFetch = globalThis.fetch;
+  const cloudId = '12345678-1234-1234-1234-123456789abc';
+  let allowed = true; let reads = 0;
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('accessible-resources')) return Response.json([{ id: cloudId, name: 'Site', url: 'https://example.atlassian.net', scopes: ['read:board-scope:jira-software'] }]);
+    if (url.pathname.endsWith('/board')) return Response.json({ startAt: 0, isLast: true, values: allowed ? [{ id: 8, name: 'Support personnalisé', type: 'kanban' }] : [] });
+    if (url.pathname.endsWith('/configuration')) return Response.json({});
+    const backlog = url.pathname.endsWith('/rest/software/1.0/board/8/backlog');
+    assert.ok(backlog || url.pathname.endsWith('/rest/software/1.0/board/8/issue'));
+    if (url.searchParams.has('jql')) {
+      assert.equal(backlog, true);
+      assert.equal(url.searchParams.get('jql'), 'key = "SUP-1"');
+      return Response.json({ issues: [{ id: '1', key: 'SUP-1', fields: { summary: 'Détail du backlog', status: { name: 'À qualifier' } } }] });
+    }
+    assert.equal(url.searchParams.get('jql'), null);
+    assert.equal(url.searchParams.has('startAt'), false);
+    const next = url.searchParams.get('nextPageToken');
+    assert.ok(next === null || next === 'next-backlog');
+    reads++;
+    return Response.json({ isLast: !!next, ...(!next ? { nextPageToken: 'next-backlog' } : {}), issues: [{ id: next ? '2' : '1', key: next ? 'SUP-2' : 'SUP-1', fields: { summary: backlog ? 'Backlog' : 'Tableau', status: { name: 'À qualifier' }, assignee: null } }] });
+  };
+  try {
+    const service = new JiraService('backlog-fixture');
+    assert.deepEqual(await service.boards(cloudId), []);
+    assert.deepEqual(await service.boards(cloudId, true), [{ id: '8', name: 'Support personnalisé' }]);
+    const selection = { cloudId, boardId: 8 };
+    const result = await service.boardTickets(selection, 'all', false, true);
+    assert.equal(result.tickets.length, 2);
+    assert.equal((await service.ticket(selection, 'SUP-1', true)).summary, 'Détail du backlog');
+    await new JiraService('backlog-fixture').boardTickets(selection, 'all', false, true);
+    assert.equal(reads, 2);
+    const board = await new JiraService('backlog-fixture').boardTickets(selection, 'all');
+    assert.equal(board.tickets[0].summary, 'Tableau');
+    assert.equal(result.tickets[0].summary, 'Backlog');
+    assert.equal(reads, 4);
+    await assert.rejects(new JiraService('backlog-fixture').boardTickets({ ...selection, boardId: 9 }, 'all', false, true), { status: 403 });
+    allowed = false;
+    await assert.rejects(new JiraService('backlog-fixture').boardTickets(selection, 'all', false, true), { status: 403 });
+    assert.equal(reads, 4);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test('Jira ticket presentation retains real issue types and categories without guessing custom statuses', () => {
   const issue = (category: string) => ({ id: '1', key: 'DEV-1', fields: { summary: 'Résumé', status: { name: 'Validation personnalisée', statusCategory: { key: category } }, issuetype: { name: 'Story' }, priority: null, assignee: null } });
   const [ticket] = jiraTickets([issue('done')], 'https://example.atlassian.net');
