@@ -474,7 +474,7 @@ def run_prestart_case(browser, width, height, existing_mood=None):
         saved(page)
         expect(page.locator('#speaker-name')).to_have_text('Alice')
         expect(page.locator('#timer-display')).to_have_text('02:00')
-        join = page.get_by_role('button', name='Rejoindre le tour', exact=True)
+        join = page.get_by_role('button', name='En attente', exact=True)
         geometry(page, width, height, [join])
         page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-prestart-timer-{width}-{existing_mood}.png'))
         join.click()
@@ -515,11 +515,84 @@ def run_prestart_case(browser, width, height, existing_mood=None):
         context.close()
 
 
+def run_waiting_order_case(browser, width, height, passed=False):
+    context = browser.new_context(viewport={'width': width, 'height': height},
+                                  reduced_motion='reduce', service_workers='block')
+    emulate_fullscreen(context)
+    install_browser_bootstrap(context, fullscreen=False, api_guard=False)
+    context.add_init_script('window.__smokeNow=Date.now(); Date.now=()=>window.__smokeNow;')
+    db = WorkspaceMock()
+    db.team['roster'] = [{'id': name.lower(), 'name': name, 'present': True,
+                         'mood': None if name in ('Bob', 'Dana') else 2,
+                         'moodUpdatedAt': None, 'moodSlide': None}
+                        for name in ['Alice', 'Bob', 'Charlie', 'Dana']]
+    db.team['session'] = ['alice', 'bob', 'charlie', 'dana']
+    db.team['postponed'] = ['bob', 'dana']
+    db.daily = deepcopy(db.meter)
+    context.route('**/api/**', db.api)
+    context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
+    page = context.new_page()
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    key = 'standup.timer.tab.v1:' + TEAM_ID
+    try:
+        page.goto(BASE + '/timer')
+        saved(page)
+        if passed:
+            page.locator('#start-button').click()
+            advance(page, 5)
+            expect(page.locator('#timer-display')).to_have_text('01:55')
+            page.locator('#next-button').click()
+            expect(page.locator('#speaker-name')).to_have_text('Charlie')
+            advance(page, 3)
+            expect(page.locator('#timer-display')).to_have_text('01:57')
+        waiting_button = page.get_by_role('button', name='En attente', exact=True)
+        geometry(page, width, height, [waiting_button])
+        page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-waiting-{width}-{passed}.png'))
+        waiting_button.click()
+        modal = page.get_by_role('dialog', name='Un instant pour votre humeur', exact=True)
+        expect(modal).to_be_visible()
+        expect(page.get_by_role('dialog', name='Économiseur d’écran', exact=True)).not_to_be_visible()
+        for name, mood in [('Bob', 3), ('Dana', 4)]:
+            action = modal.get_by_role('button', name=f'Humeur {mood} pour {name}', exact=True)
+            geometry(page, width, height, [action])
+            action.click()
+            saved(page)
+        modal.get_by_role('button', name='Revenir au tour', exact=True).click()
+        expected = ['alice', 'charlie', 'dana', 'bob'] if passed else ['alice', 'bob', 'charlie', 'dana']
+        state = page.evaluate('key=>JSON.parse(sessionStorage.getItem(key)).timer', key)
+        assert [person['id'] for person in state['people']] == expected, state
+        assert state['running'] is False
+        assert state['remaining'] == (117 if passed else 120)
+        if passed:
+            alice = next(person for person in state['people'] if person['id'] == 'alice')
+            assert alice['done'] and alice['speakingSeconds'] == 5
+        expect(page.locator('#speaker-name')).to_have_text('Charlie' if passed else 'Alice')
+        expect(page.locator('#upcoming-speaker')).to_have_text('Dana' if passed else 'Bob')
+        expect(waiting_button).to_have_count(0)
+        idle = page.locator('#timer-display').inner_text()
+        advance(page, 15)
+        expect(page.locator('#timer-display')).to_have_text(idle)
+        page.reload()
+        saved(page)
+        expect(page.locator('#speaker-name')).to_have_text('Charlie' if passed else 'Alice')
+        expect(page.locator('#timer-display')).to_have_text(idle)
+        restored = page.evaluate('key=>JSON.parse(sessionStorage.getItem(key)).timer', key)
+        assert [person['id'] for person in restored['people']] == expected
+        no_archive(page, db)
+        assert not db.unexpected and not errors, (db.unexpected, errors)
+        print(f'PASS waiting order {width}x{height}: passed={passed}, original/final positions, paused progress and reload')
+    finally:
+        context.close()
+
+
 if __name__ == '__main__':
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         try:
             for width, height in SIZES:
+                run_waiting_order_case(browser, width, height)
+                run_waiting_order_case(browser, width, height, passed=True)
                 run_prestart_case(browser, width, height)
                 run_prestart_case(browser, width, height, existing_mood=3)
                 run_case(browser, width, height)

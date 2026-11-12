@@ -53,6 +53,8 @@ test('Jira ticket details discover the board estimate field and remain board-aut
   let permitted = true;
   let available = true;
   let configurationAllowed = true;
+  let configurationStatus = 403;
+  let ticketStatus = 200;
   let details = 0;
   const issue = { id: '1', key: 'DEV-1', fields: { summary: '<script>safe title</script>', status: { name: 'En cours' }, assignee: null,
     description: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Description <img src=x>' }] }, { type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Acceptance criteria' }] }] }] }] },
@@ -61,11 +63,12 @@ test('Jira ticket details discover the board estimate field and remain board-aut
     const url = new URL(String(input));
     if (url.pathname === '/oauth/token/accessible-resources') return Response.json([{ id: cloudId, name: 'Jira', url: 'https://example.atlassian.net', scopes: ['read:board-scope:jira-software'] }]);
     if (url.pathname.endsWith('/board')) return Response.json({ values: permitted ? [{ id: 1, name: 'Board', type: 'scrum' }] : [], startAt: 0, isLast: true });
-    if (url.pathname.endsWith('/configuration')) return configurationAllowed ? Response.json({ estimation: { type: 'field', field: { fieldId: 'customfield_10888', displayName: 'Story Points' } } }) : new Response(null, { status: 403 });
+    if (url.pathname.endsWith('/configuration')) return configurationAllowed ? Response.json({ estimation: { type: 'field', field: { fieldId: 'customfield_10888', displayName: 'Story Points' } } }) : new Response(null, { status: configurationStatus });
     assert.ok(url.pathname.endsWith('/board/1/issue'));
     assert.equal(url.searchParams.get('jql'), 'key = "DEV-1"');
     assert.equal(url.searchParams.get('fields')?.includes('customfield_10888'), configurationAllowed);
     details++;
+    if (ticketStatus !== 200) return new Response(null, { status: ticketStatus });
     return Response.json({ issues: available ? [issue] : [], isLast: true });
   };
   try {
@@ -76,18 +79,26 @@ test('Jira ticket details discover the board estimate field and remain board-aut
     assert.deepEqual(ticket.components, ['Backend']);
     assert.equal(ticket.parent, 'DEV-9');
     configurationAllowed = false;
-    const legacy = await new JiraService('detail-fixture').ticket({ cloudId, boardId: 1 }, 'DEV-1');
-    assert.equal(legacy.description, ticket.description);
-    assert.equal(legacy.estimateUnavailable, true);
-    assert.equal(legacy.estimate, null);
+    for (const status of [401, 403]) {
+      configurationStatus = status;
+      const legacy = await new JiraService('detail-fixture').ticket({ cloudId, boardId: 1 }, 'DEV-1');
+      assert.equal(legacy.description, ticket.description);
+      assert.equal(legacy.estimateUnavailable, true);
+      assert.equal(legacy.estimate, null);
+    }
+    configurationStatus = 429;
+    await assert.rejects(new JiraService('detail-fixture').ticket({ cloudId, boardId: 1 }, 'DEV-1'), { status: 429 });
     configurationAllowed = true;
+    ticketStatus = 401;
+    await assert.rejects(new JiraService('detail-fixture').ticket({ cloudId, boardId: 1 }, 'DEV-1'), { status: 401 });
+    ticketStatus = 200;
     assert.equal(jiraTicketDetails({ ...issue, fields: { ...issue.fields, description: null } }, 'https://example.atlassian.net').description, '');
     available = false;
     await assert.rejects(new JiraService('detail-fixture').ticket({ cloudId, boardId: 1 }, 'DEV-1'), { status: 404 });
     permitted = false;
     await assert.rejects(new JiraService('detail-fixture').ticket({ cloudId, boardId: 1 }, 'DEV-1'), { status: 403 });
     await assert.rejects(new JiraService('detail-fixture').ticket({ cloudId, boardId: 1 }, 'DEV-1 OR key != DEV-2'), { status: 400 });
-    assert.equal(details, 3);
+    assert.equal(details, 5);
     const recursive: { type: string; content: unknown[] } = { type: 'paragraph', content: [] };
     recursive.content.push(recursive);
     assert.throws(() => jiraTicketDetails({ ...issue, fields: { ...issue.fields, description: recursive } }, 'https://example.atlassian.net'), /complexe/);

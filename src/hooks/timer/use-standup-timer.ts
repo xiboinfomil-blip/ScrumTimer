@@ -7,7 +7,7 @@ import { TimerAudio } from '@/lib/timer/audio';
 import { timerFrame } from '@/lib/timer/timer';
 import type { Mood } from '@/types/team';
 import { completedRound } from '@/lib/history/history';
-import { finishWaitingRound, roundSpeakers } from '@/lib/timer/timer-completion';
+import { finishWaitingRound, rejoinTimer, roundSpeakers } from '@/lib/timer/timer-completion';
 import { createId } from '@/lib/team/team-storage';
 import { penalizeCurrentTimer, previousSpeaker, previousTimer, recoverTimer, restartCurrentTimer, switchTimerSpeaker, type TimerState } from '@/lib/timer/timer-checkpoint';
 import { visibleModalDialogs } from '@/lib/timer/modal';
@@ -211,10 +211,9 @@ export function useStandupTimer() {
     const timestamp = new Date().toISOString();
     if (!updateTeam(value => ({ ...value, postponed: value.postponed?.filter(candidate => candidate !== id), roster: value.roster.map(p => p.id === id && mood !== undefined ? { ...p, mood, moodUpdatedAt: timestamp, moodSlide: value.currentMoodSlide ?? null } : p) }))) return;
     const person = { ...target, postponed: false, ...(mood !== undefined ? { mood, moodUpdatedAt: timestamp, moodSlide: preferences.current.currentMoodSlide ?? null } : {}) };
-    const people = [...current.people.filter(p => p.id !== id), person];
-    commit(current.activeId ? { ...current, people } : cleared({ ...current, people, activeId: id, focusMode: false }));
-    notify(`${person.name} rejoint la fin du tour. Son minuteur attend Démarrer ou Suivant.`);
-  }, [updateTeam, commit, cleared, notify]);
+    commit(rejoinTimer(current, person, preferences.current.session));
+    notify(`${person.name} rejoint le tour. Son minuteur attend Démarrer ou Suivant.`);
+  }, [updateTeam, commit, notify]);
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (visibleModalDialogs().length || (event.target instanceof Element && event.target.closest('input,select,textarea,button,a,[contenteditable]')) || event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;

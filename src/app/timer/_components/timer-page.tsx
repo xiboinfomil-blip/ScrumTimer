@@ -15,7 +15,7 @@ import { useStandupTimer } from '@/hooks/timer/use-standup-timer';
 import { useStepGuard } from '@/hooks/team/use-step-guard';
 import { DailyPrompts } from './daily-prompts';
 import { TeamLineup } from './team-lineup';
-import { ActiveSpeaker, TimerPanel } from './timer-panel';
+import { TimerPanel } from './timer-panel';
 import { SessionResults } from './session-results';
 import { TimerManagementDialog } from './timer-management-dialog';
 import { useViewMotion } from '@/hooks/motion/use-view-motion';
@@ -130,7 +130,6 @@ export function TimerPage() {
         <span role="status" className="text-xs text-muted">{broadcast.enabled ? broadcast.status : presentation.notice}</span>
         </div></DialogContent><DialogActions><Button onClick={() => setSharing(false)}>Fermer</Button></DialogActions>
       </Dialog>
-      <ActiveSpeaker timer={timer} />
       {presentation.presenting ? <ScreenTabs
         className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 max-[1099px]:flex min-[1100px]:hidden [@media(max-height:650px)]:flex [@media(max-height:650px)]:h-9 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0 [@media(max-height:650px)]:[&>button]:!min-h-9`}
         label="Présentation du point quotidien"

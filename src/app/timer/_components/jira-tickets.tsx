@@ -103,7 +103,7 @@ function TicketDialog({ ticket, teamId, onClose }: { ticket: JiraTicket; teamId:
         <aside aria-label="Détails du ticket" className="min-w-0 border-l border-line pl-5 max-[650px]:border-t max-[650px]:border-l-0 max-[650px]:pt-4 max-[650px]:pl-0">
           <span className={`inline-block max-w-full break-words rounded px-2 py-1 text-xs font-bold ${detail.statusCategory === 'done' ? 'bg-success-soft text-success' : detail.statusCategory === 'indeterminate' ? 'bg-blue-50 text-brand' : 'bg-slate-100 text-muted'}`}>{detail.status}</span>
           <div className="my-4 flex items-center justify-between gap-3 border-y border-line py-3"><span className="break-words text-xs font-semibold text-muted">{detail.estimate?.label ?? 'Story points'}</span><strong className="shrink-0 text-2xl font-bold tabular-nums text-brand">{detail.estimate?.value ?? '—'}</strong></div>
-          {detail.estimateUnavailable && <div role="status" className="mb-4 text-xs leading-relaxed text-muted">Estimation indisponible avec cette connexion Jira.<form method="post" action="/api/jira/login"><Button type="submit" startIcon={<LoginIcon fontSize="small" />} sx={{ minHeight: 44, px: 0, fontSize: 11, textTransform: 'none' }}>Se reconnecter à Jira</Button></form></div>}
+          {detail.estimateUnavailable && <p role="status" className="mb-4 text-xs leading-relaxed text-muted">Estimation indisponible : configuration du tableau inaccessible.</p>}
           <dl className="grid gap-3 max-[650px]:grid-cols-2">{facts.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-[11px] text-muted">{label}</dt><dd className="mt-0.5 break-words text-xs font-semibold leading-relaxed text-ink">{value}</dd></div>)}</dl>
         </aside>
       </div>}

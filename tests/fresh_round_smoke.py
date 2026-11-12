@@ -199,6 +199,7 @@ def run_speaker_navigation(browser, width, height, motion='reduce'):
     for person in db.team['roster']:
         person['mood'] = 2
     db.team['session'] = [person['id'] for person in db.team['roster']]
+    db.daily = db.meter.copy()
     context.route('**/api/**', db.api)
     context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
     page = context.new_page()
@@ -220,12 +221,32 @@ def run_speaker_navigation(browser, width, height, motion='reduce'):
         page.locator('#start-button').click()
         advance(17)
         assert state()['remaining'] == 103
+        postpone_next = page.get_by_role('button', name='Reporter le prochain passage de Bob', exact=True)
+        expect(postpone_next).to_contain_text('Prochain passage')
+        expect(postpone_next).to_contain_text('Reporter Bob')
+        postpone_next.click()
+        expect(page.locator('#speaker-name')).to_have_text('Alice')
+        expect(page.locator('#upcoming-speaker')).to_have_text('Carol')
+        assert state()['remaining'] == 103 and state()['running']
+        assert state()['people'][1]['postponed'] and not state()['people'][1]['done']
+        advance(2)
+        assert state()['remaining'] == 101
+        expect(page.get_by_role('dialog', name='Économiseur d’écran', exact=True)).not_to_be_visible()
+        page.get_by_role('button', name='En attente', exact=True).click()
+        waiting = page.get_by_role('dialog', name='Un instant pour votre humeur', exact=True)
+        waiting.get_by_role('button', name='Faire rejoindre Bob', exact=True).click()
+        saved(page)
+        waiting.get_by_role('button', name='Revenir au tour', exact=True).click()
+        expect(waiting).not_to_be_visible()
+        expect(page.locator('#upcoming-speaker')).to_have_text('Bob')
+        assert state()['remaining'] == 101 and not state()['running']
+        page.locator('#start-button').click()
         page.locator('#next-button').click()
         advance(9)
         assert state()['remaining'] == 111, state()
         page.locator('#previous-button').click()
         expect(page.locator('#speaker-name')).to_have_text('Alice')
-        assert state()['remaining'] == 103 and state()['running']
+        assert state()['remaining'] == 101 and state()['running']
         assert state()['people'][0]['attempts'] == 1
         page.locator('#next-button').click()
         assert state()['remaining'] == 111 and state()['running']
@@ -234,6 +255,12 @@ def run_speaker_navigation(browser, width, height, motion='reduce'):
         header = page.locator('[data-active-speaker]')
         report = header.get_by_role('button', name='Reporter le passage de Alice', exact=True)
         expect(report).to_contain_text('Reporter ce passage')
+        navigation = page.locator('[data-speaker-navigation]').bounding_box()
+        current = page.locator('#speaker-name').bounding_box()
+        panel = page.locator('.timer-panel').bounding_box()
+        assert header.bounding_box()['y'] >= navigation['y'] + navigation['height'] - 1
+        assert abs(current['x'] + current['width'] / 2 - panel['x'] - panel['width'] / 2) <= 2
+        assert page.locator('#speaker-name').evaluate('el=>parseFloat(getComputedStyle(el).fontSize)') > page.locator('#upcoming-speaker').evaluate('el=>parseFloat(getComputedStyle(el).fontSize)')
         assert header.bounding_box()['y'] < page.locator('#timer-stage').bounding_box()['y']
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         assert page.locator('[data-testid="stopwatch-timer"]').bounding_box()['height'] >= 90
@@ -246,6 +273,7 @@ def run_speaker_navigation(browser, width, height, motion='reduce'):
         page.locator('#start-button').click()
         page.get_by_role('button', name='Reporter le passage de Bob', exact=True).click()
         expect(page.locator('#speaker-name')).to_have_text('Carol')
+        expect(page.locator('[data-postpone-next]')).to_have_count(0)
         expect(page.get_by_role('dialog', name='Économiseur d’écran', exact=True)).not_to_be_visible()
         page.evaluate('''() => {
           window.__routeFrames = [];
@@ -266,7 +294,7 @@ def run_speaker_navigation(browser, width, height, motion='reduce'):
             assert all(value == 1 for value in frames), frames
         bootstrap.assert_no_unexpected_api()
         assert not db.unexpected and not errors, (db.unexpected, errors)
-        print(f'PASS speaker navigation {width}x{height} {motion}: exact countdowns, no retry penalty, report without saver, dock, route motion')
+        print(f'PASS speaker navigation {width}x{height} {motion}: exact countdowns, centered speaker, next-person report without interruption, route motion')
     finally:
         context.close()
 

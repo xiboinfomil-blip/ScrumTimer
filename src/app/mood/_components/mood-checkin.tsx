@@ -43,7 +43,7 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
   function chooseMood(personId: string, value: Mood) {
     const person = displayed.find(candidate => candidate.id === personId);
     if (!person || !dailyReady) return;
-    if (resuming) { if (rejoinLateParticipant(person.id, value)) notify(`${person.name} rejoint la fin du tour. Son humeur est enregistrée.`); return; }
+    if (resuming) { if (rejoinLateParticipant(person.id, value)) notify(`${person.name} rejoint le tour. Son humeur est enregistrée.`); return; }
     const removing = person.mood === value;
     const timestamp = new Date().toISOString();
     if (updateTeam(current => ({ ...current, session: [], postponed: current.postponed?.filter(id => id !== person.id), usedMoodMeters: removing ? current.usedMoodMeters ?? [] : [...new Set([...(current.usedMoodMeters ?? []), ...(current.currentMoodSlide?.meterId ? [current.currentMoodSlide.meterId] : [])])], roster: current.roster.map(p => p.id === person.id ? { ...p, mood: removing ? null : value, moodUpdatedAt: removing ? null : timestamp, moodSlide: removing ? null : current.currentMoodSlide ?? null } : p) }))) notify(removing ? `${person.name} : humeur annulée.` : `${person.name} : humeur ${value} enregistrée.`);

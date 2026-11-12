@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { checkpointContext, checkpointDay, parseCheckpoint, penalizeCurrentTimer, previousSpeaker, previousTimer, recoverTimer, restartCurrentTimer, switchTimerSpeaker, type TimerCheckpoint } from '../src/lib/timer/timer-checkpoint.ts';
 import { MAX_MANUAL_PENALTY, scoreSpeaker, speakerScoreProgress } from '../src/lib/history/session-results.ts';
 import type { TeamState } from '../src/types/team.ts';
+import { rejoinTimer } from '../src/lib/timer/timer-completion.ts';
 
 const now = new Date('2026-10-19T09:00:00Z');
 const team: TeamState = { roster: [{ id: 'alice', name: 'Alice', present: true, mood: 3, moodUpdatedAt: now.toISOString() }, { id: 'bob', name: 'Bob', present: true, mood: null, moodUpdatedAt: null }], session: ['alice', 'bob'], postponed: ['bob'], duration: 120, warning: 30, sound: false };
@@ -10,6 +11,38 @@ function checkpoint(): TimerCheckpoint {
   return { version: 1, day: checkpointDay(now), context: checkpointContext(team), session: team.session, postponed: ['bob'], roundId: null,
     timer: { people: team.roster.map(person => ({ ...person, done: false, started: person.id === 'alice', speakingSeconds: person.id === 'alice' ? 20 : 0, budgetSeconds: person.id === 'alice' ? 120 : 0, timeUp: false, attempts: person.id === 'alice' ? 1 : 0, postponed: person.id === 'bob' })), activeId: 'alice', previousId: null, remaining: 100, turnTotal: 120, running: true, turnStarted: true, focusMode: true, managing: false, ended: false, warned: false, deadline: now.getTime() + 100000 } };
 }
+
+test('waiting speakers keep their original future turn or join the end once passed', () => {
+  const order = ['alice', 'bob', 'charlie', 'dana'];
+  const timer = checkpoint().timer;
+  timer.running = false;
+  timer.people = order.map(id => ({ ...timer.people[id === 'alice' ? 0 : 1], id, name: id, mood: 2,
+    postponed: id === 'bob' || id === 'dana' }));
+  const dana = { ...timer.people[3], postponed: false };
+  const bob = { ...timer.people[1], postponed: false };
+  const future = rejoinTimer(rejoinTimer(timer, dana, order), bob, order);
+  assert.deepEqual(future.people.map(person => person.id), order);
+  assert.equal(future.activeId, 'alice');
+  assert.equal(future.remaining, 100);
+  assert.equal(future.running, false);
+
+  const later = { ...timer, activeId: 'charlie', people: timer.people.map(person => person.id === 'alice' ? { ...person, done: true } : person) };
+  const returned = rejoinTimer(later, bob, order);
+  assert.deepEqual(returned.people.map(person => person.id), ['alice', 'charlie', 'dana', 'bob']);
+  assert.equal(returned.activeId, 'charlie');
+  const upcoming = rejoinTimer(returned, dana, order);
+  assert.deepEqual(upcoming.people.map(person => person.id), ['alice', 'charlie', 'dana', 'bob']);
+  assert.equal(upcoming.remaining, later.remaining);
+  assert.equal(upcoming.people.find(person => person.id === 'alice')?.done, true);
+
+  const previous = { ...timer, people: timer.people.map(person => person.id === 'charlie' ? { ...person, started: true } : person) };
+  assert.deepEqual(rejoinTimer(previous, bob, order).people.map(person => person.id), ['alice', 'charlie', 'dana', 'bob']);
+  const ended = rejoinTimer({ ...timer, activeId: null }, bob, order);
+  assert.equal(ended.activeId, 'bob');
+  assert.equal(ended.running, false);
+  assert.equal(ended.turnStarted, false);
+  assert.equal(ended.remaining, 120);
+});
 
 test('checkpoint restores transient lineup against authoritative roster before route guards', () => {
   const durable = { ...team, session: [], postponed: [] };

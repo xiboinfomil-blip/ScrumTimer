@@ -100,7 +100,7 @@ export class JiraService {
     let estimateUnavailable = false;
     try { configuration = jiraObject(await this.get(`/ex/jira/${selection.cloudId}/rest/agile/1.0/board/${selection.boardId}/configuration`)); }
     catch (error) {
-      if (!(error instanceof WorkspaceError) || error.status !== 403) throw error;
+      if (!(error instanceof WorkspaceError) || ![401, 403].includes(error.status)) throw error;
       estimateUnavailable = true;
     }
     const estimation = configuration.estimation == null ? null : jiraObject(configuration.estimation);

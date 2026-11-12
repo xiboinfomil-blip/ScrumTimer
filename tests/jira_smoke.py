@@ -82,7 +82,8 @@ class JiraMock(DirectoryMock):
                 payload = {'ticket': {'id': key, 'key': key,
                     'summary': f'{person or "Non attribué"} ticket {key.split("-")[1]} <texte sûr>',
                     'description': '' if unassigned else 'Fiabiliser la synchronisation des données entre les appareils.\n\nCritères d’acceptation\n• Conserver les modifications pendant une reconnexion.\n• Afficher un état cohérent sur tous les écrans.\n• Couvrir les erreurs et la reprise avec des tests.\n\n<img src=x onerror=alert(1)> reste du texte, jamais du HTML.',
-                    'estimate': None if unassigned else {'label': 'Story Points', 'value': 8},
+                    'estimate': None if unassigned or key.endswith('-2') else {'label': 'Story Points', 'value': 8},
+                    'estimateUnavailable': key.endswith('-2'),
                     'status': 'En cours', 'statusCategory': 'indeterminate', 'issueType': 'Story', 'priority': 'Haute',
                     'assigneeId': person[5:] if person else None, 'assigneeName': person,
                     'reporter': 'Camille', 'labels': ['synchronisation', 'api'], 'components': ['Application'],
@@ -435,6 +436,16 @@ def ticket_layout_case(browser, width, height, motion, screenshots):
         expect(dialog).not_to_be_visible()
         expect(first_ticket).to_be_focused()
         assert db.detail_reads == [first_prefix + '-1']
+        detail_search = sidebar.get_by_role('searchbox', name='Rechercher un ticket Jira')
+        detail_search.fill(first_prefix + '-2')
+        sidebar.get_by_role('button', name=re.compile(first_prefix + '-2 :')).click()
+        partial = page.get_by_role('dialog', name=re.compile('ticket 2'))
+        expect(partial).to_contain_text('Critères d’acceptation')
+        expect(partial.get_by_role('status')).to_contain_text('Estimation indisponible')
+        expect(partial.locator('form[action="/api/jira/login"]')).to_have_count(0)
+        partial.get_by_role('button', name='Fermer le ticket', exact=True).click()
+        expect(partial).not_to_be_visible()
+        detail_search.fill('')
         sidebar.get_by_role('button', name='Tickets suivants', exact=True).click()
         expect(sidebar.get_by_role('button', name=re.compile(first_prefix + '-6 :'))).to_be_visible()
         status = sidebar.get_by_role('combobox', name='Statut des tickets Jira', exact=True)
