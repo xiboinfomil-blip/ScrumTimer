@@ -11,6 +11,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { dailyRoundStatistics, type HistoryRound } from '@/lib/history/history';
 import { formatTime } from '@/lib/timer/timer';
 import { PaginatedList } from './paginated-list';
+import { ScreensaverBackdrop } from './screensaver-backdrop';
 
 export function TimerScreensaver({ open, onClose, onResume, teamName, speaker = '', round }: { open: boolean; onClose: () => void; onResume?: () => void; teamName: string; speaker?: string; round?: HistoryRound }) {
   const reduced = useReducedMotion();
@@ -29,13 +30,7 @@ export function TimerScreensaver({ open, onClose, onResume, teamName, speaker = 
   const returnLabel = round ? 'Revenir au bilan' : 'Revenir au minuteur';
   return <Dialog open={open} onClose={onClose} fullScreen aria-labelledby="screensaver-title" slotProps={{ paper: { className: 'm-0! h-dvh! max-h-none! w-full! max-w-none! overflow-hidden! rounded-none! bg-white! p-0!' }, root: { sx: { zIndex: 3000 } }, transition: { onEntered: () => closeButton.current?.focus(), onExited: () => document.getElementById(round ? 'daily-screensaver-button' : 'navbar-settings-button')?.focus() } }}>
     <div data-testid="timer-screensaver" data-scene="horloge" data-motion={moving ? 'running' : 'paused'} data-completed={Boolean(round)} className="relative isolate flex h-dvh min-h-0 flex-col overflow-hidden bg-[#f4f8fa] text-[#173c51] [&_button]:transform-none!">
-      <div aria-hidden="true" data-screensaver-decor className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <motion.div animate={{ x: moving ? [0, 64] : 0, y: moving ? [0, 64] : 0 }} transition={moving ? { duration: 12, repeat: Infinity, ease: 'linear' } : { duration: 0 }} className="absolute -inset-16 bg-[linear-gradient(#205f9d09_1px,transparent_1px),linear-gradient(90deg,#205f9d09_1px,transparent_1px)] bg-size-[64px_64px]" />
-        <div className="absolute -inset-x-1/2 top-[65%] h-[65%] -rotate-12">
-          {['bg-[#c6e2ed]', 'bg-[#f5bd71]', 'bg-[#b8ddd1]', 'bg-white/80'].map((color, index) => <motion.div key={color} animate={{ y: moving ? [0, -35 - index * 12, 0] : 0, rotate: moving ? [0, index % 2 ? 5 : -5, 0] : 0, scaleY: moving ? [1, 1.3, 1] : 1 }} transition={moving ? { duration: 5 + index * 2, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }} className={`h-1/4 w-full border-b-8 border-[#f4f8fa] ${color}`} />)}
-        </div>
-        <motion.div animate={{ x: moving ? ['-30%', '100%'] : '-30%' }} transition={moving ? { duration: 18, repeat: Infinity, ease: 'linear' } : { duration: 0 }} className="absolute inset-x-0 top-[22%] flex -rotate-12 gap-12 opacity-40"><span className="h-1.5 w-28 bg-brand" /><span className="h-1.5 w-16 bg-accent" /><span className="h-1.5 w-40 bg-success" /></motion.div>
-      </div>
+      <ScreensaverBackdrop moving={moving} />
       <header className="flex shrink-0 items-center justify-between gap-3 px-5 py-3 sm:px-8 sm:py-4 [@media(max-height:500px)]:py-1">
         <h2 id="screensaver-title" className="flex items-center gap-2 text-sm font-bold"><span className="h-5 w-1 bg-accent" aria-hidden="true" />{round ? 'Point terminé' : 'Économiseur d’écran'}</h2>
         <Tooltip title={returnLabel}><IconButton ref={closeButton} autoFocus aria-label={returnLabel} onClick={onClose} className="h-12! w-12! bg-white! text-brand! shadow-sm"><CloseRounded /></IconButton></Tooltip>

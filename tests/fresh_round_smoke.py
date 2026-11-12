@@ -6,6 +6,7 @@ from pathlib import Path
 
 from playwright.sync_api import expect, sync_playwright
 from browser_bootstrap import install_browser_bootstrap
+from contrast_helpers import assert_contrast
 from postponement_smoke import WorkspaceMock, saved
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3001').rstrip('/')
@@ -86,6 +87,8 @@ def run_archive_reconciliation(browser, width, height, failure):
             expect(page.locator('.daily-score-list')).to_have_count(0)
             assert refreshes and len(reads) == 3
         else:
+            if width < 1024:
+                page.get_by_role('button', name='Classement', exact=True).click()
             expect(page.locator('.daily-score-list')).to_be_visible()
         assert len(posts) == 1
         bootstrap.assert_no_unexpected_api()
@@ -449,10 +452,81 @@ def run_case(browser, width, height, case):
         context.close()
 
 
+def run_timer_design(browser, width, height, motion, long_names=False):
+    context = browser.new_context(viewport={'width': width, 'height': height},
+                                  reduced_motion=motion, service_workers='block')
+    bootstrap = install_browser_bootstrap(context)
+    context.add_init_script('window.__timerNow = Date.now(); Date.now = () => window.__timerNow;')
+    db = WorkspaceMock()
+    db.team['warning'] = 30
+    for person in db.team['roster']:
+        person['mood'] = 2
+        if long_names:
+            person['name'] = person['name'] + 'W' * (60 - len(person['name']))
+    db.team['session'] = [person['id'] for person in db.team['roster']]
+    db.daily = db.meter.copy()
+    context.route('**/api/**', db.api)
+    context.route('**/api/meeting-settings', lambda route: route.fulfill(json={'prompts': ['Votre avancement du jour ?'], 'revision': 1}))
+    context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
+    page = context.new_page()
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    page.on('console', lambda message: errors.append(message.text) if message.type == 'error' and 'hydration' in message.text.lower() else None)
+    label = f'timer-{width}-{height}-{motion}-{"long" if long_names else "normal"}'
+
+    def check_layout(state):
+        expect(page.locator('[data-testid="stopwatch-timer"]')).to_have_css('transform', 'none')
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), label
+        dial = page.locator('[data-timer-dial]')
+        dial.scroll_into_view_if_needed()
+        assert dial.bounding_box()['height'] >= 90, (label, state, dial.bounding_box())
+        assert dial.locator('line').count() == 60
+        assert dial.locator('.MuiCircularProgress-circle').count() == 2
+        assert page.locator('#timer-display').evaluate('el => { const dial = el.closest("#timer-stage").querySelector("[data-timer-dial]").getBoundingClientRect(); const text = el.getBoundingClientRect(); return text.left >= dial.left && text.right <= dial.right && text.top >= dial.top && text.bottom <= dial.bottom; }'), (label, state, 'countdown outside dial')
+        for control in page.locator('#next-button, #start-button, #manage-timer-button, [data-active-speaker] button, [data-queue-actions] button').all():
+            control.scroll_into_view_if_needed()
+            box = control.bounding_box()
+            assert box['height'] >= 43.99 and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (label, state, box)
+            assert box['y'] >= 0 and box['y'] + box['height'] <= height + 1, (label, state, box)
+        assert page.locator('[data-active-speaker]').evaluate('el => { const name = el.querySelector("h2").getBoundingClientRect(); const action = el.querySelector("button").getBoundingClientRect(); return name.right <= action.left + 1; }'), (label, 'name overlaps report action')
+        if motion == 'reduce' and not long_names and width in (320, 1366):
+            assert_contrast(page, f'{label}-{state}', '.timer-panel')
+        if motion == 'reduce' and width in (390, 568, 1366):
+            page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-{label}-{state}.png'))
+
+    try:
+        page.goto(BASE + '/timer')
+        saved(page)
+        expect(page.locator('#timer-display')).to_have_text('02:00')
+        check_layout('ready')
+        page.locator('#start-button').click()
+        expect(page.locator('#start-button')).to_have_text('Pause')
+        check_layout('running')
+        page.locator('#timer-display').evaluate('el => { window.__timerDigits = el; }')
+        for seconds, urgency, value in [(95, 'warning', '00:25'), (16, 'critical', '00:09'), (13, 'expired', '+00:04')]:
+            page.evaluate('seconds => { window.__timerNow += seconds * 1000; document.dispatchEvent(new Event("visibilitychange")); }', seconds)
+            expect(page.locator('.timer-panel')).to_have_attribute('data-urgency', urgency)
+            expect(page.locator('#timer-display')).to_have_text(value)
+            assert page.locator('#timer-display').evaluate('el => el === window.__timerDigits'), 'Digits must not remount on each tick'
+            check_layout(urgency)
+        page.locator('#start-button').click()
+        saver = page.get_by_role('dialog', name='Économiseur d’écran', exact=True)
+        expect(saver).to_be_visible()
+        saver.get_by_role('button', name='Revenir au minuteur', exact=True).click()
+        expect(saver).not_to_be_visible()
+        expect(page.locator('#start-button')).to_have_text('Reprendre')
+        check_layout('paused')
+        bootstrap.assert_no_unexpected_api()
+        assert not db.unexpected and not errors, (db.unexpected, errors)
+        print(f'PASS {label}: dial, stable digits, 44px controls, ready/running/warning/critical/overtime/paused')
+    finally:
+        context.close()
+
+
 if __name__ == '__main__':
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        for width, height in [(320, 568), (1366, 768)]:
+        for width, height in ([] if os.environ.get('TIMER_DESIGN_ONLY') == '1' else [(320, 568), (1366, 768)]):
             for motion in ('reduce', 'no-preference'):
                 run_speaker_navigation(browser, width, height, motion)
             for failure in ('empty', 'unavailable', 'midnight'):
@@ -462,4 +536,9 @@ if __name__ == '__main__':
             if os.environ.get('TIMER_SAFETY_ONLY') != '1':
                 for case in ['reset', 'attendance', 'checkpoint']:
                     run_case(browser, width, height, case)
+        if os.environ.get('TIMER_SAFETY_ONLY') != '1':
+            sizes = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080), (568, 320), (844, 390)]
+            for width, height, long_names in [(width, height, False) for width, height in sizes] + [(320, 568, True), (1366, 768, True)]:
+                for motion in ('reduce', 'no-preference'):
+                    run_timer_design(browser, width, height, motion, long_names)
         browser.close()

@@ -1,9 +1,10 @@
-"""Compact dashboard fits screen; mocked APIs only."""
+"""Responsive awards dashboard and shared screensaver backdrop; mocked APIs only."""
 import os
 import tempfile
 from datetime import datetime, timezone
 from playwright.sync_api import sync_playwright, expect
 from browser_bootstrap import WARNING_SECONDS, install_browser_bootstrap, team_options
+from contrast_helpers import assert_contrast
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 with sync_playwright() as p:
@@ -21,8 +22,6 @@ with sync_playwright() as p:
         context.route('**/api/team', lambda route: route.fulfill(json={'team': team, 'revision': 1}))
         context.route('**/api/history', lambda route: route.fulfill(json={'rounds': [record]}))
         context.route('**/api/timer-remote', lambda route: route.fulfill(status=503, json={'error': 'Télécommande indisponible dans ce test isolé.'}))
-        context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json=[]))
-        context.route('**/mood-meters/slides/test/meter.svg', lambda route: route.fulfill(content_type='image/svg+xml', body='<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#e0f2fe"/><text x="80" y="180" font-size="40">Mood meter 1 4 / 2 3</text></svg>'))
         page = context.new_page()
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
@@ -31,6 +30,8 @@ with sync_playwright() as p:
         expect(page.get_by_role('button', name='Voir le bilan du jour', exact=True)).to_have_count(0)
         expect(page.get_by_role('dialog')).to_have_count(0)
         expect(page.locator('[data-results-podium]')).to_have_count(1)
+        expect(page.locator('[data-daily-results] [data-screensaver-decor]')).to_have_count(1)
+        expect(page.locator('[data-dashboard-column=moods], [data-mood-choice]')).to_have_count(0)
         expect(page.locator('[data-podium-rank="1"]')).to_contain_text('40 ex æquo')
         expect(page.locator('[data-podium-rank="2"], [data-podium-rank="3"]')).to_have_count(0)
         expect(page.get_by_role('term').filter(has_text='Score moyen')).to_be_visible()
@@ -51,31 +52,27 @@ with sync_playwright() as p:
             row = scores.locator('[data-daily-person]').first.bounding_box()
             list_box = scores.locator('.daily-score-list').bounding_box()
             assert row and list_box and row['y'] >= list_box['y'] - 1 and row['y'] + row['height'] <= list_box['y'] + list_box['height'] + 1, (width, height, row, list_box)
+            next_page = scores.get_by_role('button', name='Page suivante', exact=True)
+            expect(next_page).to_be_in_viewport()
+            next_page.click()
+            expect(scores.locator('[data-daily-person="p0"]')).to_have_count(0)
+            scores.get_by_role('button', name='Page précédente', exact=True).click()
+            expect(scores.locator('[data-daily-person="p0"]')).to_be_visible()
+            if width in [320, 1366] and motion == 'reduce':
+                assert_contrast(page, f'Awards ranking {width}')
+                page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-awards-ranking-{width}.png'))
             if width < 1024:
-                page.get_by_role('button', name='Humeurs', exact=True).click()
-            moods = page.locator('[data-dashboard-column=moods]')
-            expect(moods).to_be_visible()
-            if height <= 650:
-                moods.get_by_role('button', name='Voir image').click()
-                image_dialog = page.get_by_role('dialog')
-                page.wait_for_function("document.querySelector('[role=dialog] img')?.naturalWidth > 0")
-                image_dialog.get_by_role('button', name='Fermer l’image').click()
-                expect(image_dialog).not_to_be_visible()
-            else:
-                page.wait_for_function("document.querySelector('[data-dashboard-column=moods] img')?.naturalWidth > 0")
-            assert moods.locator('[data-mood-choice]').evaluate_all('els => els.map(el => Number(el.dataset.moodChoice))') == [1, 4, 2, 3]
-            moods.locator('[data-mood-choice="2"]').click()
-            expect(moods.locator('.daily-mood-list')).to_contain_text('Personne 01')
-            moods.locator('[data-mood-choice="2"]').click()
+                page.get_by_role('button', name='Podium', exact=True).click()
+            podium = page.locator('[data-results-podium]')
+            expect(podium).to_be_visible()
             page.wait_for_function("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))))")
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight')
-            overflow = page.evaluate("""() => Array.from(document.querySelectorAll('#daily-dashboard, #daily-dashboard section, .daily-score-list, .daily-mood-list')).filter(el => el.getBoundingClientRect().height > 0 && getComputedStyle(el).display !== 'none' && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1 && !['auto', 'scroll'].includes(getComputedStyle(el).overflowY))).map(el => [el.className, el.clientHeight, el.scrollHeight])""")
+            overflow = page.evaluate("""() => Array.from(document.querySelectorAll('#daily-dashboard, #daily-dashboard section, .daily-score-list')).filter(el => el.getBoundingClientRect().height > 0 && getComputedStyle(el).display !== 'none' && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1 && !['auto', 'scroll'].includes(getComputedStyle(el).overflowY))).map(el => [el.className, el.clientHeight, el.scrollHeight])""")
             assert not overflow, (motion, width, overflow)
-            for el in moods.locator('[data-mood-choice]').all():
-                box = el.bounding_box()
-                assert box['height'] >= 44 and box['y'] + box['height'] <= height + 1
+            expect(podium).to_be_in_viewport(ratio=1)
             if width in [320, 1366] and motion == 'reduce':
-                page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-compact-daily-{width}.png'))
+                assert_contrast(page, f'Awards podium {width}')
+                page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-awards-{width}.png'))
             page.get_by_role('button', name='Présenter le bilan', exact=True).click()
             expect(page.locator('#daily-dashboard')).to_have_count(1)
             expect(page.locator('[data-results-podium]')).to_have_count(1)
@@ -91,12 +88,28 @@ with sync_playwright() as p:
             exit_button = page.get_by_role('button', name='Quitter la présentation du bilan', exact=True)
             expect(exit_button).to_be_in_viewport()
             expect(page.get_by_test_id('timer-screensaver')).to_have_count(0)
+            page.locator('[data-results-podium]').scroll_into_view_if_needed()
+            expect(page.locator('[data-results-podium]')).to_be_in_viewport()
             exit_button.click()
         page.set_viewport_size({'width': 1366, 'height': 768})
         page.reload()
         expect(page.get_by_role('heading', name='Bilan du jour', exact=True)).to_be_visible()
         expect(page.get_by_role('dialog')).to_have_count(0)
         expect(page.locator('.daily-score-list')).to_be_visible()
+        backdrop = page.locator('[data-daily-results] [data-screensaver-decor] > div').first
+        if motion == 'reduce':
+            expect(page.locator('[data-awards-motion]')).to_have_attribute('data-awards-motion', 'paused')
+            expect(page.get_by_role('button', name='Arrêter les animations du bilan', exact=True)).to_be_disabled()
+        else:
+            before = backdrop.evaluate('element => getComputedStyle(element).transform')
+            page.wait_for_timeout(250)
+            assert backdrop.evaluate('element => getComputedStyle(element).transform') != before
+            page.get_by_role('button', name='Arrêter les animations du bilan', exact=True).click()
+            expect(page.locator('[data-awards-motion]')).to_have_attribute('data-awards-motion', 'paused')
+            page.wait_for_function('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))')
+        stopped = backdrop.evaluate('element => getComputedStyle(element).transform')
+        page.wait_for_timeout(250)
+        assert backdrop.evaluate('element => getComputedStyle(element).transform') == stopped
         assert not errors, errors
         record['people'] = [{**person, 'name': 'Participant' + 'Long' * 10 + str(index), 'score': 1000 - index * 100} for index, person in enumerate(people[:3])]
         for width, height in [(320, 568), (1366, 768)]:
@@ -106,7 +119,7 @@ with sync_playwright() as p:
             assert page.locator('[data-podium-rank]').evaluate_all('elements => elements.map(element => element.dataset.podiumRank)') == ['2', '1', '3']
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             if motion == 'reduce':
-                page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-results-podium-{width}.png'))
+                page.screenshot(path=os.path.join(tempfile.gettempdir(), f'scrum-awards-podium-{width}.png'))
         record['people'][1]['score'] = 1000
         page.reload()
         expect(page.locator('[data-podium-rank="1"]')).to_contain_text('2 ex æquo')
@@ -123,4 +136,4 @@ with sync_playwright() as p:
         bootstrap.assert_no_unexpected_api()
         context.close()
     browser.close()
-    print('PASS: single podium dashboard, six sizes and landscape, shared ranks, score details, mood filters, same-view presentation and reload; all APIs mocked')
+    print('PASS: awards dashboard, six sizes and landscape, shared ranks, paging, score details, no mood images, animated/paused/reduced backdrop, same-view presentation and reload; all APIs mocked')

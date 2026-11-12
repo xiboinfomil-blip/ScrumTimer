@@ -85,8 +85,10 @@ with sync_playwright() as p:
             page.get_by_role('link', name='Voir le bilan ou réinitialiser', exact=True).click()
             expect(page.get_by_text('Point quotidien terminé aujourd’hui', exact=True)).to_be_visible()
             expect(page.get_by_role('button', name='Voir le bilan du jour', exact=True)).to_have_count(0)
+            if width < 1024:
+                page.get_by_role('button', name='Classement', exact=True).click()
             expect(page.locator('.daily-score-list').get_by_text('Alice <safe>', exact=True)).to_be_visible()
-            expect(page.get_by_text('1000 pts', exact=True)).to_be_visible()
+            expect(page.locator('.daily-score-list').get_by_text('1000 pts', exact=True)).to_be_visible()
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             assert page.evaluate('document.documentElement.scrollHeight <= innerHeight')
         page = pages[1]
