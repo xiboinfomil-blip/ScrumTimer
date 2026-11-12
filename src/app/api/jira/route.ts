@@ -24,13 +24,14 @@ export async function GET(request: Request) {
     const service = await jiraService(database(), request);
     if (action === 'sites') return response({ options: (await service.sites()).map(({ id, name }) => ({ id, name })) });
     const cloudId = query.get('cloudId') ?? '';
-    if (!/^[a-f0-9-]{36}$/i.test(cloudId) && action !== 'tickets') throw new WorkspaceError(400, 'Site Jira invalide.');
+    if (!/^[a-f0-9-]{36}$/i.test(cloudId) && action !== 'tickets' && action !== 'ticket') throw new WorkspaceError(400, 'Site Jira invalide.');
     if (action === 'boards') return response({ options: await service.boards(cloudId) });
     const boardId = Number(query.get('boardId'));
     if (action === 'sprints' && Number.isSafeInteger(boardId) && boardId > 0 && boardId <= 2_147_483_647) return response({ options: await service.sprints(cloudId, boardId) });
-    if (action === 'tickets') {
+    if (action === 'tickets' || action === 'ticket') {
       const id = await selectedTeam(request); const sprint = await jiraTeamSprint(database(), id);
       if (!sprint) throw new WorkspaceError(400, 'Cette équipe n’est pas liée à un sprint Jira.');
+      if (action === 'ticket') return response({ ticket: await service.ticket(sprint, query.get('key') ?? '') });
       if (query.get('scope') === 'board') return response(await service.boardTickets(sprint, query.get('status') ?? 'indeterminate', request.headers.get('X-Jira-Refresh') === '1'));
       const participantId = query.get('participantId');
       if (!participantId?.startsWith('jira:') || participantId.length > 100) throw new WorkspaceError(400, 'Participant Jira invalide.');

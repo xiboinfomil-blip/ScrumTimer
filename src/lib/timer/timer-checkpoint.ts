@@ -4,7 +4,7 @@ import { hasValidSession, normalizeTeam } from '../team/team-storage.ts';
 import { timerFrame } from './timer.ts';
 
 export interface TimerState {
-  people: (SessionSpeaker & { postponed: boolean })[];
+  people: (SessionSpeaker & { postponed: boolean; turn?: { remaining: number; turnTotal: number; turnStarted: boolean; ended: boolean; warned: boolean } })[];
   activeId: string | null;
   previousId: string | null;
   remaining: number;
@@ -48,13 +48,26 @@ export function previousSpeaker(timer: TimerState) {
   return index > 0 ? timer.people.slice(0, index).findLast(person => !person.postponed) : undefined;
 }
 
-export function previousTimer(timer: TimerState, duration = timer.turnTotal): TimerState {
+export function previousTimer(timer: TimerState, duration = timer.turnTotal, now = Date.now()): TimerState {
   const person = previousSpeaker(timer);
   if (!person) return timer;
-  return { ...timer, activeId: person.id, previousId: timer.activeId,
-    people: timer.people.map(candidate => candidate === person ? { ...candidate, done: false } : candidate),
-    remaining: duration, turnTotal: duration, running: false, turnStarted: false,
-    focusMode: true, ended: false, warned: false, deadline: 0 };
+  const restored = switchTimerSpeaker(timer, person.id, duration);
+  return { ...restored, people: restored.people.map(candidate => candidate.id === person.id ? { ...candidate, done: false,
+    ...(timer.running ? { started: true, attempts: candidate.attempts + (restored.turnStarted ? 0 : 1), budgetSeconds: candidate.started ? candidate.budgetSeconds : restored.turnTotal } : {}) } : candidate),
+    focusMode: true, running: timer.running, turnStarted: timer.running || restored.turnStarted,
+    deadline: timer.running ? now + restored.remaining * 1000 : 0 };
+}
+
+export function switchTimerSpeaker(timer: TimerState, activeId: string | null, duration = timer.turnTotal): TimerState {
+  const person = timer.people.find(candidate => candidate.id === activeId);
+  const turn = person?.turn ?? {
+    remaining: person?.started ? person.budgetSeconds - person.speakingSeconds : duration,
+    turnTotal: person?.started ? person.budgetSeconds : duration,
+    turnStarted: person?.started ?? false, ended: person?.timeUp ?? false, warned: false,
+  };
+  return { ...timer, ...turn, activeId, previousId: timer.activeId, running: false, deadline: 0,
+    people: timer.people.map(candidate => candidate.id === timer.activeId ? { ...candidate,
+      turn: { remaining: timer.remaining, turnTotal: timer.turnTotal, turnStarted: timer.turnStarted, ended: timer.ended, warned: timer.warned } } : candidate) };
 }
 
 export const checkpointKey = (teamId: string) => `standup.timer.tab.v1:${teamId}`;
@@ -87,6 +100,10 @@ export function parseCheckpoint(raw: string | null, team: TeamState, now = new D
         || ['done', 'started', 'timeUp', 'postponed'].some(key => typeof person[key as keyof typeof person] !== 'boolean')
         || [person.speakingSeconds, person.budgetSeconds, person.attempts].some(value => !Number.isFinite(value) || value < 0 || value > 86400)
         || !Number.isInteger(person.attempts) || !validManualPenalty(person.manualPenalty))
+      || timer.people.some(person => person.turn !== undefined && (!person.turn
+        || !Number.isFinite(person.turn.remaining) || Math.abs(person.turn.remaining) > 86400
+        || !Number.isFinite(person.turn.turnTotal) || person.turn.turnTotal < 1 || person.turn.turnTotal > 86400
+        || [person.turn.turnStarted, person.turn.ended, person.turn.warned].some(value => typeof value !== 'boolean')))
       || [timer.remaining, timer.turnTotal, timer.deadline].some(value => !Number.isFinite(value))
       || timer.turnTotal < 1 || timer.turnTotal > 86400 || Math.abs(timer.remaining) > 86400
       || ['running', 'turnStarted', 'focusMode', 'managing', 'ended', 'warned'].some(key => typeof timer[key as keyof TimerState] !== 'boolean')

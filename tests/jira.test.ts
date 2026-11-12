@@ -9,7 +9,7 @@ import { JiraService } from '../src/lib/jira/jira-service.ts';
 import { assertJiraRoster, authorizeJiraTeam, jiraTeamSprint, syncJiraRoster, visibleJiraTeams } from '../src/lib/jira/jira-store.ts';
 import { createTeam, deleteTeam, listTeams } from '../src/lib/team/workspace-store.ts';
 import { readTeam, writeTeam } from '../src/lib/persistence/relational-store.ts';
-import { jiraTickets, sprintParticipants } from '../src/lib/jira/jira.ts';
+import { jiraTicketDetails, jiraTickets, sprintParticipants } from '../src/lib/jira/jira.ts';
 import { validateTeamCreation } from '../src/lib/team/team-directory.ts';
 import { JiraResourceCache } from '../src/lib/jira/jira-resource-cache.ts';
 
@@ -47,6 +47,53 @@ test('Jira resource cache does not retain failures or refill cleared entries', a
 });
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+test('Jira ticket details discover the board estimate field and remain board-authorized', async () => {
+  const originalFetch = globalThis.fetch;
+  const cloudId = '12345678-1234-1234-1234-123456789abc';
+  let permitted = true;
+  let available = true;
+  let configurationAllowed = true;
+  let details = 0;
+  const issue = { id: '1', key: 'DEV-1', fields: { summary: '<script>safe title</script>', status: { name: 'En cours' }, assignee: null,
+    description: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Description <img src=x>' }] }, { type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Acceptance criteria' }] }] }] }] },
+    customfield_10888: 0, labels: ['api'], components: [{ name: 'Backend' }], reporter: { displayName: 'Camille' }, parent: { key: 'DEV-9' } } };
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    if (url.pathname === '/oauth/token/accessible-resources') return Response.json([{ id: cloudId, name: 'Jira', url: 'https://example.atlassian.net', scopes: ['read:board-scope:jira-software'] }]);
+    if (url.pathname.endsWith('/board')) return Response.json({ values: permitted ? [{ id: 1, name: 'Board', type: 'scrum' }] : [], startAt: 0, isLast: true });
+    if (url.pathname.endsWith('/configuration')) return configurationAllowed ? Response.json({ estimation: { type: 'field', field: { fieldId: 'customfield_10888', displayName: 'Story Points' } } }) : new Response(null, { status: 403 });
+    assert.ok(url.pathname.endsWith('/board/1/issue'));
+    assert.equal(url.searchParams.get('jql'), 'key = "DEV-1"');
+    assert.equal(url.searchParams.get('fields')?.includes('customfield_10888'), configurationAllowed);
+    details++;
+    return Response.json({ issues: available ? [issue] : [], isLast: true });
+  };
+  try {
+    const ticket = await new JiraService('detail-fixture').ticket({ cloudId, boardId: 1 }, 'DEV-1');
+    assert.equal(ticket.description, 'Description <img src=x>\n• Acceptance criteria');
+    assert.deepEqual(ticket.estimate, { label: 'Story Points', value: 0 });
+    assert.equal(ticket.reporter, 'Camille');
+    assert.deepEqual(ticket.components, ['Backend']);
+    assert.equal(ticket.parent, 'DEV-9');
+    configurationAllowed = false;
+    const legacy = await new JiraService('detail-fixture').ticket({ cloudId, boardId: 1 }, 'DEV-1');
+    assert.equal(legacy.description, ticket.description);
+    assert.equal(legacy.estimateUnavailable, true);
+    assert.equal(legacy.estimate, null);
+    configurationAllowed = true;
+    assert.equal(jiraTicketDetails({ ...issue, fields: { ...issue.fields, description: null } }, 'https://example.atlassian.net').description, '');
+    available = false;
+    await assert.rejects(new JiraService('detail-fixture').ticket({ cloudId, boardId: 1 }, 'DEV-1'), { status: 404 });
+    permitted = false;
+    await assert.rejects(new JiraService('detail-fixture').ticket({ cloudId, boardId: 1 }, 'DEV-1'), { status: 403 });
+    await assert.rejects(new JiraService('detail-fixture').ticket({ cloudId, boardId: 1 }, 'DEV-1 OR key != DEV-2'), { status: 400 });
+    assert.equal(details, 3);
+    const recursive: { type: string; content: unknown[] } = { type: 'paragraph', content: [] };
+    recursive.content.push(recursive);
+    assert.throws(() => jiraTicketDetails({ ...issue, fields: { ...issue.fields, description: recursive } }, 'https://example.atlassian.net'), /complexe/);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 function configuration() {
   process.env.JIRA_CLIENT_ID = 'fixture-client'; process.env.JIRA_CLIENT_SECRET = 'fixture-secret';
   process.env.JIRA_ENCRYPTION_KEY = 'a'.repeat(64); process.env.JIRA_CALLBACK_URL = 'http://localhost:3001/api/jira/callback';

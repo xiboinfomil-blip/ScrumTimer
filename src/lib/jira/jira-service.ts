@@ -1,4 +1,4 @@
-import { jiraObject, jiraText, jiraTickets, sprintParticipants, type JiraOption, type JiraSprintSelection, type JiraStatusCategory } from './jira.ts';
+import { jiraObject, jiraText, jiraTicketDetails, jiraTickets, sprintParticipants, type JiraOption, type JiraSprintSelection, type JiraStatusCategory } from './jira.ts';
 import { jiraFetch } from './jira-auth.ts';
 import { WorkspaceError } from '../team/workspace-store.ts';
 import { createHash } from 'node:crypto';
@@ -91,6 +91,27 @@ export class JiraService {
     if (!board) throw new WorkspaceError(403, 'Tableau Scrum inaccessible avec votre compte Jira.');
     const load = () => this.issues(`/ex/jira/${selection.cloudId}/rest/software/1.0/board/${selection.boardId}/issue`, site.url, board.name, `statusCategory = ${categories[status]}`);
     return this.cachedTickets(`${selection.cloudId}:${selection.boardId}:board:${status}`, refresh, load);
+  }
+  async ticket(selection: Pick<JiraSprintSelection, 'cloudId' | 'boardId'>, key: string) {
+    if (!/^[A-Z][A-Z0-9_]*-\d+$/.test(key) || key.length > 100) throw new WorkspaceError(400, 'Clé Jira invalide.');
+    const site = await this.site(selection.cloudId);
+    await this.authorize(selection.cloudId, selection.boardId);
+    let configuration: Record<string, unknown> = {};
+    let estimateUnavailable = false;
+    try { configuration = jiraObject(await this.get(`/ex/jira/${selection.cloudId}/rest/agile/1.0/board/${selection.boardId}/configuration`)); }
+    catch (error) {
+      if (!(error instanceof WorkspaceError) || error.status !== 403) throw error;
+      estimateUnavailable = true;
+    }
+    const estimation = configuration.estimation == null ? null : jiraObject(configuration.estimation);
+    const field = estimation?.type === 'field' && estimation.field ? jiraObject(estimation.field) : null;
+    const estimateField = field ? { id: jiraText(field.fieldId, 100), name: jiraText(field.displayName, 200) } : undefined;
+    if (estimateField && !/^(?:customfield_\d+|[a-zA-Z]+)$/.test(estimateField.id)) throw new WorkspaceError(502, 'Champ d’estimation Jira invalide.');
+    const fields = ['summary', 'status', 'priority', 'assignee', 'issuetype', 'description', 'reporter', 'labels', 'components', 'updated', 'duedate', 'parent', ...(estimateField ? [estimateField.id] : [])];
+    const query = new URLSearchParams({ maxResults: '1', jql: `key = "${key}"`, fields: fields.join(',') });
+    const result = jiraObject(await this.get(`/ex/jira/${selection.cloudId}/rest/software/1.0/board/${selection.boardId}/issue?${query}`));
+    if (!Array.isArray(result.issues) || result.issues.length !== 1 || jiraObject(result.issues[0]).key !== key) throw new WorkspaceError(404, 'Ce ticket n’est plus disponible sur ce tableau.');
+    return { ...jiraTicketDetails(result.issues[0], site.url, estimateField), estimateUnavailable };
   }
   private async issues(path: string, siteUrl: string, name: string, jql?: string) {
     const issues: unknown[] = []; const seen = new Set<string>(); let token = '';

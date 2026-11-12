@@ -12,7 +12,7 @@ export function useViewMotion(view: string | boolean) {
     if (!root || preference.matches) return;
     const animations = Array.from(root.children)
       .filter((child): child is HTMLElement => child instanceof HTMLElement && child.getClientRects().length > 0)
-      .map(child => animate(child, { opacity: [.4, 1] }, { duration: .24, ease: [.22, 1, .36, 1] }));
+      .map(child => animate(child, { opacity: [.35, 1], y: [6, 0] }, { duration: .28, ease: [.22, 1, .36, 1] }));
     const stop = () => animations.forEach(animation => animation.stop());
     preference.addEventListener('change', stop);
     return () => { stop(); preference.removeEventListener('change', stop); };

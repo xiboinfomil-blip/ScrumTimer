@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSelectedLayoutSegment } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useTeam } from '@/providers/team-provider';
 import { Navbar } from '@/components/layout/navbar';
 import { useActionMotion } from '@/hooks/motion/use-action-motion';
@@ -51,11 +51,11 @@ export function AppShell({ children, modal }: { children: ReactNode; modal: Reac
     } catch { /* Show the introduction when browser storage is unavailable. */ }
     setIntroOpen(!seen);
   }, [pathname]);
-  useEffect(() => {
-    if (!ready || !routeScope.current || reduced) return;
-    const transition = animateRoute(routeScope.current, { opacity: [0, 1], y: [8, 0] }, { duration: .28, ease: [.22, 1, .36, 1] });
+  useLayoutEffect(() => {
+    if ((!ready && !publicPage) || !routeLoaded || !routeScope.current || reduced) return;
+    const transition = animateRoute(routeScope.current, { opacity: [0, 1], y: [12, 0] }, { duration: .38, ease: [.22, 1, .36, 1] });
     return () => transition.stop();
-  }, [pathname, ready, reduced, routeScope, animateRoute]);
+  }, [pathname, routeLoaded, ready, publicPage, reduced, routeScope, animateRoute]);
   useEffect(() => {
     if (pathname === '/help') return;
     const legacy = { '#participants': '/participants', '#mood': '/mood', '#timer': '/timer' }[location.hash];

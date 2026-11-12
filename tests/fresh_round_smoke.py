@@ -1,6 +1,8 @@
 """Reset/re-entry/checkpoint invalidation; all API traffic isolated from Neon."""
 import os
+import tempfile
 from datetime import date, timedelta
+from pathlib import Path
 
 from playwright.sync_api import expect, sync_playwright
 from browser_bootstrap import install_browser_bootstrap
@@ -187,6 +189,88 @@ def run_timer_safety(browser, width, height):
         context.close()
 
 
+def run_speaker_navigation(browser, width, height, motion='reduce'):
+    context = browser.new_context(viewport={'width': width, 'height': height},
+                                  reduced_motion=motion, service_workers='block')
+    bootstrap = install_browser_bootstrap(context)
+    context.add_init_script('window.__timerNow = Date.now(); Date.now = () => window.__timerNow;')
+    db = WorkspaceMock()
+    db.team['roster'].append({**db.team['roster'][0], 'id': 'carol', 'name': 'Carol'})
+    for person in db.team['roster']:
+        person['mood'] = 2
+    db.team['session'] = [person['id'] for person in db.team['roster']]
+    context.route('**/api/**', db.api)
+    context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
+    page = context.new_page()
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    key = 'standup.timer.tab.v1:' + 'a' * 64
+
+    def state():
+        return page.evaluate('(key) => JSON.parse(sessionStorage.getItem(key)).timer', key)
+
+    def advance(seconds):
+        page.evaluate('seconds => { window.__timerNow += seconds * 1000; document.dispatchEvent(new Event("visibilitychange")); }', seconds)
+        page.wait_for_function('key => { const timer = JSON.parse(sessionStorage.getItem(key)).timer; return timer.running && Math.abs(timer.remaining - (timer.deadline - Date.now()) / 1000) < .001; }', arg=key)
+
+    try:
+        page.goto(BASE + '/timer')
+        saved(page)
+        expect(page.locator('#start-button')).to_be_visible()
+        page.locator('#start-button').click()
+        advance(17)
+        assert state()['remaining'] == 103
+        page.locator('#next-button').click()
+        advance(9)
+        assert state()['remaining'] == 111, state()
+        page.locator('#previous-button').click()
+        expect(page.locator('#speaker-name')).to_have_text('Alice')
+        assert state()['remaining'] == 103 and state()['running']
+        assert state()['people'][0]['attempts'] == 1
+        page.locator('#next-button').click()
+        assert state()['remaining'] == 111 and state()['running']
+        assert state()['people'][1]['attempts'] == 1
+        page.locator('#previous-button').click()
+        header = page.locator('[data-active-speaker]')
+        report = header.get_by_role('button', name='Reporter le passage de Alice', exact=True)
+        expect(report).to_contain_text('Reporter ce passage')
+        assert header.bounding_box()['y'] < page.locator('#timer-stage').bounding_box()['y']
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        assert page.locator('[data-testid="stopwatch-timer"]').bounding_box()['height'] >= 90
+        if motion == 'reduce':
+            page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-timer-dock-{width}.png'))
+        report.click()
+        expect(page.locator('#speaker-name')).to_have_text('Bob')
+        assert state()['remaining'] == 111 and not state()['running']
+        expect(page.get_by_role('dialog', name='Économiseur d’écran', exact=True)).not_to_be_visible()
+        page.locator('#start-button').click()
+        page.get_by_role('button', name='Reporter le passage de Bob', exact=True).click()
+        expect(page.locator('#speaker-name')).to_have_text('Carol')
+        expect(page.get_by_role('dialog', name='Économiseur d’écran', exact=True)).not_to_be_visible()
+        page.evaluate('''() => {
+          window.__routeFrames = [];
+          function sample() {
+            const root = document.querySelector('[data-route-transition]');
+            if (root) window.__routeFrames.push(Number(getComputedStyle(root).opacity));
+            if (window.__routeFrames.length < 60) requestAnimationFrame(sample);
+          }
+          requestAnimationFrame(sample);
+        }''')
+        page.get_by_role('link', name='Participants', exact=True).click()
+        expect(page.locator('#participants-page')).to_be_visible()
+        page.wait_for_timeout(700)
+        frames = page.evaluate('window.__routeFrames')
+        if motion == 'no-preference':
+            assert any(value < .95 for value in frames), frames
+        else:
+            assert all(value == 1 for value in frames), frames
+        bootstrap.assert_no_unexpected_api()
+        assert not db.unexpected and not errors, (db.unexpected, errors)
+        print(f'PASS speaker navigation {width}x{height} {motion}: exact countdowns, no retry penalty, report without saver, dock, route motion')
+    finally:
+        context.close()
+
+
 def run_note_handoff(browser, width, height):
     context = browser.new_context(viewport={'width': width, 'height': height},
                                   reduced_motion='reduce', service_workers='block')
@@ -311,6 +395,8 @@ if __name__ == '__main__':
     with sync_playwright() as p:
         browser = p.chromium.launch()
         for width, height in [(320, 568), (1366, 768)]:
+            for motion in ('reduce', 'no-preference'):
+                run_speaker_navigation(browser, width, height, motion)
             for failure in ('empty', 'unavailable', 'midnight'):
                 run_archive_reconciliation(browser, width, height, failure)
             run_note_handoff(browser, width, height)

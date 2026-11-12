@@ -172,7 +172,8 @@ def open_late_checkin(page, db, source, meter_value):
     expect(modal.locator('#random-meter-button')).to_be_disabled()
     expect(modal.get_by_role('button', name='Humeurs de l’équipe', exact=True)).to_have_count(0)
     expect(modal.get_by_role('button', name='Humeur 2 pour Alice', exact=True)).to_have_count(0)
-    expect(modal.get_by_role('button', name='Humeur 3 pour Bob', exact=True)).to_be_enabled()
+    bob = next(person for person in db.team['roster'] if person['id'] == 'bob')
+    expect(modal.get_by_role('button', name='Faire rejoindre Bob' if bob['mood'] else 'Humeur 3 pour Bob', exact=True)).to_be_enabled()
     enlarge = modal.get_by_role('button', name='Afficher la diapositive 2', exact=True)
     if db.remote:
         geometry(page, page.viewport_size['width'], page.viewport_size['height'], [enlarge])
@@ -265,7 +266,7 @@ def run_case(browser, width, height, skip=False, late_at_end=False, remote=False
         if width <= 800:
             page.get_by_role('navigation', name='Pages de la liste').get_by_role('button', name='Page suivante').click()
         postpone = page.get_by_role('button', name='Reporter l’humeur et le passage de Bob', exact=True)
-        expect(postpone).to_have_text('Plus tard')
+        expect(postpone).to_have_text('Reporter passage')
         postpone.click()
         saved(page)
         expect(postpone).to_have_attribute('aria-pressed', 'true')
@@ -365,11 +366,11 @@ def run_case(browser, width, height, skip=False, late_at_end=False, remote=False
         expect(page.locator('#start-button')).to_contain_text('Pause')
         advance(page, 4)
         expect(page.locator('#timer-display')).to_have_text('01:56')
-        page.locator('.timer-panel').get_by_role('button', name='Reporter le passage de Bob', exact=True).click()
+        page.locator('[data-active-speaker]').get_by_role('button', name='Reporter le passage de Bob', exact=True).click()
 
         # Alice is done, Bob is still present/pending: this is NOT completion.
         expect(page.locator('#status-pill')).to_have_attribute('data-status', 'Personnes en attente')
-        expect(page.locator('#speaker-name')).to_have_text('En attente des personnes reportées')
+        expect(page.locator('#speaker-name')).to_have_text('Personnes reportées')
         expect(page.locator('#start-button')).to_be_disabled()
         expect(page.locator('#next-button')).to_be_disabled()
         no_archive(page, db)
@@ -394,12 +395,12 @@ def run_case(browser, width, height, skip=False, late_at_end=False, remote=False
             print(f'PASS: {width}x{height} explicit finish without postponed Bob, only Alice archived once')
             return
         advance(page, 20)
-        rejoin = choice.get_by_role('button', name='Humeur 3 pour Bob', exact=True)
+        rejoin = choice.get_by_role('button', name='Faire rejoindre Bob', exact=True)
         expect(rejoin).to_be_enabled()
         geometry(page, width, height, [rejoin])
         no_archive(page, db)
         modal, timer_url = open_late_checkin(page, db, None, meter_value)
-        modal.get_by_role('button', name='Humeur 3 pour Bob', exact=True).click()
+        modal.get_by_role('button', name='Faire rejoindre Bob', exact=True).click()
         saved(page)
         close_late_checkin(page, db, modal, timer_url)
         expect(choice).not_to_be_visible()
@@ -451,15 +452,82 @@ def run_case(browser, width, height, skip=False, late_at_end=False, remote=False
         context.close()
 
 
+def run_prestart_case(browser, width, height, existing_mood=None):
+    context = browser.new_context(viewport={'width': width, 'height': height},
+                                  reduced_motion='reduce', service_workers='block')
+    emulate_fullscreen(context)
+    install_browser_bootstrap(context, fullscreen=False, api_guard=False)
+    context.add_init_script(INIT)
+    db = WorkspaceMock()
+    db.team['roster'][0]['mood'] = 2
+    db.team['roster'][1]['mood'] = existing_mood
+    db.team['session'] = ['alice', 'bob']
+    db.team['postponed'] = ['bob']
+    db.daily = deepcopy(db.meter)
+    context.route('**/api/**', db.api)
+    context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
+    page = context.new_page()
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    try:
+        page.goto(BASE + '/timer')
+        saved(page)
+        expect(page.locator('#speaker-name')).to_have_text('Alice')
+        expect(page.locator('#timer-display')).to_have_text('02:00')
+        join = page.get_by_role('button', name='Rejoindre le tour', exact=True)
+        geometry(page, width, height, [join])
+        page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-prestart-timer-{width}-{existing_mood}.png'))
+        join.click()
+        modal = page.get_by_role('dialog', name='Un instant pour votre humeur', exact=True)
+        expect(modal).to_be_visible()
+        bob_before = deepcopy(db.team['roster'][1])
+        if existing_mood is None:
+            expect(modal.get_by_role('button', name='Faire rejoindre Bob', exact=True)).to_have_count(0)
+            action = modal.get_by_role('button', name='Humeur 3 pour Bob', exact=True)
+        else:
+            expect(modal.get_by_role('button', name=re.compile('Humeur [1-4] pour Bob'))).to_have_count(0)
+            action = modal.get_by_role('button', name='Faire rejoindre Bob', exact=True)
+            expect(action).to_contain_text(f'Humeur {existing_mood}')
+        geometry(page, width, height, [action])
+        page.screenshot(path=os.path.join(os.environ.get('TEMP', '.'), f'scrum-prestart-{width}-{existing_mood}.png'))
+        action.click()
+        saved(page)
+        expect(modal.get_by_role('status').filter(has_text='Toutes les personnes ont rejoint le tour')).to_be_visible()
+        modal.get_by_role('button', name='Revenir au tour', exact=True).click()
+        expect(modal).not_to_be_visible()
+        expect(join).to_have_count(0)
+        expect(page.locator('#speaker-name')).to_have_text('Alice')
+        expect(page.locator('#upcoming-speaker')).to_have_text('Bob')
+        expect(page.locator('#start-button')).to_contain_text('Démarrer')
+        advance(page, 15)
+        expect(page.locator('#timer-display')).to_have_text('02:00')
+        assert db.team['postponed'] == []
+        bob = db.team['roster'][1]
+        assert bob['mood'] == (existing_mood or 3)
+        if existing_mood is not None:
+            assert bob == bob_before, 'An existing mood must not be rewritten'
+        else:
+            assert bob['moodUpdatedAt']
+        no_archive(page, db)
+        assert not db.unexpected and not errors, (db.unexpected, errors)
+        print(f'PASS prestart join {width}x{height}: mood {existing_mood}, no automatic start or lost progress')
+    finally:
+        context.close()
+
+
 if __name__ == '__main__':
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         try:
             for width, height in SIZES:
+                run_prestart_case(browser, width, height)
+                run_prestart_case(browser, width, height, existing_mood=3)
                 run_case(browser, width, height)
                 run_case(browser, width, height, skip=True)
                 run_case(browser, width, height, late_at_end=True)
                 run_case(browser, width, height, late_at_end=True, remote=True)
             run_case(browser, 1366, 768, late_at_end=True, extra_postponed=True)
+            run_prestart_case(browser, 568, 320)
+            run_prestart_case(browser, 568, 320, existing_mood=3)
         finally:
             browser.close()

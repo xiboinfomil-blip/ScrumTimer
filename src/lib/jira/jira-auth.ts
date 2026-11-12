@@ -9,7 +9,7 @@ type Database = Pick<NeonHttpDatabase, 'execute' | 'batch'>;
 export const jiraCookie = 'scrum-jira-session';
 export const jiraStateCookie = 'scrum-jira-state';
 export const jiraSessionSeconds = 8 * 60 * 60;
-export const jiraScopes = ['read:me', 'offline_access', 'read:board-scope:jira-software', 'read:project:jira', 'read:sprint:jira-software', 'read:issue-details:jira', 'read:jql:jira'];
+export const jiraScopes = ['read:me', 'offline_access', 'read:board-scope:jira-software', 'read:board-scope.admin:jira-software', 'read:project:jira', 'read:sprint:jira-software', 'read:issue-details:jira', 'read:jql:jira'];
 const server: oauth.AuthorizationServer = { issuer: 'https://auth.atlassian.com', authorization_endpoint: 'https://auth.atlassian.com/authorize', token_endpoint: 'https://auth.atlassian.com/oauth/token' };
 export const jiraHash = (value: string) => createHash('sha256').update(value).digest('hex');
 const loginRequired = () => new WorkspaceError(401, 'Connectez-vous à Jira pour accéder à cette équipe de sprint.');

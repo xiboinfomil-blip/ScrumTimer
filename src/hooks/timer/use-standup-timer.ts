@@ -9,7 +9,7 @@ import type { Mood } from '@/types/team';
 import { completedRound } from '@/lib/history/history';
 import { finishWaitingRound, roundSpeakers } from '@/lib/timer/timer-completion';
 import { createId } from '@/lib/team/team-storage';
-import { penalizeCurrentTimer, previousSpeaker, previousTimer, recoverTimer, restartCurrentTimer, type TimerState } from '@/lib/timer/timer-checkpoint';
+import { penalizeCurrentTimer, previousSpeaker, previousTimer, recoverTimer, restartCurrentTimer, switchTimerSpeaker, type TimerState } from '@/lib/timer/timer-checkpoint';
 import { visibleModalDialogs } from '@/lib/timer/modal';
 
 export function useStandupTimer() {
@@ -116,18 +116,18 @@ export function useStandupTimer() {
       roundId.current ??= createId();
       saveRound(completedRound(roundId.current, roundSpeakers(people)));
     }
-    const prepared = cleared({ ...current, people, previousId: current.activeId, activeId: person?.id ?? null });
-    prepared.people = prepared.people.map(candidate => candidate.id === person?.id ? { ...candidate, started: true, attempts: candidate.attempts + 1, budgetSeconds: candidate.started ? candidate.budgetSeconds : prepared.turnTotal } : candidate);
+    const prepared = switchTimerSpeaker({ ...current, people }, person?.id ?? null, preferences.current.duration);
+    prepared.people = prepared.people.map(candidate => candidate.id === person?.id ? { ...candidate, started: true, attempts: candidate.attempts + (prepared.turnStarted ? 0 : 1), budgetSeconds: candidate.started ? candidate.budgetSeconds : prepared.turnTotal } : candidate);
     if (person && preferences.current.sound) { audio.current ??= new TimerAudio(); audio.current.prepare(); }
     commit({ ...prepared, focusMode: Boolean(person), running: Boolean(person), turnStarted: Boolean(person), deadline: person ? Date.now() + prepared.remaining * 1000 : 0 });
     notify(person ? `${person.name}, à vous la parole !` : people.some(p => p.postponed) ? 'Les passages disponibles sont terminés. Faites rejoindre les personnes reportées ou terminez sans elles.' : 'Point quotidien terminé. Bonne journée à toute l’équipe !');
-  }, [cleared, commit, notify, tick, saveRound]);
+  }, [commit, notify, tick, saveRound]);
   const previous = useCallback(() => {
     if (!previousSpeaker(latest.current)) return;
     const current = tick();
     const prepared = previousTimer(current, preferences.current.duration);
     commit(prepared);
-    notify(`Retour à ${prepared.people.find(person => person.id === prepared.activeId)?.name}. Minuteur en pause ; temps de parole et pénalités conservés.`);
+    notify(`Retour à ${prepared.people.find(person => person.id === prepared.activeId)?.name}. Temps restant conservé.`);
   }, [tick, commit, notify]);
   const finishWithoutPostponed = useCallback(() => {
     const finished = finishWaitingRound(latest.current);
@@ -147,7 +147,7 @@ export function useStandupTimer() {
     if (roundId.current) return;
     const current = latest.current;
     roundId.current = null;
-    commit(cleared({ ...current, focusMode: false, managing: false, previousId: null, people: current.people.map(p => ({ ...p, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0, manualPenalty: 0 })), activeId: current.people.find(p => !p.postponed)?.id ?? null }));
+    commit(cleared({ ...current, focusMode: false, managing: false, previousId: null, people: current.people.map(p => ({ ...p, turn: undefined, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0, manualPenalty: 0 })), activeId: current.people.find(p => !p.postponed)?.id ?? null }));
     notify('Un nouveau tour commence. Faisons le point.');
   }, [cleared, commit, notify]);
   const addTime = useCallback(() => {
@@ -200,10 +200,10 @@ export function useStandupTimer() {
       const index = people.findIndex(p => p.id === id);
       const following = [...people.slice(index + 1), ...people.slice(0, index)].find(p => !p.done && !p.postponed);
       if (!following) setLateChecking(true);
-      commit(cleared({ ...current, people, activeId: following?.id ?? null, focusMode: false }));
+      commit({ ...switchTimerSpeaker({ ...current, people }, following?.id ?? null, preferences.current.duration), focusMode: false });
     } else commit({ ...current, people });
     notify(`${target.name} : passage reporté, sans être marqué terminé.`);
-  }, [tick, cleared, commit, notify]);
+  }, [tick, commit, notify]);
   const rejoin = useCallback((id: string, mood?: Mood) => {
     const current = latest.current;
     const target = current.people.find(p => p.id === id && p.postponed && !p.done);

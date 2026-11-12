@@ -2,6 +2,7 @@ export type JiraSprintSelection = { cloudId: string; boardId: number; sprintId: 
 export type JiraOption = { id: string; name: string };
 export type JiraStatusCategory = 'new' | 'indeterminate' | 'done';
 export type JiraTicket = { id: string; key: string; summary: string; status: string; statusCategory?: JiraStatusCategory; issueType?: string; priority: string | null; assigneeId: string | null; assigneeName: string | null; url: string };
+export type JiraTicketDetails = JiraTicket & { description: string; estimate: { label: string; value: number } | null; estimateUnavailable?: boolean; reporter: string | null; labels: string[]; components: string[]; updated: string | null; dueDate: string | null; parent: string | null };
 export type JiraParticipant = { id: string; name: string; present: boolean; mood: null; moodUpdatedAt: null; moodSlide: null };
 export type JiraConnection = { configured: boolean; connected: boolean; name?: string };
 
@@ -50,4 +51,35 @@ export function sprintParticipants(tickets: readonly JiraTicket[]): JiraParticip
   if (!people.size) throw new Error('Ce sprint ne contient aucun ticket attribué.');
   if (people.size > 100) throw new Error('Ce sprint dépasse la limite de 100 participants.');
   return [...people.values()].sort((left, right) => left.name.localeCompare(right.name, 'fr'));
+}
+
+export function jiraTicketDetails(value: unknown, siteUrl: string, estimateField?: { id: string; name: string }): JiraTicketDetails {
+  const fields = jiraObject(jiraObject(value).fields);
+  let nodes = 0;
+  const text = (value: unknown, depth = 0): string => {
+    if (++nodes > 4000 || depth > 30) throw new Error('Description Jira trop complexe.');
+    if (value == null) return '';
+    if (typeof value === 'string') {
+      if (value.length > 40000) throw new Error('Description Jira trop longue.');
+      return value;
+    }
+    const node = jiraObject(value);
+    if (node.type === 'text') return text(node.text, depth + 1);
+    if (node.type === 'hardBreak') return '\n';
+    if (node.type === 'mention') return typeof jiraObject(node.attrs).text === 'string' ? jiraText(jiraObject(node.attrs).text, 300) : '';
+    const content = Array.isArray(node.content) ? node.content.map(child => text(child, depth + 1)).join('') : '';
+    return node.type === 'listItem' ? `• ${content.trim()}\n` : content + (['paragraph', 'heading', 'blockquote', 'codeBlock', 'bulletList', 'orderedList', 'tableRow'].includes(String(node.type)) ? '\n' : '');
+  };
+  const description = text(fields.description).trim();
+  if (description.length > 40000) throw new Error('Description Jira trop longue.');
+  const rawEstimate = estimateField ? fields[estimateField.id] : null;
+  const labels = fields.labels ?? [];
+  const components = fields.components ?? [];
+  if (!Array.isArray(labels) || !Array.isArray(components) || labels.length > 100 || components.length > 100) throw new Error('Métadonnées Jira invalides.');
+  return { ...jiraTickets([value], siteUrl)[0], description,
+    estimate: estimateField && typeof rawEstimate === 'number' && Number.isFinite(rawEstimate) && rawEstimate >= 0 ? { label: estimateField.name, value: rawEstimate } : null,
+    reporter: fields.reporter == null ? null : jiraText(jiraObject(fields.reporter).displayName, 300),
+    labels: labels.map(label => jiraText(label, 200)), components: components.map(component => jiraText(jiraObject(component).name, 200)),
+    updated: fields.updated == null ? null : jiraText(fields.updated, 50), dueDate: fields.duedate == null ? null : jiraText(fields.duedate, 50),
+    parent: fields.parent == null ? null : jiraText(jiraObject(fields.parent).key, 100) };
 }

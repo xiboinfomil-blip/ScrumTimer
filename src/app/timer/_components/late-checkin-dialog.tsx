@@ -21,9 +21,9 @@ export function LateCheckinDialog({ timer, autoOpen = false }: { timer: StandupT
           <h2 className="shrink-0 text-sm font-bold">Rejoindre le tour · {people.length}</h2>
           {people.length ? <PaginatedList className="late-checkin-list" items={people} renderItem={person => <li key={person.id} className="flex h-24 shrink-0 flex-col justify-center gap-2 rounded-xl border border-line bg-white px-3">
             <strong className="truncate text-sm" title={person.name}>{person.name}</strong>
-            <div className="flex gap-2" role="group" aria-label={`Humeur de ${person.name} : choisissez de 1 à 4`}>
+            {person.mood ? <Button onClick={() => timer.rejoin(person.id)} disabled={!dailyReady || cloudStatus !== 'saved'} aria-label={`Faire rejoindre ${person.name}`} sx={{ minHeight: 44, justifyContent: 'flex-start', textTransform: 'none' }}>Rejoindre le tour · Humeur {person.mood}</Button> : <div className="flex gap-2" role="group" aria-label={`Humeur de ${person.name} : choisissez de 1 à 4`}>
               {([1, 2, 3, 4] as Mood[]).map(mood => <button key={mood} type="button" className="grid size-11 shrink-0 place-items-center rounded-xl border border-line bg-white text-sm font-bold text-brand hover:border-brand hover:bg-blue-50 disabled:opacity-40" disabled={!dailyReady || cloudStatus !== 'saved'} aria-label={`Humeur ${mood} pour ${person.name}`} onClick={() => timer.rejoin(person.id, mood)}>{mood}</button>)}
-            </div>
+            </div>}
           </li>} /> : <p role="status" className="my-auto py-3 text-sm text-success">Toutes les personnes ont rejoint le tour. Reprenez lorsque vous êtes prêt.</p>}
         </section>
       </div>}

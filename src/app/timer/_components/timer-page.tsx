@@ -15,7 +15,7 @@ import { useStandupTimer } from '@/hooks/timer/use-standup-timer';
 import { useStepGuard } from '@/hooks/team/use-step-guard';
 import { DailyPrompts } from './daily-prompts';
 import { TeamLineup } from './team-lineup';
-import { TimerPanel } from './timer-panel';
+import { ActiveSpeaker, TimerPanel } from './timer-panel';
 import { SessionResults } from './session-results';
 import { TimerManagementDialog } from './timer-management-dialog';
 import { useViewMotion } from '@/hooks/motion/use-view-motion';
@@ -43,11 +43,11 @@ export function TimerPage() {
   const [lineupCapacity, setLineupCapacity] = useState(1);
   const [sharing, setSharing] = useState(false);
   const [blackScreen, setBlackScreen] = useState(false);
-  const previousRunning = useRef(timer.running);
+  const previousRunning = useRef({ running: timer.running, activeId: timer.activeId });
   useEffect(() => {
-    if (previousRunning.current && !timer.running && timer.activeId && !timer.managing && !timer.lateChecking && !lineupOpen && !sharing) setBlackScreen(true);
+    if (previousRunning.current.running && previousRunning.current.activeId === timer.activeId && !timer.running && timer.activeId && !timer.managing && !timer.lateChecking && !lineupOpen && !sharing) setBlackScreen(true);
     if (timer.running) setBlackScreen(false);
-    previousRunning.current = timer.running;
+    previousRunning.current = { running: timer.running, activeId: timer.activeId };
   }, [timer.running, timer.activeId, timer.managing, timer.lateChecking, lineupOpen, sharing]);
   const [navbarActions, setNavbarActions] = useState<HTMLElement | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -130,6 +130,7 @@ export function TimerPage() {
         <span role="status" className="text-xs text-muted">{broadcast.enabled ? broadcast.status : presentation.notice}</span>
         </div></DialogContent><DialogActions><Button onClick={() => setSharing(false)}>Fermer</Button></DialogActions>
       </Dialog>
+      <ActiveSpeaker timer={timer} />
       {presentation.presenting ? <ScreenTabs
         className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 max-[1099px]:flex min-[1100px]:hidden [@media(max-height:650px)]:flex [@media(max-height:650px)]:h-9 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0 [@media(max-height:650px)]:[&>button]:!min-h-9`}
         label="Présentation du point quotidien"
@@ -145,7 +146,7 @@ export function TimerPage() {
       />}
       <div ref={panels} className="workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 min-[1100px]:grid-cols-[minmax(0,1.35fr)_minmax(320px,.75fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1" data-view={presentation.presenting ? presentationView : view}>
         <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`min-[1100px]:col-start-1 ${presentation.presenting ? presentationView === 'notes' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
-        <aside aria-label="Pense-bête et humeur" className={`notes-rail grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 overflow-hidden min-[1100px]:border-l min-[1100px]:border-line min-[1100px]:pl-3 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? presentationView === 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'prompts' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`}>
+        <aside aria-label="Pense-bête et humeur" className={`notes-rail grid min-h-0 min-w-0 ${isSprint ? 'grid-rows-[minmax(520px,1fr)_auto] overflow-y-auto' : 'grid-rows-[minmax(0,1fr)_auto] overflow-hidden'} gap-3 min-[1100px]:border-l min-[1100px]:border-line min-[1100px]:pl-3 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? presentationView === 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'prompts' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`}>
           <DailyPrompts compact={timer.focusMode} speakerId={timer.activeId} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => presentation.presenting ? setPresentationView('timer') : setView('timer')} />
           <CurrentMoodCard compact={timer.focusMode} timer={timer} />
         </aside>

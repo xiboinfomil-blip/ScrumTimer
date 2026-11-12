@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkpointContext, checkpointDay, parseCheckpoint, penalizeCurrentTimer, previousSpeaker, previousTimer, recoverTimer, restartCurrentTimer, type TimerCheckpoint } from '../src/lib/timer/timer-checkpoint.ts';
+import { checkpointContext, checkpointDay, parseCheckpoint, penalizeCurrentTimer, previousSpeaker, previousTimer, recoverTimer, restartCurrentTimer, switchTimerSpeaker, type TimerCheckpoint } from '../src/lib/timer/timer-checkpoint.ts';
 import { MAX_MANUAL_PENALTY, scoreSpeaker, speakerScoreProgress } from '../src/lib/history/session-results.ts';
 import type { TeamState } from '../src/types/team.ts';
 
@@ -67,18 +67,19 @@ test('previous speaker reopens the prior eligible turn paused without discarding
   timer.activeId = 'bob';
   timer.people[1] = { ...timer.people[1], started: true, attempts: 1, budgetSeconds: 120 };
   const current = recoverTimer(timer, now.getTime() + 130000);
+  current.running = false;
   const previous = previousTimer(current);
   assert.equal(previous.activeId, 'alice');
   assert.equal(previous.previousId, 'bob');
   assert.equal(previous.people[0].done, false);
   assert.deepEqual(previous.people[0], { ...current.people[0], done: false });
-  assert.equal(previous.people[1], current.people[1]);
+  assert.equal(previous.people[1].turn?.remaining, current.remaining);
   assert.equal(previous.people[1].speakingSeconds, 130);
   assert.equal(previous.people[1].done, false);
-  assert.equal(previous.remaining, 120);
+  assert.equal(previous.remaining, 100);
   assert.equal(previous.turnTotal, 120);
   assert.equal(previous.running, false);
-  assert.equal(previous.turnStarted, false);
+  assert.equal(previous.turnStarted, true);
   assert.equal(previous.focusMode, true);
   assert.equal(previous.ended, false);
   assert.equal(previous.warned, false);
@@ -87,16 +88,66 @@ test('previous speaker reopens the prior eligible turn paused without discarding
   assert.equal(previousSpeaker(previous), undefined);
 });
 
+test('running previous preserves existing attempts and initializes a never-started turn', () => {
+  const timer = checkpoint().timer;
+  timer.activeId = 'bob';
+  timer.people = timer.people.map(person => ({ ...person, postponed: false }));
+  const existing = previousTimer(timer, 120, now.getTime());
+  assert.equal(existing.running, true);
+  assert.equal(existing.turnStarted, true);
+  assert.equal(existing.remaining, 100);
+  assert.equal(existing.deadline, now.getTime() + 100000);
+  assert.equal(existing.people[0].attempts, 1);
+  timer.people[0] = { ...timer.people[0], started: false, speakingSeconds: 0, budgetSeconds: 0, attempts: 0 };
+  const first = previousTimer(timer, 90, now.getTime());
+  assert.equal(first.running, true);
+  assert.equal(first.turnStarted, true);
+  assert.equal(first.remaining, 90);
+  assert.equal(first.people[0].started, true);
+  assert.equal(first.people[0].attempts, 1);
+  assert.equal(first.people[0].budgetSeconds, 90);
+  assert.equal(first.deadline, now.getTime() + 90000);
+  const paused = previousTimer({ ...timer, running: false }, 90, now.getTime());
+  assert.equal(paused.running, false);
+  assert.equal(paused.turnStarted, false);
+  assert.equal(paused.people[0].attempts, 0);
+});
+
 test('previous speaker skips postponed turns and never wraps or reopens a completed meeting', () => {
   const timer = checkpoint().timer;
   timer.people.push({ ...timer.people[0], id: 'charlie', name: 'Charlie', done: false });
   timer.activeId = 'charlie';
   assert.equal(previousSpeaker(timer)?.id, 'alice');
-  assert.equal(previousTimer(timer, 60).remaining, 60);
+  assert.equal(previousTimer(timer, 60).remaining, 100);
   for (const blocked of [{ ...timer, activeId: null }, { ...timer, activeId: 'missing' }, { ...timer, activeId: 'alice' }, { ...timer, managing: true }, { ...timer, people: timer.people.map(person => ({ ...person, postponed: true })) }]) {
     assert.equal(previousSpeaker(blocked), undefined);
     assert.equal(previousTimer(blocked), blocked);
   }
+});
+
+test('speaker handoffs restore exact countdowns, overtime and retry flags in both directions', () => {
+  const original = checkpoint().timer;
+  original.people[1].postponed = false;
+  original.remaining = -8;
+  original.ended = true;
+  original.warned = true;
+  const bob = switchTimerSpeaker(original, 'bob', 120);
+  assert.equal(bob.remaining, 120);
+  assert.equal(bob.turnStarted, false);
+  const alice = previousTimer({ ...bob, remaining: 87, turnStarted: true });
+  assert.equal(alice.remaining, -8);
+  assert.equal(alice.ended, true);
+  assert.equal(alice.warned, true);
+  assert.equal(alice.turnStarted, true);
+  const returned = switchTimerSpeaker(alice, 'bob', 120);
+  assert.equal(returned.remaining, 87);
+  assert.equal(returned.turnStarted, true);
+  assert.equal(returned.people[0].attempts, original.people[0].attempts);
+  const saved = checkpoint();
+  saved.timer.people[0].turn = { remaining: -8, turnTotal: 120, turnStarted: true, ended: true, warned: true };
+  assert.equal(parseCheckpoint(JSON.stringify(saved), team, now)?.timer.people[0].turn?.remaining, -8);
+  saved.timer.people[0].turn.remaining = Infinity;
+  assert.equal(parseCheckpoint(JSON.stringify(saved), team, now), null);
 });
 
 test('manual penalty targets only the current speaker, repeats by 50 and retains countdown/focus/metrics', () => {
