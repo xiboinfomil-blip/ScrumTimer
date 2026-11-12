@@ -106,7 +106,7 @@ class JiraMock(DirectoryMock):
                 person = None if unassigned else 'jira:a' if key.startswith('DEV') else 'jira:b'
                 payload = {'ticket': {'id': key, 'key': key,
                     'summary': 'W' * 255 if self.long_title else f'{person or "Non attribué"} ticket {key.split("-")[1]} <texte sûr>',
-                    'description': '' if unassigned else 'Fiabiliser la synchronisation des données entre les appareils.\n\nCritères d’acceptation\n• Conserver les modifications pendant une reconnexion.\n• Afficher un état cohérent sur tous les écrans.\n• Couvrir les erreurs et la reprise avec des tests.\n\n<img src=x onerror=alert(1)> reste du texte, jamais du HTML.\n\n' * 8,
+                    'description': '' if unassigned else ('## Résumé technique\n\n**Synchronisation** et *reprise*.\n\n- Conserver les données\n- Vérifier les erreurs\n\n[Documentation](https://example.atlassian.net/wiki)\n\n| Champ | Valeur |\n| --- | --- |\n| Identifiant | ' + 'W' * 180 + ' |\n\n```text\n' + 'W' * 180 + '\n```\n\n' if key.endswith('-1') else '') + 'Fiabiliser la synchronisation des données entre les appareils.\n\nCritères d’acceptation\n• Conserver les modifications pendant une reconnexion.\n• Afficher un état cohérent sur tous les écrans.\n• Couvrir les erreurs et la reprise avec des tests.\n\n<img src=x onerror=alert(1)> reste du texte, jamais du HTML.\n\n' * 8,
                     'estimate': None if unassigned or key.endswith('-2') else {'label': 'Story Points', 'value': 8},
                     'estimateUnavailable': key.endswith('-2'),
                     'status': 'En cours', 'statusCategory': 'indeterminate', 'issueType': 'Story', 'priority': 'Haute',
@@ -460,6 +460,12 @@ def ticket_layout_case(browser, width, height, motion, screenshots):
         expect(dialog).to_contain_text('Lecture seule')
         expect(dialog.locator('input, textarea, select, [contenteditable=true]')).to_have_count(0)
         description = dialog.get_by_role('region', name='Description', exact=True)
+        expect(description.get_by_role('heading', name='Résumé technique', exact=True)).to_be_visible()
+        expect(description.locator('strong')).to_have_text('Synchronisation')
+        expect(description.get_by_role('listitem')).to_have_count(2)
+        expect(description.get_by_role('table')).to_have_count(1)
+        expect(description.locator('pre code')).to_have_text('W' * 180 + '\n')
+        expect(description.get_by_role('link', name='Documentation', exact=True)).to_have_attribute('rel', 'noopener noreferrer')
         assert description.evaluate('element => element.scrollHeight > element.clientHeight && element.clientHeight >= 80 && element.scrollWidth <= element.clientWidth')
         description.focus()
         page.keyboard.press('End')

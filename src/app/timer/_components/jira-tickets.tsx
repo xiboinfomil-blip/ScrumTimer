@@ -23,6 +23,7 @@ import { useJiraResource } from '@/hooks/jira/use-jira-resource';
 import type { JiraStatusCategory, JiraTicket, JiraTicketDetails } from '@/lib/jira/jira';
 import { secondaryButton } from '@/components/ui/styles';
 import { useViewMotion } from '@/hooks/motion/use-view-motion';
+import { TicketDescription } from '@/components/jira/ticket-description';
 
 type TicketData = { name: string; tickets: JiraTicket[] };
 
@@ -109,7 +110,7 @@ function TicketDialog({ ticket, teamId, onClose }: { ticket: JiraTicket; teamId:
         <section className="min-w-0">
           <h3 id="jira-description-heading" className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink"><SubjectRounded className="text-muted" fontSize="small" />Description</h3>
           <div role="region" aria-labelledby="jira-description-heading" tabIndex={0} className="max-h-[min(22rem,40dvh)] overflow-y-auto overscroll-contain rounded-sm border border-line bg-white p-3 [scrollbar-gutter:stable] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
-            <p className={`whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere] ${detail.description ? 'text-ink' : 'text-muted'}`}>{detail.description || 'Aucune description renseignée.'}</p>
+            <TicketDescription description={detail.description} />
           </div>
           {!!detail.labels.length && <div className="mt-6 border-t border-line pt-3"><h3 className="mb-2 text-[11px] font-semibold text-muted">Étiquettes</h3><ul className="flex list-none flex-wrap gap-1.5">{detail.labels.map(label => <li key={label} className="max-w-full break-words rounded border border-line bg-slate-50 px-2 py-1 text-[11px] text-muted">{label}</li>)}</ul></div>}
         </section>
