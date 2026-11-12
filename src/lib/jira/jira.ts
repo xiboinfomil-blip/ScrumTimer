@@ -62,7 +62,8 @@ export function sprintParticipants(tickets: readonly JiraTicket[]): JiraParticip
 export function jiraTicketDetails(value: unknown, siteUrl: string, estimateField?: { id: string; name: string }): JiraTicketDetails {
   const fields = jiraObject(jiraObject(value).fields);
   let nodes = 0;
-  const text = (value: unknown, depth = 0): string => {
+  const escape = (value: string) => value.replace(/[\\`*_[\]<>~|]/g, '\\$&');
+  const text = (value: unknown, depth = 0, literal = false): string => {
     if (++nodes > 4000 || depth > 30) throw new Error('Description Jira trop complexe.');
     if (value == null) return '';
     if (typeof value === 'string') {
@@ -70,11 +71,58 @@ export function jiraTicketDetails(value: unknown, siteUrl: string, estimateField
       return value;
     }
     const node = jiraObject(value);
-    if (node.type === 'text') return text(node.text, depth + 1);
+    if (node.type === 'text') {
+      const raw = text(node.text, depth + 1);
+      if (literal) return raw;
+      const leading = raw.match(/^\s*/)?.[0] ?? '';
+      const trailing = raw.trim() ? raw.match(/\s*$/)?.[0] ?? '' : '';
+      let result = escape(raw.trim());
+      if (Array.isArray(node.marks) && node.marks.length > 20) throw new Error('Description Jira trop complexe.');
+      if (Array.isArray(node.marks)) for (const markValue of node.marks) {
+        const mark = jiraObject(markValue);
+        if (mark.type === 'strong') result = `**${result}**`;
+        if (mark.type === 'em') result = `*${result}*`;
+        if (mark.type === 'strike') result = `~~${result}~~`;
+        if (mark.type === 'code') {
+          const fence = '`'.repeat(Math.max(0, ...(raw.match(/`+/g) ?? []).map(run => run.length)) + 1);
+          result = `${fence} ${raw} ${fence}`;
+        }
+        if (mark.type === 'link') {
+          const href = jiraObject(mark.attrs).href;
+          if (typeof href === 'string' && /^https?:\/\//i.test(href)) result = `[${result}](<${href.replace(/[<>\s\\]/g, character => encodeURIComponent(character))}>)`;
+        }
+      }
+      return leading + result + trailing;
+    }
     if (node.type === 'hardBreak') return '\n';
-    if (node.type === 'mention') return typeof jiraObject(node.attrs).text === 'string' ? jiraText(jiraObject(node.attrs).text, 300) : '';
-    const content = Array.isArray(node.content) ? node.content.map(child => text(child, depth + 1)).join('') : '';
-    return node.type === 'listItem' ? `• ${content.trim()}\n` : content + (['paragraph', 'heading', 'blockquote', 'codeBlock', 'bulletList', 'orderedList', 'tableRow'].includes(String(node.type)) ? '\n' : '');
+    if (node.type === 'mention') return typeof jiraObject(node.attrs).text === 'string' ? escape(jiraText(jiraObject(node.attrs).text, 300)) : '';
+    const children = Array.isArray(node.content) ? node.content.map(child => text(child, depth + 1, literal || node.type === 'codeBlock')) : [];
+    const content = children.join('');
+    if (content.length > 40000) throw new Error('Description Jira trop longue.');
+    if (node.type === 'heading') {
+      const level = Number(node.attrs && jiraObject(node.attrs).level);
+      return `${'#'.repeat(Number.isInteger(level) && level >= 1 && level <= 6 ? level : 2)} ${content.trim()}\n\n`;
+    }
+    if (node.type === 'blockquote') return `${content.trim().split('\n').map(line => `> ${line}`).join('\n')}\n\n`;
+    if (node.type === 'codeBlock') {
+      const fence = '`'.repeat(Math.max(2, ...(content.match(/`+/g) ?? []).map(run => run.length)) + 1);
+      return `${fence}\n${content}\n${fence}\n\n`;
+    }
+    if (node.type === 'bulletList' || node.type === 'orderedList') {
+      const start = node.attrs && jiraObject(node.attrs).order;
+      return children.map((child, index) => {
+        const marker = node.type === 'bulletList' ? '-' : `${Number.isSafeInteger(start) && Number(start) > 0 ? Number(start) + index : index + 1}.`;
+        return `${marker} ${child.trim().replace(/\n/g, `\n${' '.repeat(marker.length + 1)}`)}\n`;
+      }).join('') + '\n';
+    }
+    if (node.type === 'tableRow') return `| ${children.map(child => child.trim().replace(/\n+/g, ' ')).join(' | ')} |\n`;
+    if (node.type === 'table') {
+      const firstRow = Array.isArray(node.content) && node.content.length ? jiraObject(node.content[0]).content : [];
+      const separator = `| ${Array.from({ length: Array.isArray(firstRow) ? firstRow.length : 0 }, () => '---').join(' | ')} |\n`;
+      return children.map((row, index) => index ? row : row + separator).join('') + '\n';
+    }
+    if (node.type === 'rule') return '\n---\n\n';
+    return content + (node.type === 'paragraph' ? '\n\n' : '');
   };
   const description = text(fields.description).trim();
   if (description.length > 40000) throw new Error('Description Jira trop longue.');

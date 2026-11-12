@@ -10,14 +10,18 @@ import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
 import SettingsRounded from '@mui/icons-material/SettingsRounded';
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Loader } from '@infomil/scrum-shared/ui';
 import type { useDailyHints } from '@/hooks/meeting/use-daily-hints';
-import { ParticipantNote } from '@/components/ui/participant-note';
 import { timerUrgency } from '@/lib/timer/timer';
 import type { StandupTimer } from './timer-page';
 import { previousSpeaker } from '@/lib/timer/timer-checkpoint';
 import { TimerIcon } from './timer-icon';
+
+const ParticipantNote = dynamic(() => import('@/components/ui/participant-note').then(module => module.ParticipantNote), {
+  loading: () => <Loader size="sm" label="Chargement de la note…" />,
+});
 
 export function ActiveSpeaker({ timer }: { timer: StandupTimer }) {
   const person = timer.person;

@@ -83,7 +83,7 @@ test('Jira ticket details discover the board estimate field and remain board-aut
   };
   try {
     const ticket = await new JiraService('detail-fixture').ticket({ cloudId, boardId: 1 }, 'DEV-1');
-    assert.equal(ticket.description, 'Description <img src=x>\n• Acceptance criteria');
+    assert.equal(ticket.description, 'Description \\<img src=x\\>\n\n- Acceptance criteria');
     assert.deepEqual(ticket.estimate, { label: 'Story Points', value: 0 });
     assert.equal(ticket.reporter, 'Camille');
     assert.deepEqual(ticket.components, ['Backend']);

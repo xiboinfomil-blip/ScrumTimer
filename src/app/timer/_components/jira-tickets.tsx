@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Loader } from '@infomil/scrum-shared/ui';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -23,7 +24,9 @@ import { useJiraResource } from '@/hooks/jira/use-jira-resource';
 import type { JiraStatusCategory, JiraTicket, JiraTicketDetails } from '@/lib/jira/jira';
 import { secondaryButton } from '@/components/ui/styles';
 import { useViewMotion } from '@/hooks/motion/use-view-motion';
-import { TicketDescription } from '@/components/jira/ticket-description';
+const TicketDescription = dynamic(() => import('@/components/jira/ticket-description').then(module => module.TicketDescription), {
+  loading: () => <Loader size="sm" label="Chargement de la description…" />,
+});
 
 type TicketData = { name: string; tickets: JiraTicket[] };
 

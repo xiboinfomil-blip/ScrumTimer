@@ -1,15 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { Loader } from '@infomil/scrum-shared/ui';
 import { motion, useReducedMotion } from 'framer-motion';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
-import { ParticipantNote } from '@/components/ui/participant-note';
 import { useTeam } from '@/providers/team-provider';
 import { DEFAULT_DISCUSSION_PROMPTS, validateDiscussionPrompts, validateMeetingSettings, type MeetingSettings } from '@/lib/meeting/meeting-settings';
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, TextField } from '@mui/material';
 import { JiraTickets } from './jira-tickets';
 import EditNoteRounded from '@mui/icons-material/EditNoteRounded';
 import FormatListNumberedRounded from '@mui/icons-material/FormatListNumberedRounded';
+
+const ParticipantNote = dynamic(() => import('@/components/ui/participant-note').then(module => module.ParticipantNote), {
+  loading: () => <Loader size="sm" label="Chargement de la note…" />,
+});
 
 const descriptions = [
   'Partagez vos avancées, vos petites réussites et ce que vous avez terminé.',

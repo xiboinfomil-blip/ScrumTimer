@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSelectedLayoutSegment } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useTeam } from '@/providers/team-provider';
 import { Navbar } from '@/components/layout/navbar';
@@ -9,10 +10,13 @@ import { motion, MotionConfig, useAnimate, useReducedMotion } from 'framer-motio
 import { Alert, Button } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { PageSkeleton, skeletonVariantForPath } from '@/components/ui/page-skeleton';
-import { DailyRound } from './daily-round';
 import { DesktopFullscreenGate } from './desktop-fullscreen-gate';
 import { WelcomeEntrance } from './welcome-entrance';
 import { RemoteHostProvider } from '@/providers/remote-host-provider';
+
+const DailyRound = dynamic(() => import('./daily-round').then(module => module.DailyRound), {
+  loading: () => <PageSkeleton variant="timer" label="Chargement du bilan…" />,
+});
 
 const WELCOME_DAY_KEY = 'standup.welcome.day.v1';
 
