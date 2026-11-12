@@ -84,12 +84,12 @@ export class JiraService {
     return this.cachedTickets(`${selection.cloudId}:${selection.boardId}:${selection.sprintId}`, activeOnly || refresh, load);
   }
   async boardTickets(selection: Pick<JiraSprintSelection, 'cloudId' | 'boardId'>, status: string = 'indeterminate', refresh = false) {
-    if (status !== 'new' && status !== 'indeterminate' && status !== 'done') throw new WorkspaceError(400, 'Statut Jira invalide.');
+    if (status !== 'all' && status !== 'new' && status !== 'indeterminate' && status !== 'done') throw new WorkspaceError(400, 'Statut Jira invalide.');
     const categories: Record<JiraStatusCategory, string> = { new: '"To Do"', indeterminate: '"In Progress"', done: '"Done"' };
     const site = await this.site(selection.cloudId);
     const board = (await this.boards(selection.cloudId)).find(board => board.id === String(selection.boardId));
     if (!board) throw new WorkspaceError(403, 'Tableau Scrum inaccessible avec votre compte Jira.');
-    const load = () => this.issues(`/ex/jira/${selection.cloudId}/rest/software/1.0/board/${selection.boardId}/issue`, site.url, board.name, `statusCategory = ${categories[status]}`);
+    const load = () => this.issues(`/ex/jira/${selection.cloudId}/rest/software/1.0/board/${selection.boardId}/issue`, site.url, board.name, status === 'all' ? undefined : `statusCategory = ${categories[status]}`);
     return this.cachedTickets(`${selection.cloudId}:${selection.boardId}:board:${status}`, refresh, load);
   }
   async ticket(selection: Pick<JiraSprintSelection, 'cloudId' | 'boardId'>, key: string) {

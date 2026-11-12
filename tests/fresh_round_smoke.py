@@ -229,6 +229,18 @@ def run_speaker_navigation(browser, width, height, motion='reduce'):
         expect(page.locator('#upcoming-speaker')).to_have_text('Carol')
         assert state()['remaining'] == 103 and state()['running']
         assert state()['people'][1]['postponed'] and not state()['people'][1]['done']
+        queue = page.get_by_role('group', name='Gestion de la file d’attente', exact=True)
+        queue_box = queue.bounding_box()
+        controls = page.locator('[data-timer-controls]').bounding_box()
+        assert queue_box['y'] >= controls['y'] + controls['height'] - 1
+        assert queue_box['y'] + queue_box['height'] <= height
+        assert queue.get_by_role('button', name='En attente', exact=True).bounding_box()['height'] >= 44
+        assert queue.get_by_role('button', name='Reporter le prochain passage de Carol', exact=True).bounding_box()['height'] >= 44
+        assert page.locator('[data-speaker-navigation] [data-postpone-next]').count() == 0
+        expect(page.locator('[data-testid="stopwatch-timer"]')).to_have_css('transform', 'none')
+        assert page.locator('[data-testid="stopwatch-timer"]').bounding_box()['height'] >= 90
+        if motion == 'reduce':
+            page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-queue-{width}.png'))
         advance(2)
         assert state()['remaining'] == 101
         expect(page.get_by_role('dialog', name='Économiseur d’écran', exact=True)).not_to_be_visible()

@@ -290,6 +290,7 @@ test('Jira board tickets share all assignees and pages without skipping fresh au
   const originalFetch = globalThis.fetch;
   const selection = { cloudId: '12345678-1234-1234-1234-123456789abc', boardId: 7 };
   let issueReads = 0; let boardReads = 0; let forbidden = false; let looping = false;
+  const filters: (string | null)[] = [];
   const issue = (id: string, accountId: string | null) => ({ id, key: `DEV-${id}`, fields: { summary: `Ticket ${id}`, status: { name: 'Ouvert' }, assignee: accountId ? { accountId, displayName: accountId } : null } });
   globalThis.fetch = async input => {
     const url = new URL(String(input));
@@ -300,7 +301,8 @@ test('Jira board tickets share all assignees and pages without skipping fresh au
     }
     assert.ok(url.pathname.endsWith('/rest/software/1.0/board/7/issue'));
     assert.equal(url.searchParams.get('fields'), 'summary,status,priority,assignee,issuetype');
-    assert.ok(['statusCategory = "In Progress"', 'statusCategory = "To Do"', 'statusCategory = "Done"'].includes(url.searchParams.get('jql') ?? ''));
+    filters.push(url.searchParams.get('jql'));
+    assert.ok([null, 'statusCategory = "In Progress"', 'statusCategory = "To Do"', 'statusCategory = "Done"'].includes(url.searchParams.get('jql')));
     issueReads++;
     return Response.json(url.searchParams.has('nextPageToken')
       ? { isLast: !looping, nextPageToken: 'next', issues: [issue('3', null)] }
@@ -324,9 +326,14 @@ test('Jira board tickets share all assignees and pages without skipping fresh au
     await new JiraService('board-access').boardTickets(selection, 'new'); assert.equal(issueReads, 12);
     await new JiraService('board-access').boardTickets(selection, 'indeterminate'); assert.equal(issueReads, 12);
     await new JiraService('board-access').boardTickets(selection, 'done'); assert.equal(issueReads, 12);
-    await assert.rejects(new JiraService('board-access').boardTickets(selection, 'all'), { status: 400 });
+    const complete = await new JiraService('board-access').boardTickets(selection, 'all');
+    assert.equal(complete.tickets.length, 3);
+    assert.equal(issueReads, 14);
+    assert.deepEqual(filters.slice(-2), [null, null]);
+    await new JiraService('board-access').boardTickets(selection, 'all');
+    assert.equal(issueReads, 14);
     await assert.rejects(new JiraService('board-access').boardTickets(selection, 'done OR assignee IS NOT EMPTY'), { status: 400 });
-    assert.equal(issueReads, 12);
+    assert.equal(issueReads, 14);
   } finally { globalThis.fetch = originalFetch; }
 });
 
