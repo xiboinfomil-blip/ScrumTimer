@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
@@ -107,8 +107,9 @@ test('browser mood reads share pending metadata without one aborted consumer can
 test('PostgreSQL cache: shared hits, seven-day purge, failures, concurrent fills and domain isolation', async () => {
   const engine = new PGlite();
   try {
-    for (const name of ['0000_spotty_the_stranger', '0001_abandoned_snowbird', '0002_workspace_daily_meters', '0003_remote_mood_cache']) {
-      await engine.exec(readFileSync(new URL(`../drizzle/${name}.sql`, import.meta.url), 'utf8'));
+    const directory = new URL('../drizzle/', import.meta.url);
+    for (const name of readdirSync(directory).filter(name => /^\d+.*\.sql$/.test(name)).sort()) {
+      await engine.exec(readFileSync(new URL(name, directory), 'utf8'));
     }
     const team = 'a'.repeat(64);
     await engine.query('INSERT INTO workspaces(id) VALUES($1)', [team]);
@@ -122,6 +123,7 @@ test('PostgreSQL cache: shared hits, seven-day purge, failures, concurrent fills
         return engine.query(compiled.sql, compiled.params).then(resolve, reject);
       } }),
       batch: (queries: { query: SQL }[]) => engine.transaction(async tx => {
+        assert.match(dialect.sqlToQuery(queries[0].query).sql, /^SELECT pg_advisory_xact_lock\(20501029\)$/, 'budget lock precedes cache row locks and every write');
         const results = [];
         for (const { query } of queries) {
           const compiled = dialect.sqlToQuery(query);

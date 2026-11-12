@@ -25,7 +25,7 @@ def run_archive_reconciliation(browser, width, height, failure):
     winner = None
 
     def team(route):
-        if route.request.method == 'GET' and posts and failure == 'midnight':
+        if route.request.method == 'GET' and posts and failure.startswith('midnight'):
             assert route.request.headers.get('x-team-refresh') == '1'
             refreshes.append(route.request)
         route.fallback()
@@ -34,14 +34,18 @@ def run_archive_reconciliation(browser, width, height, failure):
         if route.request.method == 'POST':
             posts.append(route.request.post_data_json)
             assert len(posts) == 1, 'Reconciliation must not resubmit the archive'
-            route.fulfill(status=409, json={'error': 'Already completed elsewhere'})
+            if failure == 'midnight-saved':
+                db.day = (date.fromisoformat(db.day) + timedelta(days=1)).isoformat()
+                route.fulfill(json={'saved': True, 'day': db.day})
+            else:
+                route.fulfill(status=409, json={'error': 'Already completed elsewhere'})
         elif not posts:
             route.fulfill(json={'rounds': [], 'day': db.day})
         else:
             assert route.request.headers.get('x-team-refresh') == '1'
             reads.append(route.request)
-            if failure == 'midnight' and len(reads) > 2:
-                route.fulfill(json={'rounds': [winner], 'day': db.day})
+            if failure.startswith('midnight') and len(reads) > 2:
+                route.fulfill(json={'rounds': [] if failure == 'midnight-empty' else [winner], 'day': db.day})
             elif len(reads) == 1:
                 if failure == 'empty':
                     route.fulfill(json={'rounds': [], 'day': db.day})
@@ -73,17 +77,18 @@ def run_archive_reconciliation(browser, width, height, failure):
         winner = {**posts[0], 'id': 'remote-winner', 'people': [
             {**person, 'speakingSeconds': 80, 'budgetSeconds': 120, 'score': 750}
             for person in posts[0]['people']]}
-        if failure == 'midnight':
-            db.day = (date.fromisoformat(db.day) + timedelta(days=1)).isoformat()
+        if failure.startswith('midnight'):
+            if failure != 'midnight-saved':
+                db.day = (date.fromisoformat(db.day) + timedelta(days=1)).isoformat()
             db.team['session'] = []
             for person in db.team['roster']:
                 person['mood'] = None
                 person['moodUpdatedAt'] = None
-        pending[0].fulfill(json={'rounds': [winner], 'day': db.day})
+        pending[0].fulfill(json={'rounds': [] if failure == 'midnight-empty' else [winner], 'day': db.day})
         saved(page)
         page.wait_for_function('(key) => sessionStorage.getItem(key) === null', arg=key)
         expect(page.locator('#timer-page[data-mode="results"]')).to_have_count(0)
-        if failure == 'midnight':
+        if failure.startswith('midnight'):
             expect(page.locator('.daily-score-list')).to_have_count(0)
             assert refreshes and len(reads) == 3
         else:
@@ -116,6 +121,58 @@ def move_bob(page, width, present):
     page.locator('#attendance-search').fill('Bob')
     section.locator('.checkin-person').filter(has_text='Bob').locator('.attendance-button').click()
     saved(page)
+
+
+def run_warning_change(browser, width, height):
+    context = browser.new_context(viewport={'width': width, 'height': height},
+                                  reduced_motion='reduce', service_workers='block')
+    bootstrap = install_browser_bootstrap(context)
+    context.add_init_script('window.__timerNow = Date.now(); Date.now = () => window.__timerNow;')
+    db = WorkspaceMock()
+    db.team['warning'] = 30
+    for person in db.team['roster']:
+        person['mood'] = 2
+    db.team['session'] = [person['id'] for person in db.team['roster']]
+    db.daily = db.meter.copy()
+    context.route('**/api/**', db.api)
+    context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
+    page = context.new_page()
+    key = 'standup.timer.tab.v1:' + 'a' * 64
+
+    def state():
+        return page.evaluate('(key) => JSON.parse(sessionStorage.getItem(key)).timer', key)
+
+    try:
+        page.goto(BASE + '/timer')
+        saved(page)
+        page.locator('#start-button').click()
+        page.evaluate('window.__timerNow += 95000; document.dispatchEvent(new Event("visibilitychange"));')
+        expect(page.locator('#timer-display')).to_have_text('00:25')
+        assert state()['warned']
+        notification = page.locator('[data-notification]')
+        expect(notification).to_contain_text('Il reste 25 secondes')
+        assert_contrast(page, f'warning-notification-{width}', '[data-notification]')
+        page.locator('#next-button').click()
+        assert state()['people'][0]['turn']['warned']
+        page.locator('#manage-timer-button').click()
+        settings = page.get_by_role('dialog', name='Modifier le minuteur', exact=True)
+        settings.locator('#warning-seconds').select_option('10')
+        settings.get_by_role('button', name='Fermer les réglages', exact=True).click()
+        expect(settings).not_to_be_visible()
+        assert not state()['people'][0]['turn']['warned']
+        page.locator('#previous-button').click()
+        assert state()['remaining'] == 25 and not state()['warned']
+        page.locator('#start-button').click()
+        page.evaluate('window.__timerNow += 16000; document.dispatchEvent(new Event("visibilitychange"));')
+        expect(page.locator('#timer-display')).to_have_text('00:09')
+        assert state()['warned']
+        expect(notification).to_contain_text('Il reste 9 secondes')
+        assert_contrast(page, f'changed-warning-notification-{width}', '[data-notification]')
+        bootstrap.assert_no_unexpected_api()
+        assert not db.unexpected, db.unexpected
+        print(f'PASS warning change {width}x{height}: saved turn re-armed, 25s preserved, warning contrast')
+    finally:
+        context.close()
 
 
 def run_timer_safety(browser, width, height):
@@ -346,6 +403,9 @@ def run_note_handoff(browser, width, height):
     pending = []
     held = False
     refreshed = False
+    unsafe_requests = []
+    context.route('https://evil.invalid/**', lambda route: (unsafe_requests.append(route.request.url), route.abort()))
+    markdown = '**Avancement**\n\n- API terminée\n- *Tests* en cours\n\n1. ~~Ancien~~\n2. Suite\n\n<script>alert(1)</script>\n\n![image](https://evil.invalid/note-image)\n\n[Lien](https://evil.invalid/note-link)'
 
     def hints(route):
         if held:
@@ -353,7 +413,7 @@ def run_note_handoff(browser, width, height):
         else:
             route.fulfill(json={'day': db.day, 'hints': [
                 {'participantId': 'carol', 'hint': 'Updated during handoff', 'revision': 1}
-            ] if refreshed else []})
+            ] if refreshed else [{'participantId': 'alice', 'hint': markdown, 'revision': 1}]})
 
     context.route('**/api/daily-hints', hints)
     page = context.new_page()
@@ -362,6 +422,18 @@ def run_note_handoff(browser, width, height):
         saved(page)
         expect(page.locator('#start-button')).to_be_visible()
         page.locator('#start-button').click()
+        page.get_by_role('button', name='Lire la note de Alice', exact=True).click()
+        note = page.get_by_role('dialog', name='Le pense-bête de Alice', exact=True)
+        expect(note.locator('strong')).to_have_text('Avancement')
+        expect(note.locator('em')).to_have_text('Tests')
+        expect(note.locator('del')).to_have_text('Ancien')
+        expect(note.locator('script, textarea, input, img, a, iframe')).to_have_count(0)
+        before = page.locator('#timer-display').inner_text()
+        expect(page.locator('#start-button')).to_contain_text('Pause')
+        expect(page.locator('#timer-display')).not_to_have_text(before)
+        note.get_by_role('button', name='Fermer', exact=True).click()
+        expect(note).not_to_be_visible()
+        expect(page.locator('#start-button')).to_contain_text('Pause')
         held = True
         page.locator('#next-button').click()
         expect(page.locator('#speaker-name')).to_have_text('Bob')
@@ -377,8 +449,8 @@ def run_note_handoff(browser, width, height):
             page.get_by_role('button', name='Pense-bête & humeur', exact=True).click()
         expect(page.locator('.notes-rail')).to_contain_text('Updated during handoff')
         bootstrap.assert_no_unexpected_api()
-        assert not db.unexpected, db.unexpected
-        print(f'PASS note refresh during in-flight handoff {width}x{height}')
+        assert not db.unexpected and not unsafe_requests, (db.unexpected, unsafe_requests)
+        print(f'PASS note Markdown safety, running countdown and in-flight handoff {width}x{height}')
     finally:
         context.close()
 
@@ -529,9 +601,10 @@ if __name__ == '__main__':
         for width, height in ([] if os.environ.get('TIMER_DESIGN_ONLY') == '1' else [(320, 568), (1366, 768)]):
             for motion in ('reduce', 'no-preference'):
                 run_speaker_navigation(browser, width, height, motion)
-            for failure in ('empty', 'unavailable', 'midnight'):
+            for failure in ('empty', 'unavailable', 'midnight', 'midnight-saved', 'midnight-empty'):
                 run_archive_reconciliation(browser, width, height, failure)
             run_note_handoff(browser, width, height)
+            run_warning_change(browser, width, height)
             run_timer_safety(browser, width, height)
             if os.environ.get('TIMER_SAFETY_ONLY') != '1':
                 for case in ['reset', 'attendance', 'checkpoint']:

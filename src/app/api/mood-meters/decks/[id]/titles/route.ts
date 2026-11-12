@@ -1,4 +1,5 @@
-import { findPresentation, fetchGooglePowerPoint } from '@/lib/mood/google-slides';
+import { fetchGooglePowerPoint } from '@/lib/mood/google-slides';
+import { cachedMoodPresentation } from '@/lib/mood/remote-mood-cache';
 import { extractMoodText } from '@/lib/mood/mood-titles';
 
 export const runtime = 'nodejs';
@@ -8,15 +9,16 @@ const pending = new Map<string, Promise<{ titles: (string | null)[]; subtitles: 
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const deck = /^deck-[a-f0-9]{20}$/.test(id) ? findPresentation(id) : undefined;
-  if (!deck) return new Response(null, { status: 404 });
+  if (!/^deck-[a-f0-9]{20}$/.test(id)) return new Response(null, { status: 404 });
   try {
+    const deck = await cachedMoodPresentation(id);
+    if (!deck) return new Response(null, { status: 404 });
     let entry = cache.get(id);
     if (!entry || entry.expires <= Date.now()) {
       let job = pending.get(id);
       if (!job) {
         if (pending.size >= 2) return Response.json({ error: 'Extraction occupée.' }, { status: 503 });
-        job = fetchGooglePowerPoint(deck.googleId).then(extractMoodText).finally(() => pending.delete(id));
+        job = fetchGooglePowerPoint(deck.google_id).then(extractMoodText).finally(() => pending.delete(id));
         pending.set(id, job);
       }
       entry = { ...await job, expires: Date.now() + 5 * 60_000 };

@@ -1,0 +1,1 @@
+ALTER TABLE "participant_daily_hints" ALTER COLUMN "revision" SET DATA TYPE bigint;

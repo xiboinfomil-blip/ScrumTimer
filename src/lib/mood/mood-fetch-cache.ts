@@ -20,6 +20,7 @@ export async function readMoodFetchCache(db: Database, source: RemoteMoodSource[
   const generation = randomUUID();
   const expires = new Date(now.getTime() + MOOD_CACHE_WEEK_MS).toISOString();
   const results = await db.batch([
+    db.execute(sql`SELECT pg_advisory_xact_lock(20501029)`),
     db.execute(sql`INSERT INTO remote_mood_cache_state(id,generation,expires_at) VALUES(1,${generation},${expires}::timestamptz) ON CONFLICT DO NOTHING`),
     db.execute(sql`SELECT id FROM remote_mood_cache_state WHERE id=1 FOR UPDATE`),
     db.execute(sql`DELETE FROM remote_mood_catalog WHERE EXISTS(SELECT 1 FROM remote_mood_cache_state WHERE id=1 AND expires_at<=${instant}::timestamptz)`),
@@ -27,7 +28,7 @@ export async function readMoodFetchCache(db: Database, source: RemoteMoodSource[
     db.execute(sql`INSERT INTO remote_mood_catalog(id,google_id,title,category) SELECT s.id,s."googleId",s.title,s.category FROM jsonb_to_recordset(${JSON.stringify(source)}::jsonb) AS s(id text,"googleId" text,title text,category text) WHERE NOT EXISTS(SELECT 1 FROM remote_mood_catalog) ON CONFLICT DO NOTHING`),
     db.execute(sql`SELECT c.id,c.google_id,c.title,c.category,c.loaded_at,s.generation FROM remote_mood_catalog c CROSS JOIN remote_mood_cache_state s WHERE s.id=1 ORDER BY c.title,c.id`),
   ]);
-  return results[5].rows as { id: string; google_id: string; title: string; category: string; loaded_at: string | null; generation: string }[];
+  return results[6].rows as { id: string; google_id: string; title: string; category: string; loaded_at: string | null; generation: string }[];
 }
 
 export async function loadCachedMoodPages(db: Database, source: RemoteMoodSource[] | (() => Promise<RemoteMoodSource[]>), id: string, load: (googleId: string) => Promise<string[]>, now = new Date()) {
@@ -48,6 +49,7 @@ export async function loadCachedMoodPages(db: Database, source: RemoteMoodSource
   // last week's URLs. Concurrent fills are first-writer-wins under this lock.
   const gate = sql`EXISTS(SELECT 1 FROM remote_mood_cache_state s JOIN remote_mood_catalog c ON c.id=${id} WHERE s.id=1 AND s.generation=${item.generation} AND c.loaded_at IS NULL)`;
   await db.batch([
+    db.execute(sql`SELECT pg_advisory_xact_lock(20501029)`),
     db.execute(sql`SELECT id FROM remote_mood_cache_state WHERE id=1 FOR UPDATE`),
     db.execute(sql`INSERT INTO remote_mood_pages(deck_id,position,page_id) SELECT ${id},p.position,p.page FROM jsonb_to_recordset(${JSON.stringify(pages.map((page, position) => ({ page, position })))}::jsonb) AS p(page text,position integer) WHERE ${gate} ON CONFLICT DO NOTHING`),
     db.execute(sql`UPDATE remote_mood_catalog SET loaded_at=${now.toISOString()}::timestamptz WHERE id=${id} AND ${gate}`),

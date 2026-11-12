@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const db = database(); const id = await selectedTeam(request);
     // Team bootstrap must precede history writes; never create an empty team over a saved one.
     if (!await teamReadCache.mutate(() => writeHistory(db, id, round))) return NextResponse.json({ error: 'Le point quotidien est déjà terminé aujourd’hui.' }, { status: 409 });
-    return NextResponse.json({ saved: true });
+    return NextResponse.json({ saved: true, day: mauritiusDay() });
   } catch (error) { return databaseFailure(error); }
 }
 export async function DELETE(request: Request) {

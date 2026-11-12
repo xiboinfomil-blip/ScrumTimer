@@ -154,8 +154,11 @@ test('PGlite: signed team-A notes use member-only CAS, reject forged scope and p
       if (!resolvedTeam) throw new WorkspaceError(403, 'Lien d’équipe invalide.');
       return saveDailyHint(client, resolvedTeam, value, now);
     };
-    assert.deepEqual(await saveFromLink(token, input), {
-      day: input.day, hints: [{ participantId: input.participantId, hint: input.hint, revision: 1 }],
+    const saved = await saveFromLink(token, input);
+    const initialRevision = saved.hints[0].revision;
+    assert.ok(initialRevision > 2147483647);
+    assert.deepEqual(saved, {
+      day: input.day, hints: [{ participantId: input.participantId, hint: input.hint, revision: initialRevision }],
     });
     assert.equal((await readDailyHints(client, teamA, now)).hints.length, 1, 'absent current members can write notes');
     await assert.rejects(saveFromLink(token, { ...input, teamId: teamB }), hasStatus(400));
@@ -172,8 +175,9 @@ test('PGlite: signed team-A notes use member-only CAS, reject forged scope and p
     assert.equal(batches, batchesBeforeForgery, 'forged scope is rejected before reaching the store');
 
     const markdown = '**Avancement**\n\n- API terminée\n- *Tests* en cours\n\n1. ~~Ancien~~\n2. Suite';
-    const updated = await saveFromLink(token, { ...input, hint: ` \n${markdown}\n `, revision: 1 });
-    assert.deepEqual(updated, { day: input.day, hints: [{ participantId: input.participantId, hint: markdown, revision: 2 }] });
+    const updated = await saveFromLink(token, { ...input, hint: ` \n${markdown}\n `, revision: initialRevision });
+    assert.ok(updated.hints[0].revision > initialRevision);
+    assert.deepEqual(updated, { day: input.day, hints: [{ participantId: input.participantId, hint: markdown, revision: updated.hints[0].revision }] });
     assert.equal((await engine.query('SELECT hint FROM participant_daily_hints WHERE team_id=$1', [teamA])).rows[0].hint, markdown, 'database preserves Markdown exactly after outer trimming');
     const fetched = await readDailyHints(client, teamA, now);
     assert.deepEqual(fetched, updated, 'GET store returns unchanged Markdown and revisions');
@@ -184,7 +188,7 @@ test('PGlite: signed team-A notes use member-only CAS, reject forged scope and p
     assert.match(html, /<del>Ancien<\/del>/);
     assert.match(html, /<ul>/);
     assert.match(html, /<ol>/);
-    await assert.rejects(saveFromLink(token, { ...input, hint: 'Brouillon périmé', revision: 1 }), hasStatus(409));
+    await assert.rejects(saveFromLink(token, { ...input, hint: 'Brouillon périmé', revision: initialRevision }), hasStatus(409));
     assert.deepEqual(await readDailyHints(client, teamA, now), updated, 'failed CAS cannot overwrite the winner');
     assert.deepEqual(await readDailyHints(client, teamB, now), otherNotes, 'same participant ID does not allow a cross-team overwrite');
     assert.equal((await engine.query('SELECT count(*)::int AS n FROM participant_daily_hints')).rows[0].n, 2, 'rejections create no extra or archived-member notes');

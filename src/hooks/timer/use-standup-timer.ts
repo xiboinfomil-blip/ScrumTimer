@@ -167,7 +167,8 @@ export function useStandupTimer() {
     if (latest.current.focusMode && !latest.current.managing) return;
     if (![0, 10, 15, 30, 60].includes(warning)) return;
     updateTeam(current => ({ ...current, warning }));
-    commit({ ...latest.current, warned: false });
+    commit({ ...latest.current, warned: false, people: latest.current.people.map(person => person.turn
+      ? { ...person, turn: { ...person.turn, warned: false } } : person) });
   }, [commit, updateTeam]);
   const manage = useCallback(() => {
     const current = tick();

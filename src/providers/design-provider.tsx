@@ -7,6 +7,7 @@ const theme = createTheme({
   cssVariables: true,
   palette: {
     primary: { main: '#205f9d', dark: '#164b80', light: '#eaf2fc' }, secondary: { main: '#ec8b23', contrastText: '#193752' },
+    warning: { main: '#ec8b23', contrastText: '#193752' },
     success: { main: '#147d52' }, error: { main: '#b94b43' }, background: { default: '#f7f8fa', paper: '#ffffff' },
     text: { primary: '#202b36', secondary: '#596979' }, divider: '#dce3e9',
   },

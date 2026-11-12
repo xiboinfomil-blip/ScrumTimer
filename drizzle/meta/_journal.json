@@ -92,6 +92,20 @@
       "when": 1794468892261,
       "tag": "0012_jira_display_selection",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794481197393,
+      "tag": "0013_daily_hint_revisions",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794481283232,
+      "tag": "0014_daily_hint_revision_type",
+      "breakpoints": true
     }
   ]
 }

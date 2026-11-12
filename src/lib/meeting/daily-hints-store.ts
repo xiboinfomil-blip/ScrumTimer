@@ -33,10 +33,10 @@ export async function saveDailyHint(db: Database, teamId: string, value: unknown
     // A nonzero expected revision must never create a missing/expired row.
     // A zero revision creates only; it cannot overwrite an existing daily hint.
     sql`INSERT INTO participant_daily_hints(team_id,participant_id,day,hint,revision)
-      SELECT ${teamId},${input.participantId},${day}::date,${input.hint},1
+      SELECT ${teamId},${input.participantId},${day}::date,${input.hint},nextval('daily_hint_revision')
       WHERE EXISTS(SELECT 1 FROM team_members WHERE team_id=${teamId} AND participant_id=${input.participantId})
-        AND (${input.revision}=0 OR EXISTS(SELECT 1 FROM participant_daily_hints WHERE team_id=${teamId} AND participant_id=${input.participantId} AND day=${day}::date AND revision=${input.revision}))
-      ON CONFLICT(team_id,participant_id) DO UPDATE SET hint=excluded.hint,revision=participant_daily_hints.revision+1
+        AND (${input.revision}::bigint=0 OR EXISTS(SELECT 1 FROM participant_daily_hints WHERE team_id=${teamId} AND participant_id=${input.participantId} AND day=${day}::date AND revision=${input.revision}))
+      ON CONFLICT(team_id,participant_id) DO UPDATE SET hint=excluded.hint,revision=excluded.revision
       WHERE participant_daily_hints.day=excluded.day AND participant_daily_hints.revision=${input.revision}
       RETURNING participant_id`,
     hintsStatement(teamId, day),

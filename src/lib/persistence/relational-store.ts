@@ -4,7 +4,7 @@ import type { TeamState } from '../../types/team.ts';
 import type { HistoryRound } from '../history/history.ts';
 import { pruneHistoryStatement } from '../history/retention.ts';
 import { HISTORY_LIMIT } from '@infomil/scrum-shared/statistics';
-import { mauritiusDay, WorkspaceError } from '../team/workspace-store.ts';
+import { mauritiusDay } from '../team/workspace-store.ts';
 
 type Database = Pick<NeonHttpDatabase, 'execute' | 'batch'>;
 // Transaction IDs are server-generated, unique gates, NOT revision+1 (which a stale
@@ -61,10 +61,11 @@ export async function writeTeam(db: Database, id: string, revision: number, team
   const results = await batch(db, [sql`SELECT id FROM teams WHERE id=${id} FOR UPDATE`, ...teamWriteStatements(id, revision, team)]);
   return results[1].rows.length ? Number(results[1].rows[0].revision) : null;
 }
-export async function writeHistory(db: Database, id: string, round: HistoryRound) {
-  if (mauritiusDay(new Date(round.completedAt)) !== mauritiusDay()) throw new WorkspaceError(400, 'Seul le bilan du jour peut être enregistré.');
-  const results = await batch(db, historyWriteStatements(id, round));
-  if (results[1].rows.length) return true;
+export async function writeHistory(db: Database, id: string, round: HistoryRound, now = new Date()) {
+  if (mauritiusDay(new Date(round.completedAt)) === mauritiusDay(now)) {
+    const results = await batch(db, historyWriteStatements(id, round, now));
+    if (results[1].rows.length) return true;
+  }
   const existing = await db.execute(sql`SELECT id FROM standup_sessions WHERE team_id=${id} AND id=${round.id}`);
   return existing.rows.length > 0;
 }

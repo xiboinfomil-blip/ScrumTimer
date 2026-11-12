@@ -37,7 +37,7 @@ test('master and participant contracts share the exact canonical validator and F
     [{ ...input, hint: 'A\r\nB' }, 'Indice invalide : seuls les retours à la ligne LF sont autorisés.'],
     [{ ...input, hint: '😀'.repeat(601) }, 'L’indice doit contenir entre 1 et 600 caractères.'],
     [{ ...input, day: '2026-02-29' }, 'Date invalide.'],
-    [{ ...input, revision: 2147483647 }, 'Révision invalide.'],
+    [{ ...input, revision: Number.MAX_SAFE_INTEGER + 1 }, 'Révision invalide.'],
   ];
   for (const [value, message] of invalid) {
     for (const validate of [masterValidate, validateNote]) assert.throws(() => validate(value), { message });

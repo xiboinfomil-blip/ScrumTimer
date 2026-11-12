@@ -148,10 +148,13 @@ test('PostgreSQL: legacy backfill, CAS isolation, atomic rollback, scoped reads 
   await assert.rejects(writeTeam(client, id, 8, invalid));
   assert.deepEqual(await readTeam(client, id, now), before, 'child failure rolls back parent CAS');
   assert.equal(await writeHistory(client, other, { ...round, completedAt: new Date().toISOString() }), false);
-  await assert.rejects(writeHistory(client, id, old), { status: 400 });
+  assert.equal(await writeHistory(client, id, old), true, 'an old saved result remains idempotent');
+  assert.equal(await writeHistory(client, id, { ...old, id: 'unsaved-old-round' }), false, 'an old unsaved result is never inserted');
+  assert.equal(await writeHistory(client, other, old), false, 'old replay lookup is team scoped');
   // Use actual current time because writeHistory's retention is a runtime policy.
   const current = { ...round, completedAt: new Date().toISOString() };
   assert.equal(await writeHistory(client, id, validateHistoryInput(current)), true);
+  assert.equal(await writeHistory(client, id, current, new Date(Date.now() + 86400000)), true, 'lost response retried after midnight still acknowledges the saved result');
   assert.equal(await writeHistory(client, id, validateHistoryInput({ ...current, people: [{ ...current.people[0], name: 'Duplicate must not overwrite' }] })), true);
   assert.deepEqual(await readHistory(client, id), [current, old]);
   assert.deepEqual(await readHistory(client, other), []);

@@ -16,3 +16,10 @@ export function cachedMoodDeck(id: string) {
   return publicReadCache.read(`deck:${id}`, 60_000, () =>
     loadCachedMoodPages(database(), fetchMoodSource, id, async googleId => parseGoogleSlideIds(await fetchGoogleSlide(googleId, undefined, true))));
 }
+
+export function cachedMoodPresentation(id: string) {
+  return publicReadCache.read(`presentation:${id}`, 60_000, async () => {
+    const rows = await readMoodFetchCache(database(), fetchMoodSource);
+    return rows.find(row => row.id === id);
+  });
+}

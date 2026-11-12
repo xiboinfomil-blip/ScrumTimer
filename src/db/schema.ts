@@ -75,7 +75,7 @@ export const teamDiscussionPrompts = pgTable('team_discussion_prompts', {
 // Identity FK, not membership: roster writes delete/reinsert team_members.
 export const participantDailyHints = pgTable('participant_daily_hints', {
   teamId: text('team_id').notNull(), participantId: text('participant_id').notNull(),
-  day: date('day').notNull(), hint: text('hint').notNull(), revision: integer('revision').notNull(),
+  day: date('day').notNull(), hint: text('hint').notNull(), revision: bigint('revision', { mode: 'number' }).notNull(),
 }, t => [primaryKey({ columns: [t.teamId, t.participantId] }),
   foreignKey({ columns: [t.teamId, t.participantId], foreignColumns: [participants.teamId, participants.id] }).onDelete('cascade'),
   index('participant_daily_hints_day').on(t.day),

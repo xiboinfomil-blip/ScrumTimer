@@ -20,7 +20,7 @@ export function validateDailyHint(value: unknown): DailyHintInput {
   if (typeof input.day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(input.day)
     || input.day.startsWith('0000') || !Number.isFinite(Date.parse(`${input.day}T00:00:00Z`))
     || new Date(`${input.day}T00:00:00Z`).toISOString().slice(0, 10) !== input.day) throw new Error('Date invalide.');
-  if (typeof input.revision !== 'number' || !Number.isInteger(input.revision)
-    || input.revision < 0 || input.revision >= 2147483647) throw new Error('Révision invalide.');
+  if (typeof input.revision !== 'number' || !Number.isSafeInteger(input.revision)
+    || input.revision < 0) throw new Error('Révision invalide.');
   return { participantId: input.participantId, hint, day: input.day, revision: input.revision };
 }

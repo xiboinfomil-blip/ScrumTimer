@@ -194,18 +194,19 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         } else {
           const round = pendingRounds.current[0];
           const response = reconcilingRound.current === round.id ? null : await cloudFetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Team-Id': teamId }, body: JSON.stringify(round), signal: controller.signal });
-          if (response === null || response.status === 409) {
+          const roundDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(round.completedAt));
+          const savedDay = response?.ok ? (await response.json()).day : null;
+          if (response === null || response.status === 409 || (savedDay && savedDay !== roundDay)) {
             reconcilingRound.current = round.id;
             const existing = await cloudFetch('/api/history', { cache: 'no-store', headers: { 'X-Team-Id': teamId, 'X-Team-Refresh': '1' }, signal: controller.signal });
             if (!existing.ok) throw new CloudRequestError(existing);
             const history = await existing.json();
             if (generation.current !== currentGeneration || controller.signal.aborted) return;
-            const roundDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(round.completedAt));
             const winner = normalizeHistory(history.rounds).find(item => new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Mauritius' }).format(new Date(item.completedAt)) === roundDay);
-            if (!winner) throw new CloudRequestError(new Response(null, { status: 503 }));
+            if (!winner && roundDay === history.day) throw new CloudRequestError(new Response(null, { status: 503 }));
             clearCheckpoint(teamId);
             timerMemory.current = null;
-            setTodayRound(winner);
+            setTodayRound(winner ?? null);
             pendingRounds.current = pendingRounds.current.filter(item => item.id !== round.id);
             reconcilingRound.current = null;
             if (roundDay !== history.day) {
@@ -216,7 +217,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
               setRetry(value => value + 1);
               return;
             }
-            if (winner.id !== round.id) notify('Ce point quotidien a déjà été terminé sur un autre appareil. Le bilan enregistré est affiché.', 'warning');
+            if (winner && winner.id !== round.id) notify('Ce point quotidien a déjà été terminé sur un autre appareil. Le bilan enregistré est affiché.', 'warning');
             continue;
           }
           if (!response.ok) throw new CloudRequestError(response);

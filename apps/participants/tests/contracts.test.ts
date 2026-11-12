@@ -8,7 +8,9 @@ test('notes : contrat exact, Unicode, LF et limites', () => {
   assert.equal(characterCount('😀'), 1);
   assert.equal(characterCount(validateNote({ ...input, hint: '😀'.repeat(600) }).hint), 600);
   for (const hint of ['', ' \n ', 'a'.repeat(601), 'a\rb', 'a\r\nb', 'a\tb', 'a\0b', 'a\u0085b']) assert.throws(() => validateNote({ ...input, hint }));
-  for (const revision of [-1, 0.5, 2147483647, '0', null]) assert.throws(() => validateNote({ ...input, revision }));
+  assert.equal(validateNote({ ...input, revision: Number.MAX_SAFE_INTEGER }).revision, Number.MAX_SAFE_INTEGER);
+  assert.equal(parseNotes({ day: input.day, hints: [{ ...input, revision: 2147483648 }] }).hints[0].revision, 2147483648);
+  for (const revision of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, '0', null]) assert.throws(() => validateNote({ ...input, revision }));
   assert.throws(() => validateNote({ ...input, teamId: 'other' }));
   assert.throws(() => validateNote({ hint: 'a', day: input.day, revision: 0 }));
 });

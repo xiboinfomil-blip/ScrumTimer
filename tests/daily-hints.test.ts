@@ -16,7 +16,7 @@ test('daily hint validation: exact payload, trimmed Unicode text, strict LF, dat
   const formattedLimit = `**${'😀'.repeat(596)}**`;
   assert.equal(validateDailyHint({ ...input, hint: ` \n${formattedLimit}\n ` }).hint, formattedLimit);
   assert.throws(() => validateDailyHint({ ...input, hint: `**${'😀'.repeat(597)}**` }), 'Markdown markers count toward the limit');
-  assert.equal(validateDailyHint({ ...input, day: '2028-02-29', revision: 2147483646 }).revision, 2147483646);
+  assert.equal(validateDailyHint({ ...input, day: '2028-02-29', revision: Number.MAX_SAFE_INTEGER }).revision, Number.MAX_SAFE_INTEGER);
   for (let code = 0; code <= 159; code++) {
     if (code === 10 || (code > 31 && code < 127)) continue;
     assert.throws(() => validateDailyHint({ ...input, hint: `A${String.fromCharCode(code)}B` }), `control ${code}`);
@@ -25,7 +25,7 @@ test('daily hint validation: exact payload, trimmed Unicode text, strict LF, dat
   for (const hint of ['', ' \n ', 'a'.repeat(601), '😀'.repeat(601), 'A\r\nB', null, 4]) assert.throws(() => validateDailyHint({ ...input, hint }));
   for (const participantId of ['', 'p'.repeat(101), 'A\n', 'A\u0085', null, 2]) assert.throws(() => validateDailyHint({ ...input, participantId }));
   for (const day of ['2026-02-29', '2026-04-31', '2026-13-01', '2026-00-01', '0000-01-01', '2026-1-01', '2026-10-16T00:00:00Z', null]) assert.throws(() => validateDailyHint({ ...input, day }));
-  for (const revision of [-1, 0.5, '0', null, NaN, Infinity, 2147483647]) assert.throws(() => validateDailyHint({ ...input, revision }));
+  for (const revision of [-1, 0.5, '0', null, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) assert.throws(() => validateDailyHint({ ...input, revision }));
   for (const value of [null, [], {}, { ...input, teamId: 'forged' }, { ...input, [Symbol('extra')]: true }]) assert.throws(() => validateDailyHint(value));
   for (const field of Object.keys(input)) {
     const missing: Record<string, unknown> = { ...input }; delete missing[field];
@@ -97,23 +97,26 @@ test('PGlite: all migrations, daily hint CAS/isolation/roster rewrite/expiry and
     assert.deepEqual(await readDailyHints(client, a, now), { day: input.day, hints: [] });
     await assert.rejects(saveDailyHint(client, a, { ...input, revision: 1 }, now), { status: 409 });
     const saved = await saveDailyHint(client, a, { ...input, hint: '  Ligne 1\nLigne 2  ' }, now);
-    assert.deepEqual(saved, { day: input.day, hints: [{ participantId: 'p1', hint: 'Ligne 1\nLigne 2', revision: 1 }] });
+    const initialRevision = saved.hints[0].revision;
+    assert.ok(initialRevision > 2147483647);
+    assert.deepEqual(saved, { day: input.day, hints: [{ participantId: 'p1', hint: 'Ligne 1\nLigne 2', revision: initialRevision }] });
     await assert.rejects(saveDailyHint(client, a, input, now), { status: 409 });
     await saveDailyHint(client, b, { ...input, hint: 'Autre équipe' }, now);
     await saveDailyHint(client, a, { ...input, participantId: 'p2' }, now);
     assert.deepEqual((await readDailyHints(client, a, now)).hints.map(hint => hint.participantId), ['p2', 'p1'], 'roster order, even absent members');
     const writers = await Promise.allSettled([
-      saveDailyHint(client, a, { ...input, hint: 'Premier', revision: 1 }, now),
-      saveDailyHint(client, a, { ...input, hint: 'Second', revision: 1 }, now),
+      saveDailyHint(client, a, { ...input, hint: 'Premier', revision: initialRevision }, now),
+      saveDailyHint(client, a, { ...input, hint: 'Second', revision: initialRevision }, now),
     ]);
     assert.equal(writers.filter(writer => writer.status === 'fulfilled').length, 1);
     assert.equal(writers.filter(writer => writer.status === 'rejected' && writer.reason.status === 409).length, 1);
-    assert.equal((await readDailyHints(client, a, now)).hints[1].revision, 2);
+    const winnerRevision = (await readDailyHints(client, a, now)).hints[1].revision;
+    assert.ok(winnerRevision > initialRevision);
     assert.equal((await readDailyHints(client, b, now)).hints[0].hint, 'Autre équipe');
     const winner = await readDailyHints(client, a, now);
     await engine.exec(`CREATE FUNCTION reject_hint_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'simulated database failure'; END $$;
       CREATE TRIGGER reject_hint_write BEFORE UPDATE ON participant_daily_hints FOR EACH ROW EXECUTE FUNCTION reject_hint_write();`);
-    await assert.rejects(saveDailyHint(client, a, { ...input, hint: '**Non enregistré**', revision: 2 }, now), /simulated database failure/);
+    await assert.rejects(saveDailyHint(client, a, { ...input, hint: '**Non enregistré**', revision: winnerRevision }, now), /simulated database failure/);
     assert.deepEqual(await readDailyHints(client, a, now), winner, 'a failed database transaction never returns success or changes the winner');
     await engine.exec('DROP TRIGGER reject_hint_write ON participant_daily_hints; DROP FUNCTION reject_hint_write();');
     assert.equal((await engine.query('SELECT revision FROM teams WHERE id=$1', [a])).rows[0].revision, 1);
@@ -129,9 +132,9 @@ test('PGlite: all migrations, daily hint CAS/isolation/roster rewrite/expiry and
     await engine.query("DELETE FROM team_members WHERE team_id=$1 AND participant_id='p1'", [a]);
     assert.equal((await readDailyHints(client, a, now)).hints.length, 1, 'removed roster identities are hidden');
     await assert.rejects(saveDailyHint(client, a, { ...input, revision: 2 }, now), { status: 404 });
-    assert.equal((await engine.query("SELECT revision FROM participant_daily_hints WHERE team_id=$1 AND participant_id='p1'", [a])).rows[0].revision, 2, 'invalid member cannot alter an existing hint');
+    assert.equal(Number((await engine.query("SELECT revision FROM participant_daily_hints WHERE team_id=$1 AND participant_id='p1'", [a])).rows[0].revision), winnerRevision, 'invalid member cannot alter an existing hint');
     await engine.query("INSERT INTO team_members(team_id,participant_id,position,present) VALUES($1,'p1',1,true)", [a]);
-    assert.equal((await readDailyHints(client, a, now)).hints[1].revision, 2, 'membership delete/reinsert preserves hint');
+    assert.equal((await readDailyHints(client, a, now)).hints[1].revision, winnerRevision, 'membership delete/reinsert preserves hint');
     for (const [hint, revision] of [['', 1], [' a ', 1], ['A\rB', 1], ['A\tB', 1], ['A\u007fB', 1], ['A\u0085B', 1], ['a'.repeat(601), 1], ['a', 0]]) {
       await assert.rejects(engine.query("UPDATE participant_daily_hints SET hint=$2,revision=$3 WHERE team_id=$1 AND participant_id='p1'", [a, hint, revision]));
     }
@@ -147,15 +150,16 @@ test('PGlite: all migrations, daily hint CAS/isolation/roster rewrite/expiry and
     await assert.rejects(saveDailyHint(client, a, { ...input, day: '2026-10-17', revision: 2 }, midnight), { status: 409 });
     assert.equal((await engine.query('SELECT count(*)::int AS n FROM participant_daily_hints')).rows[0].n, 0, 'nonzero revision cannot resurrect an expired hint');
     const today = { ...input, day: '2026-10-17' };
-    assert.equal((await saveDailyHint(client, a, today, midnight)).hints[0].revision, 1);
+    const todayRevision = (await saveDailyHint(client, a, today, midnight)).hints[0].revision;
+    assert.ok(todayRevision > winnerRevision);
     await assert.rejects(saveDailyHint(client, a, { ...input, revision: 1 }, midnight), { status: 409 });
     await saveDailyHint(client, b, today, midnight);
     await assert.rejects(saveDailyHint(client, a, { ...today, revision: 2 }, midnight), { status: 409 });
-    assert.equal((await readDailyHints(client, a, midnight)).hints[0].revision, 1, 'failed CAS leaves winner untouched');
+    assert.equal((await readDailyHints(client, a, midnight)).hints[0].revision, todayRevision, 'failed CAS leaves winner untouched');
 
     // Saving, not just reading, globally expires old hints; current day survives.
     await engine.query("UPDATE participant_daily_hints SET day='2026-10-16' WHERE team_id=$1", [b]);
-    await saveDailyHint(client, a, { ...today, revision: 1 }, midnight);
+    await saveDailyHint(client, a, { ...today, revision: todayRevision }, midnight);
     assert.deepEqual(await readDailyHints(client, b, midnight), { day: today.day, hints: [] });
     await saveDailyHint(client, b, today, midnight);
     // Full-round completion clears all this team's notes, including absent
@@ -181,6 +185,10 @@ test('PGlite: all migrations, daily hint CAS/isolation/roster rewrite/expiry and
     assert.equal((await readDailyHints(client, b, completedAt)).hints.length, 2, 'other teams keep every note');
     assert.deepEqual(await readHistory(client, a), [round], 'the completed summary is retained');
     await saveDailyHint(client, a, { ...input, day: completionDay, hint: '**Prochain tour**' }, completedAt);
+    await assert.rejects(saveDailyHint(client, a, {
+      ...input, day: completionDay, hint: 'Stale editor must not overwrite the new note',
+      revision: beforeCompletion.hints.find(hint => hint.participantId === input.participantId)!.revision,
+    }, completedAt), { status: 409 });
     assert.equal(await writeHistory(client, a, round), true, 'replayed completion remains idempotent');
     assert.equal(await writeHistory(client, a, { ...round, id: 'conflicting-round' }), false);
     assert.equal((await readDailyHints(client, a, completedAt)).hints[0].hint, '**Prochain tour**', 'replays and rejected rounds cannot erase newer notes');
