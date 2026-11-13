@@ -2,9 +2,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { animate } from 'framer-motion';
-import { IconButton } from '@mui/material';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import { Button as IconButton } from '@/components/ui/button';
+import { ChevronUp as KeyboardArrowUpIcon } from 'lucide-react';
+import { ChevronDown as KeyboardArrowDownIcon } from 'lucide-react';
 import { useSynchronizedList } from '@/providers/remote-host-provider';
 
 export interface ListPagination {
@@ -81,13 +81,12 @@ export function PaginatedList<T extends { id: string; name?: string; present?: b
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, capacity]);
   const Tag = ordered ? 'ol' : 'ul';
-  const pageButtonSx = { width: 44, height: 44, flexShrink: 0, borderRadius: 2, bgcolor: 'action.hover' };
   return <div className="paginated-list @container relative flex min-h-0 min-w-0 flex-1 gap-1 overflow-hidden">
     <Tag ref={ref} className={`relative mt-2 flex min-h-0 min-w-0 flex-1 list-none flex-col gap-2 overflow-hidden p-1 ${className}`}>{items.slice(current * capacity, (current + 1) * capacity).map((item, index) => renderItem(item, current * capacity + index))}</Tag>
     {pages > 1 && <nav className="list-pagination flex w-11 shrink-0 flex-col items-center justify-center gap-2 text-[10px] text-muted" aria-label="Pages de la liste">
-      <IconButton type="button" color="primary" sx={pageButtonSx} aria-label="Page précédente" disabled={current === 0} onClick={() => { direction.current = -1; setPage(current - 1); }}><KeyboardArrowUpIcon aria-hidden="true" sx={{ fontSize: 20 }} /></IconButton>
+      <IconButton type="button" aria-label="Page précédente" disabled={current === 0} onClick={() => { direction.current = -1; setPage(current - 1); }} variant="ghost" size="icon" className="size-11 rounded-md border border-control bg-white text-brand"><KeyboardArrowUpIcon aria-hidden="true" size={20} /></IconButton>
       <span className="text-center tabular-nums" role="status" aria-live="polite">{current + 1}<span className="block text-[9px]">sur {pages}</span></span>
-      <IconButton type="button" color="primary" sx={pageButtonSx} aria-label="Page suivante" disabled={current >= pages - 1} onClick={() => { direction.current = 1; setPage(current + 1); }}><KeyboardArrowDownIcon aria-hidden="true" sx={{ fontSize: 20 }} /></IconButton>
+      <IconButton type="button" aria-label="Page suivante" disabled={current >= pages - 1} onClick={() => { direction.current = 1; setPage(current + 1); }} variant="ghost" size="icon" className="size-11 rounded-md border border-control bg-white text-brand"><KeyboardArrowDownIcon aria-hidden="true" size={20} /></IconButton>
     </nav>}
   </div>;
 }

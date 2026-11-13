@@ -1,17 +1,17 @@
 import type { SVGProps } from 'react';
-import AddIcon from '@mui/icons-material/Add';
-import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
-import CheckIcon from '@mui/icons-material/Check';
-import CloudDoneOutlinedIcon from '@mui/icons-material/CloudDoneOutlined';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutlineRounded';
-import MoodOutlinedIcon from '@mui/icons-material/MoodOutlined';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import SearchIcon from '@mui/icons-material/Search';
-import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
-import VolumeOffOutlinedIcon from '@mui/icons-material/VolumeOffOutlined';
-import VolumeUpOutlinedIcon from '@mui/icons-material/VolumeUpOutlined';
+import { Plus as AddIcon } from 'lucide-react';
+import { ChartColumn as BarChartOutlinedIcon } from 'lucide-react';
+import { Check as CheckIcon } from 'lucide-react';
+import { CloudCheck as CloudDoneOutlinedIcon } from 'lucide-react';
+import { ChevronDown as ExpandMoreIcon } from 'lucide-react';
+import { Users as GroupsOutlinedIcon } from 'lucide-react';
+import { CircleHelp as HelpOutlineIcon } from 'lucide-react';
+import { Smile as MoodOutlinedIcon } from 'lucide-react';
+import { RefreshCw as RefreshIcon } from 'lucide-react';
+import { Search as SearchIcon } from 'lucide-react';
+import { Timer as TimerOutlinedIcon } from 'lucide-react';
+import { VolumeX as VolumeOffOutlinedIcon } from 'lucide-react';
+import { Volume2 as VolumeUpOutlinedIcon } from 'lucide-react';
 
 export type NavIconName = 'people' | 'mood' | 'timer' | 'help' | 'chart' | 'sound' | 'muted' | 'chevron' | 'search' | 'plus' | 'check' | 'cloud' | 'retry';
 
@@ -31,7 +31,7 @@ const icons = {
   retry: RefreshIcon,
 };
 
-export function NavIcon({ name, color, fontSize, shapeRendering, width = 20, height = 20, ...props }: SVGProps<SVGSVGElement> & { name: NavIconName }) {
+export function NavIcon({ name, color, shapeRendering, width = 20, height = 20, ...props }: SVGProps<SVGSVGElement> & { name: NavIconName }) {
   const Icon = icons[name];
-  return <Icon {...props} fontSize="inherit" shapeRendering={shapeRendering === undefined ? undefined : String(shapeRendering)} htmlColor={color} width={width} height={height} sx={{ fontSize: fontSize ?? 'inherit', width, height }} aria-hidden="true" />;
+  return <Icon {...props} size={16} shapeRendering={shapeRendering === undefined ? undefined : String(shapeRendering)} color={color} width={width} height={height} aria-hidden="true" />;
 }

@@ -1,7 +1,14 @@
 'use client';
 
+
+import { Dialog, DialogContent, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+
+import { cn } from 'cn';
+
+
 import { useEffect, useRef, useState } from 'react';
-import { Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel } from '@mui/material';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
 import { primaryButton } from '@/components/ui/styles';
 
 // This non-sensitive UI preference is deliberately separate from team pairing.
@@ -132,26 +139,24 @@ export function CompanionInstall() {
     <aside aria-label="Installer la télécommande" className="rounded-2xl border border-slate-200/80 bg-white p-3 text-xs text-slate-600">
       {!installed && (
         <>
-          <Button size="small" onClick={() => setOpen(true)} aria-haspopup="dialog"
+          <Button onClick={() => setOpen(true)} aria-haspopup="dialog"
             aria-controls={open ? 'companion-install-dialog' : undefined}
-            className="text-brand" sx={{ minHeight: 44, minWidth: 44, textTransform: 'none' }}>
+            className={cn("min-h-[44px] min-w-[44px] normal-case", "text-brand")} variant="ghost" size="sm">
             Ajouter l’application
           </Button>
-          <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm"
-            aria-labelledby="companion-install-title" aria-describedby="companion-install-description"
-            slotProps={{ paper: { id: 'companion-install-dialog' } }}>
-            <DialogTitle id="companion-install-title">Installer la télécommande</DialogTitle>
-            <DialogContent dividers>
-              <p id="companion-install-description" className="mb-3 text-sm leading-relaxed text-slate-600">
+          <Dialog open={open} onOpenChange={next => { if (!next) (() => setOpen(false))?.(); }}><DialogContent showCloseButton={false} className="min-h-0 max-w-[600px]" aria-labelledby="companion-install-title" aria-describedby="companion-install-description" id={'companion-install-dialog'}>
+            <DialogTitle id="companion-install-title" className="shrink-0 px-5 pt-5 pb-2">Installer la télécommande</DialogTitle>
+            <div className="min-h-0 overflow-y-auto px-5 py-3 border-y border-line">
+              <DialogDescription id="companion-install-description" className="mb-3 text-sm leading-relaxed text-slate-600">
                 Ajoutez la télécommande à votre écran d’accueil pour la retrouver facilement. Vous pouvez aussi continuer dans le navigateur.
-              </p>
+              </DialogDescription>
               {deferredPrompt && (
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
                   <p className="font-semibold text-brand">Votre télécommande, à portée de main</p>
-                  <button type="button" onClick={() => void install()} disabled={pending}
-                    className={`${primaryButton} min-h-11 min-w-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand`}>
+                  <Button type="button" onClick={() => void install()} disabled={pending}
+                    className={`${primaryButton} min-h-11 min-w-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand`} variant="ghost">
                     {pending ? 'Ouverture…' : 'Installer'}
-                  </button>
+                  </Button>
                 </div>
               )}
               <div className="space-y-2 text-sm leading-relaxed text-slate-600">
@@ -162,16 +167,15 @@ export function CompanionInstall() {
               </div>
               {!secure && <p className="mt-2 leading-relaxed">L’installation nécessite un contexte sécurisé : HTTPS, ou localhost pour les essais locaux.</p>}
               {message && <p role="status" className="mt-2 leading-relaxed">{message}</p>}
-              <FormControlLabel className="mt-3" control={<Checkbox checked={doNotShowAgain}
-                onChange={event => updatePreference(event.target.checked)} />}
-                label="Ne plus afficher automatiquement" />
+              <label className="mt-3 flex min-h-11 items-center text-sm"><Checkbox checked={doNotShowAgain}
+                onCheckedChange={checked => updatePreference(checked === true)} />Ne plus afficher automatiquement</label>
               {storageError && <p role="alert" className="mt-2 text-sm leading-relaxed text-amber-800">{storageError}</p>}
               {workerError && <p role="alert" className="mt-2 text-sm leading-relaxed text-amber-800">{workerError}</p>}
-            </DialogContent>
-            <DialogActions>
-              <Button autoFocus onClick={() => setOpen(false)} sx={{ minHeight: 44 }}>Continuer dans le navigateur</Button>
-            </DialogActions>
-          </Dialog>
+            </div>
+            <DialogFooter>
+              <Button autoFocus onClick={() => setOpen(false)} variant="ghost" className="min-h-[44px]">Continuer dans le navigateur</Button>
+            </DialogFooter>
+          </DialogContent></Dialog>
         </>
       )}
       {storageError && !open && <p role="alert" className="mt-2 leading-relaxed text-amber-800">{storageError}</p>}

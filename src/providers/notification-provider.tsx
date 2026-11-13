@@ -1,7 +1,10 @@
 'use client';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Info as NoticeIcon } from 'lucide-react';
+
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert } from '@mui/material';
+
 
 type Tone = 'info' | 'warning' | 'error';
 const NotificationContext = createContext<(message: string, tone?: Tone) => void>(() => {});
@@ -17,7 +20,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     timeout.current = setTimeout(() => setMessage(''), severity === 'error' ? 8000 : 4000);
   }, []);
   useEffect(() => () => clearTimeout(timeout.current), []);
-  return <NotificationContext.Provider value={notify}>{children}{message && <Alert data-notification severity={tone} variant="filled" role={tone === 'error' ? 'alert' : 'status'} aria-live={tone === 'error' ? 'assertive' : 'polite'} aria-atomic="true" className="shrink-0" sx={{ borderRadius: 0, minWidth: 0, width: '100%', py: 0, fontSize: 12, lineHeight: 1.35, overflowWrap: 'anywhere', '& .MuiAlert-icon': { fontSize: 16, mr: 1, py: .25 }, '& .MuiAlert-message': { minWidth: 0, py: .25 } }}>{message}</Alert>}</NotificationContext.Provider>;
+  return <NotificationContext.Provider value={notify}>{children}{message && <Alert variant={(tone) === 'error' ? 'destructive' : (tone)} data-notification role={tone === 'error' ? 'alert' : 'status'} aria-live={tone === 'error' ? 'assertive' : 'polite'} aria-atomic="true" className="min-w-0 shrink-0 rounded-none border-x-0 px-3 py-1 text-xs"><NoticeIcon aria-hidden="true" /><AlertDescription className="text-xs leading-[1.35]">{message}</AlertDescription></Alert>}</NotificationContext.Provider>;
 }
 
 export const useNotify = () => useContext(NotificationContext);

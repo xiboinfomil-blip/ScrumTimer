@@ -184,12 +184,12 @@ test('install dialog opens after hydration unless opted out or standalone, and s
   assert.match(component, /installedRef\.current = true;\s*setInstalled\(true\);\s*setOpen\(false\)/);
   assert.match(component, /if \(installedRef\.current\) \{\s*setDeferredPrompt\(null\);\s*setOpen\(false\)/);
   assert.match(component, /installedRef\.current \|\| isStandalone\(\)/);
-  assert.match(component, /<Button size="small" onClick=\{\(\) => setOpen\(true\)\} aria-haspopup="dialog"/);
+  assert.match(component, /<Button onClick=\{\(\) => setOpen\(true\)\} aria-haspopup="dialog"/);
   assert.match(component, /Ajouter l’application/);
-  assert.match(component, /onClose=\{\(\) => setOpen\(false\)\}/);
+  assert.match(component, /onOpenChange=\{next => \{ if \(!next\)/);
   assert.match(component, /aria-labelledby="companion-install-title" aria-describedby="companion-install-description"/);
-  assert.match(component, /<DialogTitle id="companion-install-title">Installer la télécommande/);
-  assert.match(component, /<DialogActions>/);
+  assert.match(component, /<DialogTitle id="companion-install-title"[^>]*>Installer la télécommande/);
+  assert.match(component, /<DialogFooter>/);
   assert.match(component, /<Button autoFocus onClick=\{\(\) => setOpen\(false\)\}/);
 });
 
@@ -199,7 +199,7 @@ test('only a non-sensitive installation opt-out is stored, with in-page fallback
   assert.match(component, /if \(hidden\) window\.localStorage\.setItem\(INSTALL_PREFERENCE_KEY, 'true'\);\s*else window\.localStorage\.removeItem\(INSTALL_PREFERENCE_KEY\);/);
   assert.match(component, /setDoNotShowAgain\(hidden\);\s*try \{/);
   assert.match(component, /<Checkbox checked=\{doNotShowAgain\}/);
-  assert.match(component, /onChange=\{event => updatePreference\(event\.target\.checked\)\}/);
+  assert.match(component, /onCheckedChange=\{checked => updatePreference\(checked === true\)\}/);
   assert.match(component, /Ne plus afficher automatiquement/);
   assert.match(component, /Le stockage est indisponible/);
   assert.match(component, /\{storageError && !open && <p role="alert"/);
@@ -212,7 +212,7 @@ test('install UI provides French platform guidance, accessible status and 44px b
     assert.ok(component.includes(text), text);
   }
   assert.match(component, /min-h-11 min-w-11 focus-visible:/);
-  assert.match(component, /sx=\{\{ minHeight: 44, minWidth: 44/);
+  assert.match(component, /min-h-\[44px\] min-w-\[44px\]/);
   assert.match(component, /disabled=\{pending\}/);
   assert.match(component, /role="status"/);
   assert.match(component, /border-slate-200/);

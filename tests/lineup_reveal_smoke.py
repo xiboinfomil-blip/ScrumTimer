@@ -44,6 +44,9 @@ def setup(browser, width, height, motion, count=12):
             route.fulfill(json={'prompts': [], 'revision': 0})
         elif path == '/api/daily-hints':
             route.fulfill(json={'day': day, 'hints': []})
+        elif path == '/api/timer-remote' and request.method == 'POST' and request.post_data_json == {'operation': 'create'}:
+            assert request.headers.get('x-team-id') == ID
+            route.fulfill(status=503, json={'error': 'Télécommande indisponible dans ce scénario.'})
         else:
             route.fallback()
 

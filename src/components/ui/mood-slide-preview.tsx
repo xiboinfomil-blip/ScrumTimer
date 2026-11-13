@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button } from '@mui/material';
+import { Button } from '@/components/ui/button';
 import { useReducedMotion } from 'framer-motion';
 import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood/mood-catalog-client';
 import type { MoodMeterSlide } from '@/lib/mood/mood-meter';
@@ -26,6 +26,6 @@ export function MoodSlidePreview({ context, idPrefix, compact = false }: { conte
   const animated = slide.overlays.length > 0 || /\.gif$/i.test(slide.image);
   return <figure className={compact ? 'flex min-h-12 flex-1 flex-col overflow-hidden' : 'mt-3'}>
     <div className={compact ? 'flex min-h-0 flex-1 flex-col' : 'flex h-52 min-w-0 flex-col sm:h-64'}><MeterSlide key={context.image} slide={slide} title={`${context.title} — diapositive ${context.slideNumber}`} paused={!playing || Boolean(reduced)} idPrefix={idPrefix} /></div>
-    <figcaption className={`${compact ? 'shrink-0' : 'mt-2'} flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted`}><span className={compact ? 'sr-only' : ''}>Diapositive {context.slideNumber} · image associée au choix enregistré</span>{animated && <Button disabled={Boolean(reduced)} sx={{ minHeight: 44, fontSize: 11 }} aria-pressed={playing && !reduced} onClick={() => setPlaying(value => !value)}>{reduced ? 'Animations réduites' : playing ? 'Stop' : 'Lire les GIF'}</Button>}</figcaption>
+    <figcaption className={`${compact ? 'shrink-0' : 'mt-2'} flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted`}><span className={compact ? 'sr-only' : ''}>Diapositive {context.slideNumber} · image associée au choix enregistré</span>{animated && <Button disabled={Boolean(reduced)} aria-pressed={playing && !reduced} onClick={() => setPlaying(value => !value)} variant="ghost" className="min-h-[44px] text-[11px]">{reduced ? 'Animations réduites' : playing ? 'Stop' : 'Lire les GIF'}</Button>}</figcaption>
   </figure>;
 }

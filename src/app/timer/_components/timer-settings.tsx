@@ -1,9 +1,15 @@
 'use client';
+import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+
+import { cn } from 'cn';
+
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button, InputBase, NativeSelect } from '@mui/material';
-import CheckRounded from '@mui/icons-material/CheckRounded';
-import MoreTimeRounded from '@mui/icons-material/MoreTimeRounded';
+
+import { Button } from '@/components/ui/button';
+import { Check as CheckRounded } from 'lucide-react';
+import { AlarmClockPlus as MoreTimeRounded } from 'lucide-react';
 import { useNotify } from '@/providers/notification-provider';
 import { field } from '@/components/ui/styles';
 import type { StandupTimer } from './timer-page';
@@ -39,13 +45,13 @@ export function TimerSettings({ timer }: { timer: StandupTimer }) {
     <form className="timer-settings grid min-w-0 gap-5 text-sm text-muted" noValidate onSubmit={applyDuration}>
       <fieldset className="grid min-w-0 grid-cols-2 gap-3 border-0 p-0">
         <legend className="mb-3 text-sm font-bold text-ink">Durée par personne</legend>
-        <label htmlFor="duration-minutes" className="grid min-w-0 gap-1.5 text-xs font-medium">Minutes<InputBase className={`${field} min-h-14 w-full px-3! text-2xl! font-semibold! tabular-nums`} sx={{ '& input': { p: 0 } }} type="number" id="duration-minutes" inputProps={{ min: 0, max: 60, step: 1, 'aria-label': 'Minutes' }} required value={minutes} onChange={event => setMinutes(event.target.value)} /></label>
-        <label htmlFor="duration-seconds" className="grid min-w-0 gap-1.5 text-xs font-medium">Secondes<InputBase className={`${field} min-h-14 w-full px-3! text-2xl! font-semibold! tabular-nums`} sx={{ '& input': { p: 0 } }} type="number" id="duration-seconds" inputProps={{ min: 0, max: 59, step: 1, 'aria-label': 'Secondes' }} required value={seconds} onChange={event => setSeconds(event.target.value)} /></label>
-        <Button disableElevation variant="outlined" startIcon={<CheckRounded />} sx={{ minHeight: 44, textTransform: 'none', fontSize: 12 }} type="submit" id="apply-duration" className="col-span-full">Appliquer la durée</Button>
+        <label htmlFor="duration-minutes" className="grid min-w-0 gap-1.5 text-xs font-medium">Minutes<Input className={`${field} min-h-14 w-full px-3! text-2xl! font-semibold! tabular-nums`} type="number" id="duration-minutes" required value={minutes} onChange={event => setMinutes(event.target.value)} {...{ min: 0, max: 60, step: 1, 'aria-label': 'Minutes' }} /></label>
+        <label htmlFor="duration-seconds" className="grid min-w-0 gap-1.5 text-xs font-medium">Secondes<Input className={`${field} min-h-14 w-full px-3! text-2xl! font-semibold! tabular-nums`} type="number" id="duration-seconds" required value={seconds} onChange={event => setSeconds(event.target.value)} {...{ min: 0, max: 59, step: 1, 'aria-label': 'Secondes' }} /></label>
+        <Button type="submit" id="apply-duration" className={cn("min-h-[44px] normal-case text-[12px]", "col-span-full")} variant="outline"><CheckRounded />Appliquer la durée</Button>
       </fieldset>
       <div className="grid min-w-0 gap-3 border-t border-line pt-5">
         <label className="font-bold text-ink" htmlFor="warning-seconds">Préalerte</label>
-        <NativeSelect disableUnderline inputProps={{ id: 'warning-seconds' }} sx={{ height: 44, minWidth: 0, width: '100%', fontSize: 13, '& select': { boxSizing: 'border-box', height: 44, pl: 1.5, pr: 4 } }} className={`${field} h-11 px-0! py-0!`} value={timer.warning} onChange={event => timer.setWarning(Number(event.target.value))}>
+        <NativeSelect className={`${field} h-11 px-0! py-0!`} value={timer.warning} onChange={event => timer.setWarning(Number(event.target.value))} {...{ id: 'warning-seconds' }}>
           <option value={10}>10 s avant</option>
           <option value={15}>15 s avant</option>
           <option value={30}>30 s avant</option>
@@ -53,7 +59,7 @@ export function TimerSettings({ timer }: { timer: StandupTimer }) {
           <option value={0}>Sans préalerte</option>
         </NativeSelect>
       </div>
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-line pt-4"><span className="text-xs font-semibold text-ink">Passage actuel</span><Button disableElevation variant="text" startIcon={<MoreTimeRounded />} sx={{ minHeight: 44, textTransform: 'none', fontSize: 12 }} type="button" id="add-time-button" title="Ajouter 30 secondes à ce passage" onClick={timer.addTime}>+30 s</Button></div>
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-line pt-4"><span className="text-xs font-semibold text-ink">Passage actuel</span><Button type="button" id="add-time-button" title="Ajouter 30 secondes à ce passage" onClick={timer.addTime} variant="ghost" className="min-h-[44px] normal-case text-[12px]"><MoreTimeRounded />+30 s</Button></div>
     </form>
   );
 }

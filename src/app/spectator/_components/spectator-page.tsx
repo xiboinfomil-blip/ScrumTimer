@@ -1,6 +1,10 @@
 'use client';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Info as NoticeIcon } from 'lucide-react';
+
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button } from '@mui/material';
+
+import { Button } from '@/components/ui/button';
 import { useTeam } from '@/providers/team-provider';
 import { liveRemaining, validateLiveSnapshot, type LiveSnapshot } from '@/lib/live/live-session';
 import { usePresentation } from '@/hooks/timer/use-presentation';
@@ -41,11 +45,11 @@ export function SpectatorPage() {
   const remaining = snapshot ? liveRemaining(snapshot, now + live!.offset) : 0;
   const seconds = Math.ceil(Math.abs(remaining));
   return <section ref={target} aria-label="Vue spectateur" className={`${presentation.presenting ? 'fixed inset-0 z-[1400] h-dvh' : 'min-h-0 flex-1'} flex flex-col gap-3 overflow-auto bg-white p-4 text-center sm:p-6`}>
-    <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3 text-left"><h1 className="min-w-0 text-xl font-bold wrap-anywhere text-ink">{activeTeamName} · Spectateur</h1><Button variant="outlined" onClick={() => void presentation.toggle()} sx={{ minHeight: 44 }}>{presentation.presenting ? 'Quitter la présentation' : 'Présentation'}</Button></header>
+    <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3 text-left"><h1 className="min-w-0 text-xl font-bold wrap-anywhere text-ink">{activeTeamName} · Spectateur</h1><Button onClick={() => void presentation.toggle()} variant="outline" className="min-h-[44px]">{presentation.presenting ? 'Quitter la présentation' : 'Présentation'}</Button></header>
     {presentation.notice && <p role="status" className="text-xs text-muted">{presentation.notice}</p>}
-    {localOnly && <Alert severity="info">Diffusion limitée à cette instance. Un service Redis partagé est nécessaire sur un hébergement multi-instance.</Alert>}
-    {error && <Alert severity="warning">{error} Reconnexion automatique…</Alert>}
-    {stale && !error && <Alert severity="warning">Connexion au direct perdue. Le compte à rebours est masqué jusqu’à la reconnexion.</Alert>}
+    {localOnly && <Alert variant={"info"} ><NoticeIcon aria-hidden="true" /><AlertDescription>Diffusion limitée à cette instance. Un service Redis partagé est nécessaire sur un hébergement multi-instance.</AlertDescription></Alert>}
+    {error && <Alert variant={"warning"} ><NoticeIcon aria-hidden="true" /><AlertDescription>{error} Reconnexion automatique…</AlertDescription></Alert>}
+    {stale && !error && <Alert variant={"warning"} ><NoticeIcon aria-hidden="true" /><AlertDescription>Connexion au direct perdue. Le compte à rebours est masqué jusqu’à la reconnexion.</AlertDescription></Alert>}
     <div className="flex min-h-60 flex-1 flex-col items-center justify-center gap-4">
       {!snapshot ? <p role="status" className="text-lg text-muted">{error || stale ? 'Direct indisponible' : 'En attente de la diffusion du facilitateur…'}</p> : <>
         <p role="status" className="font-semibold text-brand">{snapshot.running ? remaining <= 0 ? 'Temps écoulé' : 'À la parole' : 'En pause / prêt'}</p>

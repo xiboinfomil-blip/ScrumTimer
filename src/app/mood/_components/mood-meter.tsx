@@ -1,7 +1,14 @@
 'use client';
 
+
+import { NativeSelect } from '@/components/ui/native-select';
+
+import { cn } from 'cn';
+
+
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, IconButton, NativeSelect, Paper } from '@mui/material';
+
+import { Button, Button as IconButton } from '@/components/ui/button';
 import {
   chooseUnusedDeck, displayTitle, groupMoodMeters, moodMeterId, isAnimatedImage, overlayCropStyle,
   overlayMatrix, type MoodMeterDeck, type MoodMeterSlide,
@@ -13,8 +20,8 @@ import { DefaultMoodMeter, MoodMeterLoading } from './default-mood-meter';
 import { useNotify } from '@/providers/notification-provider';
 import { MoodIcon } from './mood-icon';
 import { MOOD_RETRY_DELAYS } from '@/lib/mood/mood-retry';
-import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
-import PauseRounded from '@mui/icons-material/PauseRounded';
+import { Play as PlayArrowRounded } from 'lucide-react';
+import { Pause as PauseRounded } from 'lucide-react';
 
 const slideError = 'Diapositive indisponible. Le baromètre par défaut est affiché.';
 const meterStage = 'meter-stage relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden rounded-md border border-line bg-slate-50';
@@ -148,8 +155,7 @@ function OrderedMeterSlides({ deck, title, retry }: { deck: MoodMeterDeck; title
     </div>
     {pages.length > 1 && <IconButton id="meter-flip-button" type="button" aria-label={pinned ? 'Afficher la diapositive 1' : 'Afficher la diapositive 2'} aria-pressed={pinned}
       title={pinned ? 'Afficher la première diapositive' : 'Afficher la deuxième diapositive'}
-      onClick={() => setPinned(value => !value)}
-      sx={{ width: 44, height: 44 }} className="absolute right-1 bottom-1 z-10 rounded-full border border-line bg-white/95 text-brand shadow-sm">
+      onClick={() => setPinned(value => !value)} className={cn("w-[44px] h-[44px]", "absolute right-1 bottom-1 z-10 rounded-full border border-line bg-white/95 text-brand shadow-sm")} variant="ghost" size="icon">
       <MoodIcon name={pinned ? 'back' : 'arrow'} className="size-5" />
     </IconButton>}
   </div>;
@@ -313,23 +319,23 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
   const playing = !paused && (wide || mobileVisible);
 
   return (
-    <Paper component="section" elevation={0} ref={panelRef} className={`flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden rounded-lg border border-line border-t-2 border-t-accent bg-white p-4 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-2.5 ${className}`} aria-labelledby="meter-title">
+    <section ref={panelRef} className={`flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden rounded-lg border border-line border-t-2 border-t-accent bg-white p-4 max-[650px]:p-3 [@media(max-height:650px)]:gap-1 [@media(max-height:650px)]:p-2.5 ${className}`} aria-labelledby="meter-title">
       <div className="flex shrink-0 items-center justify-between gap-3">
         <div className="min-w-0"><h2 id="meter-title" className="truncate text-base font-bold text-ink max-[800px]:sr-only">Baromètre du jour</h2></div>
       </div>
       <div className="flex min-w-0 shrink-0 items-center gap-2">
         <div className={`flex min-w-0 flex-1 items-center gap-2 ${locked ? 'max-[800px]:sr-only' : ''}`}>
         <label className="sr-only" htmlFor="meter-catalogue-select">Catalogue · {catalog.length} baromètres</label>
-        <NativeSelect disableUnderline inputProps={{ id: 'meter-catalogue-select', 'aria-describedby': 'daily-meter-note' }} sx={{ height: 44, minWidth: 0, fontSize: 12, '& select': { boxSizing: 'border-box', height: 44, pl: 1.5, pr: 4 } }} className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50/70 text-xs font-semibold text-brand focus-within:border-brand/40 focus-within:ring-2 focus-within:ring-brand/10 disabled:opacity-75" disabled={!canChange} value={String(selection.deck)} onChange={event => void selectDeck(Number(event.target.value))}>
+        <NativeSelect className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50/70 text-xs font-semibold text-brand focus-within:border-brand/40 focus-within:ring-2 focus-within:ring-brand/10 disabled:opacity-75" disabled={!canChange} value={String(selection.deck)} onChange={event => void selectDeck(Number(event.target.value))} {...{ id: 'meter-catalogue-select', 'aria-describedby': 'daily-meter-note' }}>
           <option value="-1" disabled>{status === 'loading' ? 'Chargement…' : 'Choisissez un baromètre'}</option>
           <option value="-2">Baromètre original · choix manuel</option>
           {groupMoodMeters(catalog).map(({ label, entries }) => <optgroup key={label} label={`${label} (${entries.length})`}>
             {entries.map(({ deck: item, index }) => <option key={moodMeterId(item)} value={index}>{displayTitle(item)}{state.usedMoodMeters?.includes(moodMeterId(item)) ? ' · Déjà utilisé' : ''}</option>)}
           </optgroup>)}
         </NativeSelect>
-        <IconButton size="small" sx={{ width: 44, height: 44 }} id="random-meter-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-brand hover:border-brand/30 hover:bg-blue-50" aria-label="Afficher un autre baromètre au hasard"
+        <IconButton id="random-meter-button" type="button" className={cn("w-[44px] h-[44px]", "grid size-11 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-brand hover:border-brand/30 hover:bg-blue-50")} aria-label="Afficher un autre baromètre au hasard"
           title="Choisir un autre baromètre avant le premier vote" disabled={!canChange}
-          onClick={() => void selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))}><MoodIcon name="shuffle" className="size-5" /></IconButton>
+          onClick={() => void selectDeck(chooseUnusedDeck(catalog, state.usedMoodMeters ?? [], selection.deck))} variant="ghost" size="icon"><MoodIcon name="shuffle" className="size-5" /></IconButton>
         </div>
       </div>
       <p id="daily-meter-note" role="status" className={`flex shrink-0 items-start gap-2 rounded-lg px-2 py-1 text-xs leading-snug ${locked && status === 'ready' ? 'max-[800px]:sr-only' : ''} ${status === 'error' ? 'bg-danger-soft text-danger' : savingMeter || !daily ? 'text-amber-800' : 'text-muted'}`}><MoodIcon name={hasVotes ? 'lock' : 'meter'} className="mt-0.5 size-3.5 shrink-0" /><span>{savingMeter ? 'Enregistrement du baromètre…' : daily ? hasVotes ? 'Verrouillé après le premier vote.' : 'Modifiable avant le premier vote.' : status === 'error' ? 'Baromètre du jour indisponible. Rechargez pour réessayer ; aucun autre baromètre ne sera choisi.' : 'Chargement du baromètre du jour…'}</span></p>
@@ -341,19 +347,19 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
       )}
       {!stacked && deck && <div className="flex h-11 shrink-0 items-center justify-between gap-1 text-xs text-muted">
         <div className="flex min-w-0 items-center gap-1">
-        <IconButton size="small" sx={{ width: 44, height: 44 }} id="meter-prev-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-xl border border-line text-brand hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Diapositive précédente" disabled={!deck || selection.slide === 0} onClick={() => moveSlide(-1)}><MoodIcon name="back" /></IconButton>
+        <IconButton id="meter-prev-button" type="button" className={cn("w-[44px] h-[44px]", "grid size-11 shrink-0 place-items-center rounded-xl border border-line text-brand hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40")} aria-label="Diapositive précédente" disabled={!deck || selection.slide === 0} onClick={() => moveSlide(-1)} variant="ghost" size="icon"><MoodIcon name="back" /></IconButton>
         <span id="meter-slide-count" className="min-w-0 rounded-full bg-slate-100 px-2 py-1 text-center text-[11px] font-medium tabular-nums" aria-live="polite">{slide
           ? `${selection.slide + 1} / ${deck.slides.length}` : 'Aucune diapositive'}</span>
-        <IconButton size="small" sx={{ width: 44, height: 44 }} id="meter-next-button" type="button" className="grid size-11 shrink-0 place-items-center rounded-xl border border-line text-brand hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Diapositive suivante" disabled={!slide || selection.slide === deck.slides.length - 1} onClick={() => moveSlide(1)}><MoodIcon name="arrow" /></IconButton>
+        <IconButton id="meter-next-button" type="button" className={cn("w-[44px] h-[44px]", "grid size-11 shrink-0 place-items-center rounded-xl border border-line text-brand hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40")} aria-label="Diapositive suivante" disabled={!slide || selection.slide === deck.slides.length - 1} onClick={() => moveSlide(1)} variant="ghost" size="icon"><MoodIcon name="arrow" /></IconButton>
         </div>
-        <Button disableElevation size="small" variant="outlined" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 12, '&[hidden]': { display: 'none' } }} id="meter-animation-button" type="button" disabled={!slide}
-          className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg border border-line px-3 text-xs font-semibold text-brand hover:bg-blue-50 disabled:opacity-50" hidden={Boolean(deck?.remoteId)}
+        <Button id="meter-animation-button" type="button" disabled={!slide}
+          className={cn("min-h-[44px] min-w-[0px] normal-case text-[12px] [&[hidden]]:hidden", "inline-flex h-11 shrink-0 items-center gap-2 rounded-lg border border-line px-3 text-xs font-semibold text-brand hover:bg-blue-50 disabled:opacity-50")} hidden={Boolean(deck?.remoteId)}
           aria-pressed={paused} aria-label={paused ? 'Lire les animations' : 'Mettre les animations en pause'}
-          onClick={() => setPaused(value => !value)}>
+          onClick={() => setPaused(value => !value)} variant="outline" size="sm">
           {paused ? <PlayArrowRounded className="size-4" /> : <PauseRounded className="size-4" />}{paused ? 'Reprendre' : 'Stop'}</Button>
       </div>}
       {deck?.remoteId && (!slide || conversion !== 'idle') && <div role="status" className="shrink-0 text-[11px] text-muted">
-        {conversion === 'error' ? <>Présentation indisponible. Choisissez un autre baromètre ou <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" className="min-h-11 px-2 text-brand underline" onClick={() => { setConversion('loading'); setRetry(value => value + 1); }}>Réessayer</Button></> : 'Chargement des diapositives SVG depuis Google…'}
+        {conversion === 'error' ? <>Présentation indisponible. Choisissez un autre baromètre ou <Button type="button" className={cn("min-h-[44px] min-w-[0px] normal-case text-[11px]", "min-h-11 px-2 text-brand underline")} onClick={() => { setConversion('loading'); setRetry(value => value + 1); }} variant="ghost" size="sm">Réessayer</Button></> : 'Chargement des diapositives SVG depuis Google…'}
       </div>}
       <p id="meter-source-note" className={deck && !deck.remoteId ? 'sr-only' : `shrink-0 text-[10px] text-muted ${status === 'ready' ? '[@media(max-height:650px)]:sr-only' : ''}`} role="status">{deck?.remoteId
         ? `${stacked ? `${deck.slides.length} diapositives disponibles. ` : ''}SVG statiques fournis par Google ; GIF non animés.` : deck
@@ -361,8 +367,8 @@ export function MoodMeter({ className = '', mobileVisible = true, onShowPeople, 
         : status === 'loading' ? 'Chargement du catalogue…'
         : status === 'error' ? loadError || 'Catalogue indisponible. Réessayez le chargement.'
         : selection.deck === -2 ? 'Baromètre original choisi manuellement.' : 'Sélection automatique parmi les baromètres non utilisés uniquement.'}</p>
-      {status === 'error' && <Button type="button" variant="outlined" sx={{ minHeight: 44, flexShrink: 0 }} onClick={() => setCatalogRetry(value => value + 1)}>Réessayer le catalogue</Button>}
-      {onShowPeople && <button type="button" onClick={onShowPeople} className="group hidden min-h-11 shrink-0 items-center justify-center gap-3 rounded-xl bg-brand px-3 text-sm font-semibold text-white hover:bg-brand-dark max-[800px]:inline-flex [@media(max-height:650px)]:hidden">Renseigner les humeurs<MoodIcon name="arrow" className="size-4 shrink-0 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" /></button>}
-    </Paper>
+      {status === 'error' && <Button type="button" onClick={() => setCatalogRetry(value => value + 1)} variant="outline" className="min-h-[44px] shrink-0">Réessayer le catalogue</Button>}
+      {onShowPeople && <Button type="button" onClick={onShowPeople} className="group hidden min-h-11 shrink-0 items-center justify-center gap-3 rounded-xl bg-brand px-3 text-sm font-semibold text-white hover:bg-brand-dark max-[800px]:inline-flex [@media(max-height:650px)]:hidden" variant="ghost">Renseigner les humeurs<MoodIcon name="arrow" className="size-4 shrink-0 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" /></Button>}
+    </section>
   );
 }

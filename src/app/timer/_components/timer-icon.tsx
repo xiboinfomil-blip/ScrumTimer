@@ -1,13 +1,13 @@
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import PauseIcon from '@mui/icons-material/Pause';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import ReplayIcon from '@mui/icons-material/Replay';
-import ShuffleIcon from '@mui/icons-material/Shuffle';
-import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
-import UpdateIcon from '@mui/icons-material/Update';
+import { ArrowLeft as ArrowBackIcon } from 'lucide-react';
+import { ArrowRight as ArrowForwardIcon } from 'lucide-react';
+import { Pencil as EditOutlinedIcon } from 'lucide-react';
+import { LockKeyhole as LockOutlinedIcon } from 'lucide-react';
+import { Pause as PauseIcon } from 'lucide-react';
+import { Play as PlayArrowIcon } from 'lucide-react';
+import { RotateCcw as ReplayIcon } from 'lucide-react';
+import { Shuffle as ShuffleIcon } from 'lucide-react';
+import { Timer as TimerOutlinedIcon } from 'lucide-react';
+import { History as UpdateIcon } from 'lucide-react';
 
 export function TimerIcon({ name, className = 'size-4' }: { name: 'play' | 'pause' | 'next' | 'reset' | 'later' | 'edit' | 'lock' | 'shuffle' | 'back' | 'timer'; className?: string }) {
   const icons = {
@@ -23,5 +23,5 @@ export function TimerIcon({ name, className = 'size-4' }: { name: 'play' | 'paus
     back: ArrowBackIcon,
   };
   const Icon = icons[name];
-  return <Icon className={className} fontSize="inherit" aria-hidden="true" />;
+  return <Icon className={className} size={16} aria-hidden="true" />;
 }

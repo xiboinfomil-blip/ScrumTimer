@@ -528,7 +528,7 @@ def ticket_layout_case(browser, width, height, motion, screenshots):
         sidebar.get_by_role('button', name=re.compile(first_prefix + '-7 :')).click()
         long_dialog = page.get_by_role('dialog', name='W' * 255, exact=True)
         expect(long_dialog).to_be_visible()
-        body = long_dialog.locator('.MuiDialogContent-root')
+        body = long_dialog.locator('[data-dialog-body]')
         assert body.evaluate('element => element.clientHeight >= 100 && element.scrollWidth <= element.clientWidth')
         long_dialog.get_by_role('heading', name='Description', exact=True).scroll_into_view_if_needed()
         link_box = long_dialog.get_by_role('link', name='Ouvrir dans Jira', exact=True).bounding_box()

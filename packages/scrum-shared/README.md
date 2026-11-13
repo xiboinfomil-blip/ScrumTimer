@@ -1,6 +1,6 @@
 # @infomil/scrum-shared
 
-Private, source-only ESM package shared by the master application at the repository root and the participant application in `apps/participants`. Version: 1.0.0. React >=19 is a peer dependency; there are no runtime dependencies.
+Private, source-only ESM package shared by the master application at the repository root and the participant application in `apps/participants`. Version: 1.0.0. React >=19 is a peer dependency. UI dependencies are Radix, Lucide, class-variance-authority and cn; pure contracts do not import them.
 
 ## Public boundaries
 
@@ -9,6 +9,7 @@ Private, source-only ESM package shared by the master application at the reposit
 - `@infomil/scrum-shared/contracts`: browser-safe response projection/parsers and link shape checks. `validateNote` is the exact same function as `validateDailyHint`; link patterns do not authenticate HMACs.
 - `@infomil/scrum-shared/statistics`: pure participant reporting helpers. Archived scores are read, never recalculated.
 - `@infomil/scrum-shared/ui`: client React primitives and Tailwind recipes. Each app must scan this package's source and supply the brand theme tokens.
+- `@infomil/scrum-shared/ui/*`: shared shadcn button, input, textarea, label and native-select implementations. Both apps supply matching Infomil theme tokens; the master keeps compatibility re-exports at its existing UI paths.
 
 The master alone owns the database schema, migrations, persistence, authentication secrets, signing, authorization and writes. This package must not import database/server modules, environment secrets, Next.js or either application's source. No database schema is copied into the participant app. Shared contracts are the single source of truth; application compatibility modules only re-export them. Daily hint validation never imports contracts (no circular dependency).
 

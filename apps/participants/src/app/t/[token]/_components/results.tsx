@@ -1,4 +1,6 @@
 'use client';
+import { Input } from '@infomil/scrum-shared/ui/input';
+
 import { useState } from 'react';
 import { field, Pagination, Panel } from '@/components/ui';
 import { duration, leaderboard, measured, pageItems, searchText, todayRound, totals } from '@/lib/statistics';
@@ -14,7 +16,7 @@ export function Results({ kind, data, now }: { kind: 'statistics' | 'summary'; d
     {summary && !round ? <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">Aucun daily terminé aujourd’hui. Le bilan apparaîtra après sa clôture par le scrum master.</p> : <>
       {summary && round && <p className="mb-4 text-xs text-slate-600">Terminé le {new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Indian/Mauritius' }).format(new Date(round.completedAt))} · Maurice</p>}
       <dl className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">{[['Dailys terminés', stats.rounds], ['Prises de parole', stats.turns], ['Temps total', duration(stats.seconds)], ['Score moyen enregistré', stats.average ?? '—']].map(([label, value]) => <div key={label} className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4"><dt className="text-xs text-slate-600">{label}</dt><dd className="mt-2 text-xl font-bold tabular-nums text-brand">{value}</dd></div>)}</dl>
-      <label htmlFor={`${prefix}-search`} className="mb-2 block text-sm font-semibold">Rechercher dans les résultats</label><input id={`${prefix}-search`} type="search" className={field} value={query} onChange={e => { setQuery(e.target.value); setPage(1); }} />
+      <label htmlFor={`${prefix}-search`} className="mb-2 block text-sm font-semibold">Rechercher dans les résultats</label><Input id={`${prefix}-search`} type="search" className={field} value={query} onChange={e => { setQuery(e.target.value); setPage(1); }} />
       <ol aria-label={summary ? 'Résultats du jour' : 'Classement sur cinq bilans'} className="mt-4 space-y-2">{list.items.map(p => <li key={p.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 p-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 font-bold text-brand" aria-label={p.rank === null ? 'Non classé' : `Rang ${p.rank}`}>{p.rank ?? '—'}</span><div className="min-w-0 flex-1"><p className="font-semibold">{p.name}</p><p className="text-xs text-slate-500">{p.count} score(s) mesuré(s) · {p.turns} passage(s)</p></div><span className="text-lg font-bold tabular-nums text-brand">{p.average ?? '—'}<span className="block text-right text-[10px] font-normal text-slate-500">/ 1 000</span></span></li>)}</ol>
       {!rows.length && <p className="p-5 text-sm text-slate-600">Aucun résultat sur cette période.</p>}{rows.length > 0 && !list.items.length && <p className="p-5 text-sm text-slate-600">Aucun résultat pour cette recherche.</p>}
       <Pagination page={list.page} pages={list.pages} onPage={setPage} label={summary ? 'Résultats du bilan' : 'Classement statistique'} />

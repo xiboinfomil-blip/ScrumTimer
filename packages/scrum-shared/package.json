@@ -8,7 +8,14 @@
     "./types": "./src/types.ts",
     "./statistics": "./src/statistics.ts",
     "./ui": "./src/ui.tsx",
+    "./ui/*": "./src/ui/*.tsx",
     "./daily-hints": "./src/daily-hints.ts"
   },
-  "peerDependencies": { "react": ">=19" }
+  "peerDependencies": { "react": ">=19" },
+  "dependencies": {
+    "class-variance-authority": "0.7.1",
+    "cn": "0.3.0",
+    "lucide-react": "1.70.0",
+    "radix-ui": "1.4.3"
+  }
 }

@@ -1,8 +1,11 @@
 'use client';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
+
 
 import { useEffect, useRef, useState } from 'react';
-import { IconButton, Tooltip } from '@mui/material';
-import InstallDesktopRounded from '@mui/icons-material/InstallDesktopRounded';
+
+import { Button as IconButton } from '@/components/ui/button';
+import { MonitorDown as InstallDesktopRounded } from 'lucide-react';
 
 interface InstallEvent extends Event {
   prompt(): Promise<void>;
@@ -38,5 +41,5 @@ export function AppInstallButton() {
     catch {}
     finally { if (mounted.current) { setPrompt(null); setPending(false); } }
   };
-  return <Tooltip title="Installer l’application"><IconButton aria-label="Installer l’application" disabled={pending} onClick={() => void install()} className="hidden size-11 text-brand min-[801px]:inline-flex"><InstallDesktopRounded /></IconButton></Tooltip>;
+  return <TooltipProvider><Tooltip disableHoverableContent><TooltipTrigger asChild><IconButton aria-label="Installer l’application" disabled={pending} onClick={() => void install()} className="hidden size-11 text-brand min-[801px]:inline-flex" variant="ghost" size="icon"><InstallDesktopRounded /></IconButton></TooltipTrigger><TooltipContent>{"Installer l’application"}</TooltipContent></Tooltip></TooltipProvider>;
 }

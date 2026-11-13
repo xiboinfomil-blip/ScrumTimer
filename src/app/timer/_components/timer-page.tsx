@@ -1,11 +1,15 @@
 'use client';
+import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { cn } from 'cn';
+
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
-import { Button, Dialog, DialogTitle, DialogContent, DialogActions, ListItemIcon, ListItemText, MenuItem } from '@mui/material';
-import GroupsRounded from '@mui/icons-material/GroupsRounded';
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { Users as GroupsRounded } from 'lucide-react';
 import { useTeam } from '@/providers/team-provider';
 import { useLiveBroadcast } from '@/hooks/live/use-live-broadcast';
 import { usePresentation } from '@/hooks/timer/use-presentation';
@@ -23,10 +27,10 @@ import { useDailyHints } from '@/hooks/meeting/use-daily-hints';
 import { roundSpeakers } from '@/lib/timer/timer-completion';
 import { LateCheckinDialog } from './late-checkin-dialog';
 import { useRemotePage } from '@/providers/remote-host-provider';
-import SmartphoneRounded from '@mui/icons-material/SmartphoneRounded';
-import ScreenShareRounded from '@mui/icons-material/ScreenShareRounded';
+import { Smartphone as SmartphoneRounded } from 'lucide-react';
+import { ScreenShare as ScreenShareRounded } from 'lucide-react';
 import { CurrentMoodCard } from './current-mood-card';
-import WallpaperRounded from '@mui/icons-material/WallpaperRounded';
+import { Wallpaper as WallpaperRounded } from 'lucide-react';
 import { TimerScreensaver } from '@/components/ui/timer-screensaver';
 import { TeamNavbarActions } from '@/components/layout/team-navbar-actions';
 
@@ -111,25 +115,25 @@ export function TimerPage() {
   return (
     <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-1 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-0 ${presentation.presenting ? 'fixed inset-x-0 bottom-0 top-[68px] z-[1200] max-w-none! bg-slate-50 p-3 sm:p-6 max-[800px]:top-[105px]' : 'mx-auto w-full'} overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
         {navbarActions && createPortal(<TeamNavbarActions onOpenChange={setToolsOpen} timerTools={[
-          <MenuItem key="screensaver" sx={{ minHeight: 48 }} onClick={() => { if (timer.running) timer.toggle(); setBlackScreen(true); }}><ListItemIcon><WallpaperRounded /></ListItemIcon><ListItemText>Économiseur d’écran</ListItemText></MenuItem>,
-          <MenuItem key="lineup" sx={{ minHeight: 48 }} onClick={() => { if (timer.running) timer.toggle(); setLineupOpen(true); }}><ListItemIcon><GroupsRounded /></ListItemIcon><ListItemText>Voir le tour de parole</ListItemText></MenuItem>,
-          <MenuItem key="broadcast" sx={{ minHeight: 48 }} onClick={() => { if (presentation.presenting) { setPresentationView('timer'); void presentation.toggle(); } else setSharing(true); }}><ListItemIcon><ScreenShareRounded /></ListItemIcon><ListItemText>{presentation.presenting ? 'Quitter la présentation' : 'Diffusion'}</ListItemText></MenuItem>,
+          <DropdownMenuItem key="screensaver" onSelect={() => { if (timer.running) timer.toggle(); setBlackScreen(true); }}><WallpaperRounded />Économiseur d’écran</DropdownMenuItem>,
+          <DropdownMenuItem key="lineup" onSelect={() => { if (timer.running) timer.toggle(); setLineupOpen(true); }}><GroupsRounded />Voir le tour de parole</DropdownMenuItem>,
+          <DropdownMenuItem key="broadcast" onSelect={() => { if (presentation.presenting) { setPresentationView('timer'); void presentation.toggle(); } else setSharing(true); }}><ScreenShareRounded />{presentation.presenting ? 'Quitter la présentation' : 'Diffusion'}</DropdownMenuItem>,
         ]} />, navbarActions)}
       <TimerScreensaver open={blackScreen} onClose={() => setBlackScreen(false)} onResume={() => { setBlackScreen(false); if (!timer.running) timer.toggle(); }} teamName={activeTeamName} speaker={timer.person?.name ?? ''} />
-      <Dialog keepMounted open={lineupOpen && !timer.lateChecking && !waitingForPostponed} onClose={() => setLineupOpen(false)} aria-labelledby="lineup-dialog-title" fullWidth maxWidth="sm" slotProps={{ paper: { sx: { height: 'min(640px, calc(100dvh - 32px))', m: 2, width: 'calc(100% - 32px)', borderRadius: '14px', border: '1px solid #dce3e9' } } }}>
-        <DialogTitle id="lineup-dialog-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Le tour de parole</DialogTitle>
-        <DialogContent className="flex min-h-0 flex-1 flex-col"><p className="mb-3 shrink-0 text-xs text-muted">{timer.focusMode ? 'Votre passage reste sélectionné. Reprenez le minuteur une fois prêt.' : 'Choisissez la personne qui ouvrira le point.'}</p><TeamLineup timer={timer} pagination={lineupPagination} className="flex-1" /></DialogContent>
-        <DialogActions><Button onClick={() => setLineupOpen(false)} sx={{ minHeight: 44 }}>Revenir au passage</Button></DialogActions>
-      </Dialog>
-      <Dialog open={sharing} onClose={() => setSharing(false)} aria-labelledby="sharing-title" fullWidth maxWidth="xs" slotProps={{ paper: { sx: { borderRadius: '14px', border: '1px solid #dce3e9' } } }}>
-        <DialogTitle id="sharing-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Diffusion et présentation</DialogTitle>
-        <DialogContent><div className="flex flex-col gap-2" aria-label="Diffusion et présentation">
-        <Button fullWidth onClick={broadcast.toggle} aria-label={broadcast.enabled ? 'Arrêter le direct' : 'Diffuser en direct'} aria-pressed={broadcast.enabled} sx={{ minHeight: 56, justifyContent: 'flex-start', border: '1px solid #dce3e9', textAlign: 'left', textTransform: 'none' }}><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-brand"><ScreenShareRounded /></span><span className="ml-3 grid justify-items-start"><strong className="text-sm">{broadcast.enabled ? 'Arrêter le direct' : 'Diffuser en direct'}</strong><span aria-hidden="true" className="text-[11px] font-normal text-muted">{broadcast.enabled ? 'Interrompre la diffusion du minuteur' : 'Afficher le minuteur sur un écran distant'}</span></span></Button>
-        <Button fullWidth component={Link} href={`/spectator?team=${encodeURIComponent(activeTeamId ?? '')}`} target="_blank" rel="noopener noreferrer" aria-label="Lien spectateur" sx={{ minHeight: 56, justifyContent: 'flex-start', border: '1px solid #dce3e9', textAlign: 'left', textTransform: 'none' }}><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-brand"><SmartphoneRounded /></span><span className="ml-3 grid justify-items-start"><strong className="text-sm">Lien spectateur</strong><span aria-hidden="true" className="text-[11px] font-normal text-muted">Ouvrir une vue en lecture seule</span></span></Button>
-        <Button fullWidth onClick={() => { setSharing(false); setPresentationView('timer'); void presentation.toggle(); }} aria-label={presentation.presenting ? 'Quitter la présentation' : 'Présentation'} aria-pressed={presentation.presenting} sx={{ minHeight: 56, justifyContent: 'flex-start', border: '1px solid #dce3e9', textAlign: 'left', textTransform: 'none' }}><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-orange-50 text-amber-800"><ScreenShareRounded /></span><span className="ml-3 grid justify-items-start"><strong className="text-sm">{presentation.presenting ? 'Quitter la présentation' : 'Présentation'}</strong><span aria-hidden="true" className="text-[11px] font-normal text-muted">{presentation.presenting ? 'Revenir à la page complète' : 'Afficher le minuteur en plein écran'}</span></span></Button>
+      <Dialog open={lineupOpen && !timer.lateChecking && !waitingForPostponed} onOpenChange={next => { if (!next) (() => setLineupOpen(false))?.(); }}><DialogContent showCloseButton={false} className="min-h-0 h-[min(640px,_calc(100dvh_-_32px))] w-[calc(100%_-_32px)] rounded-[14px] border-[1px_solid_#dce3e9] max-w-[600px]" aria-labelledby="lineup-dialog-title">
+        <DialogTitle id="lineup-dialog-title" className={cn("shrink-0 px-5 pt-5 pb-2", "border-t-2 border-t-accent pb-2! text-lg! font-bold!")}>Le tour de parole</DialogTitle>
+        <div className={cn("min-h-0 overflow-y-auto px-5 py-3", "flex min-h-0 flex-1 flex-col")}><p className="mb-3 shrink-0 text-xs text-muted">{timer.focusMode ? 'Votre passage reste sélectionné. Reprenez le minuteur une fois prêt.' : 'Choisissez la personne qui ouvrira le point.'}</p><TeamLineup timer={timer} pagination={lineupPagination} className="flex-1" /></div>
+        <DialogFooter><Button onClick={() => setLineupOpen(false)} variant="ghost" className="min-h-[44px]">Revenir au passage</Button></DialogFooter>
+      </DialogContent></Dialog>
+      <Dialog open={sharing} onOpenChange={next => { if (!next) (() => setSharing(false))?.(); }}><DialogContent showCloseButton={false} className="min-h-0 rounded-[14px] border-[1px_solid_#dce3e9] max-w-[400px]" aria-labelledby="sharing-title">
+        <DialogTitle id="sharing-title" className={cn("shrink-0 px-5 pt-5 pb-2", "border-t-2 border-t-accent pb-2! text-lg! font-bold!")}>Diffusion et présentation</DialogTitle>
+        <div className="min-h-0 overflow-y-auto px-5 py-3"><div className="flex flex-col gap-2" aria-label="Diffusion et présentation">
+        <Button onClick={broadcast.toggle} aria-label={broadcast.enabled ? 'Arrêter le direct' : 'Diffuser en direct'} aria-pressed={broadcast.enabled} variant="ghost" className="min-h-[56px] justify-start border-[1px_solid_#dce3e9] text-left normal-case w-full"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-brand"><ScreenShareRounded /></span><span className="ml-3 grid justify-items-start"><strong className="text-sm">{broadcast.enabled ? 'Arrêter le direct' : 'Diffuser en direct'}</strong><span aria-hidden="true" className="text-[11px] font-normal text-muted">{broadcast.enabled ? 'Interrompre la diffusion du minuteur' : 'Afficher le minuteur sur un écran distant'}</span></span></Button>
+        <Button aria-label="Lien spectateur" variant="ghost" asChild className="min-h-[56px] justify-start border-[1px_solid_#dce3e9] text-left normal-case w-full"><Link href={`/spectator?team=${encodeURIComponent(activeTeamId ?? '')}`} target="_blank" rel="noopener noreferrer"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-brand"><SmartphoneRounded /></span><span className="ml-3 grid justify-items-start"><strong className="text-sm">Lien spectateur</strong><span aria-hidden="true" className="text-[11px] font-normal text-muted">Ouvrir une vue en lecture seule</span></span></Link></Button>
+        <Button onClick={() => { setSharing(false); setPresentationView('timer'); void presentation.toggle(); }} aria-label={presentation.presenting ? 'Quitter la présentation' : 'Présentation'} aria-pressed={presentation.presenting} variant="ghost" className="min-h-[56px] justify-start border-[1px_solid_#dce3e9] text-left normal-case w-full"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-orange-50 text-amber-800"><ScreenShareRounded /></span><span className="ml-3 grid justify-items-start"><strong className="text-sm">{presentation.presenting ? 'Quitter la présentation' : 'Présentation'}</strong><span aria-hidden="true" className="text-[11px] font-normal text-muted">{presentation.presenting ? 'Revenir à la page complète' : 'Afficher le minuteur en plein écran'}</span></span></Button>
         <span role="status" className="text-xs text-muted">{broadcast.enabled ? broadcast.status : presentation.notice}</span>
-        </div></DialogContent><DialogActions><Button onClick={() => setSharing(false)}>Fermer</Button></DialogActions>
-      </Dialog>
+        </div></div><DialogFooter><Button onClick={() => setSharing(false)} variant="ghost">Fermer</Button></DialogFooter>
+      </DialogContent></Dialog>
       {presentation.presenting ? <ScreenTabs
         className={`${segmentedTabs} h-13 border border-slate-200/70 p-1 [&>button]:min-h-11 max-[1099px]:flex min-[1100px]:hidden [@media(max-height:650px)]:flex [@media(max-height:650px)]:h-9 [@media(max-height:650px)]:border-0 [@media(max-height:650px)]:p-0 [@media(max-height:650px)]:[&>button]:!min-h-9`}
         label="Présentation du point quotidien"

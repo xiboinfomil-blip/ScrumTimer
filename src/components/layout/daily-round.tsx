@@ -1,12 +1,15 @@
 'use client';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
+
 
 import { useRef, useState } from 'react';
-import { IconButton, Tooltip } from '@mui/material';
-import WallpaperRounded from '@mui/icons-material/WallpaperRounded';
-import FullscreenExitRounded from '@mui/icons-material/FullscreenExitRounded';
-import PauseRounded from '@mui/icons-material/PauseRounded';
-import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
-import EmojiEventsRounded from '@mui/icons-material/EmojiEventsRounded';
+
+import { Button as IconButton } from '@/components/ui/button';
+import { Wallpaper as WallpaperRounded } from 'lucide-react';
+import { Minimize as FullscreenExitRounded } from 'lucide-react';
+import { Pause as PauseRounded } from 'lucide-react';
+import { Play as PlayArrowRounded } from 'lucide-react';
+import { Trophy as EmojiEventsRounded } from 'lucide-react';
 import { useReducedMotion } from 'framer-motion';
 import { useTeam } from '@/providers/team-provider';
 import { DailyDashboard } from './daily-dashboard';
@@ -25,15 +28,15 @@ export function DailyRound() {
     <ScreensaverBackdrop moving={!reduced && !paused} />
     <header className="flex shrink-0 items-center justify-between gap-2 border-b border-brand/15 pb-3 [@media(max-height:650px)]:pb-1">
       <div className="flex min-w-0 items-center gap-3">
-        <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-lg border border-[#d6aa54] bg-[#fff5d8] text-[#906114] max-[650px]:hidden"><EmojiEventsRounded fontSize="large" /></span>
+        <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-lg border border-[#d6aa54] bg-[#fff5d8] text-[#906114] max-[650px]:hidden"><EmojiEventsRounded size={36} /></span>
         <div className="min-w-0"><p className="mb-1 text-[11px] font-semibold text-success [@media(max-height:650px)]:hidden">Point terminé · {new Intl.DateTimeFormat('fr-FR', { timeZone: 'Indian/Mauritius', day: 'numeric', month: 'long' }).format(new Date(round.completedAt))}</p>
         <h1 className="text-2xl font-extrabold text-brand max-[650px]:text-xl [@media(max-height:400px)]:text-lg">Bilan du jour</h1>
         <p className="mt-0.5 truncate text-xs text-muted" title={activeTeamName}>{activeTeamName} · {round.people.length} participants</p></div>
         <span className="sr-only">Point quotidien terminé aujourd’hui</span>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        <Tooltip title={paused || reduced ? 'Animations arrêtées' : 'Arrêter les animations'}><span><IconButton disabled={Boolean(reduced)} aria-label={paused ? 'Animer le décor du bilan' : 'Arrêter les animations du bilan'} aria-pressed={paused || Boolean(reduced)} onClick={() => setPaused(value => !value)} className="size-11! text-brand!">{paused || reduced ? <PlayArrowRounded /> : <PauseRounded />}</IconButton></span></Tooltip>
-        <Tooltip title={presentation.presenting ? 'Quitter la présentation du bilan' : 'Présenter le bilan'}><IconButton id="daily-screensaver-button" aria-label={presentation.presenting ? 'Quitter la présentation du bilan' : 'Présenter le bilan'} aria-pressed={presentation.presenting} onClick={() => void presentation.toggle()} className="size-11! text-brand!">{presentation.presenting ? <FullscreenExitRounded /> : <WallpaperRounded />}</IconButton></Tooltip>
+        <TooltipProvider><Tooltip disableHoverableContent><TooltipTrigger asChild><span><IconButton disabled={Boolean(reduced)} aria-label={paused ? 'Animer le décor du bilan' : 'Arrêter les animations du bilan'} aria-pressed={paused || Boolean(reduced)} onClick={() => setPaused(value => !value)} className="size-11! text-brand!" variant="ghost" size="icon">{paused || reduced ? <PlayArrowRounded /> : <PauseRounded />}</IconButton></span></TooltipTrigger><TooltipContent>{paused || reduced ? 'Animations arrêtées' : 'Arrêter les animations'}</TooltipContent></Tooltip></TooltipProvider>
+        <TooltipProvider><Tooltip disableHoverableContent><TooltipTrigger asChild><IconButton id="daily-screensaver-button" aria-label={presentation.presenting ? 'Quitter la présentation du bilan' : 'Présenter le bilan'} aria-pressed={presentation.presenting} onClick={() => void presentation.toggle()} className="size-11! text-brand!" variant="ghost" size="icon">{presentation.presenting ? <FullscreenExitRounded /> : <WallpaperRounded />}</IconButton></TooltipTrigger><TooltipContent>{presentation.presenting ? 'Quitter la présentation du bilan' : 'Présenter le bilan'}</TooltipContent></Tooltip></TooltipProvider>
       </div>
     </header>
     <DailyDashboard round={round} />

@@ -306,6 +306,7 @@ def run_speaker_navigation(browser, width, height, motion='reduce'):
         expect(page.locator('#upcoming-speaker')).to_have_text('Carol')
         assert state()['remaining'] == 103 and state()['running']
         assert state()['people'][1]['postponed'] and not state()['people'][1]['done']
+        page.wait_for_function("document.querySelector('[data-postpone-next]').getAnimations().every(animation => animation.playState !== 'running')")
         queue = page.get_by_role('group', name='Gestion de la file d’attente', exact=True)
         queue_box = queue.bounding_box()
         controls = page.locator('[data-timer-controls]').bounding_box()
@@ -553,7 +554,7 @@ def run_timer_design(browser, width, height, motion, long_names=False):
         dial.scroll_into_view_if_needed()
         assert dial.bounding_box()['height'] >= 90, (label, state, dial.bounding_box())
         assert dial.locator('line').count() == 60
-        assert dial.locator('.MuiCircularProgress-circle').count() == 2
+        assert dial.locator('[data-timer-track], [data-timer-progress]').count() == 2
         assert page.locator('#timer-display').evaluate('el => { const dial = el.closest("#timer-stage").querySelector("[data-timer-dial]").getBoundingClientRect(); const text = el.getBoundingClientRect(); return text.left >= dial.left && text.right <= dial.right && text.top >= dial.top && text.bottom <= dial.bottom; }'), (label, state, 'countdown outside dial')
         for control in page.locator('#next-button, #start-button, #manage-timer-button, [data-active-speaker] button, [data-queue-actions] button').all():
             control.scroll_into_view_if_needed()

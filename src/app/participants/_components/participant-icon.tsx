@@ -1,12 +1,12 @@
-import AddIcon from '@mui/icons-material/Add';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import CheckIcon from '@mui/icons-material/Check';
-import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
-import HistoryIcon from '@mui/icons-material/History';
-import LogoutIcon from '@mui/icons-material/Logout';
-import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
+import { Plus as AddIcon } from 'lucide-react';
+import { ArrowRight as ArrowForwardIcon } from 'lucide-react';
+import { Check as CheckIcon } from 'lucide-react';
+import { Trash2 as DeleteOutlinedIcon } from 'lucide-react';
+import { Pencil as EditOutlinedIcon } from 'lucide-react';
+import { Users as GroupsOutlinedIcon } from 'lucide-react';
+import { History as HistoryIcon } from 'lucide-react';
+import { LogOut as LogoutIcon } from 'lucide-react';
+import { ShieldCheck as VerifiedUserOutlinedIcon } from 'lucide-react';
 
 export function ParticipantIcon({ name, className = 'size-4' }: { name: 'people' | 'plus' | 'reset' | 'trash' | 'edit' | 'arrow' | 'away' | 'check' | 'shield'; className?: string }) {
   const icons = {
@@ -21,5 +21,5 @@ export function ParticipantIcon({ name, className = 'size-4' }: { name: 'people'
     shield: VerifiedUserOutlinedIcon,
   };
   const Icon = icons[name];
-  return <Icon className={className} fontSize="inherit" aria-hidden="true" />;
+  return <Icon className={className} size={16} aria-hidden="true" />;
 }

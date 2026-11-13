@@ -1,12 +1,17 @@
 'use client';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
+
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+
 
 import { useEffect, useRef, useState } from 'react';
-import { Box, Button, Dialog, IconButton, Tooltip } from '@mui/material';
-import CloseRounded from '@mui/icons-material/CloseRounded';
-import PauseRounded from '@mui/icons-material/PauseRounded';
-import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
-import EmojiEventsRounded from '@mui/icons-material/EmojiEventsRounded';
-import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded';
+
+import { Button, Button as IconButton } from '@/components/ui/button';
+import { X as CloseRounded } from 'lucide-react';
+import { Pause as PauseRounded } from 'lucide-react';
+import { Play as PlayArrowRounded } from 'lucide-react';
+import { Trophy as EmojiEventsRounded } from 'lucide-react';
+import { ArrowLeft as ArrowBackRounded } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { dailyRoundStatistics, type HistoryRound } from '@/lib/history/history';
 import { formatTime } from '@/lib/timer/timer';
@@ -28,16 +33,16 @@ export function TimerScreensaver({ open, onClose, onResume, teamName, speaker = 
   const moving = !reduced && !paused && open;
   const stats = round ? dailyRoundStatistics(round) : null;
   const returnLabel = round ? 'Revenir au bilan' : 'Revenir au minuteur';
-  return <Dialog open={open} onClose={onClose} fullScreen aria-labelledby="screensaver-title" slotProps={{ paper: { className: 'm-0! h-dvh! max-h-none! w-full! max-w-none! overflow-hidden! rounded-none! bg-white! p-0!' }, root: { sx: { zIndex: 3000 } }, transition: { onEntered: () => closeButton.current?.focus(), onExited: () => document.getElementById(round ? 'daily-screensaver-button' : 'navbar-settings-button')?.focus() } }}>
+  return <Dialog open={open} onOpenChange={next => { if (!next) (onClose)?.(); }}><DialogContent showCloseButton={false} className="min-h-0 h-dvh! max-h-none! w-full! max-w-none! overflow-hidden! rounded-none! bg-white! p-0! inset-0 top-0 left-0 h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 rounded-none" aria-labelledby="screensaver-title" onOpenAutoFocus={event => { event.preventDefault(); (() => closeButton.current?.focus())(); }} onCloseAutoFocus={event => { event.preventDefault(); (() => document.getElementById(round ? 'daily-screensaver-button' : 'navbar-settings-button')?.focus())(); }}>
     <div data-testid="timer-screensaver" data-scene="horloge" data-motion={moving ? 'running' : 'paused'} data-completed={Boolean(round)} className="relative isolate flex h-dvh min-h-0 flex-col overflow-hidden bg-[#f4f8fa] text-[#173c51] [&_button]:transform-none!">
       <ScreensaverBackdrop moving={moving} />
       <header className="flex shrink-0 items-center justify-between gap-3 px-5 py-3 sm:px-8 sm:py-4 [@media(max-height:500px)]:py-1">
-        <h2 id="screensaver-title" className="flex items-center gap-2 text-sm font-bold"><span className="h-5 w-1 bg-accent" aria-hidden="true" />{round ? 'Point terminé' : 'Économiseur d’écran'}</h2>
-        <Tooltip title={returnLabel}><IconButton ref={closeButton} autoFocus aria-label={returnLabel} onClick={onClose} className="h-12! w-12! bg-white! text-brand! shadow-sm"><CloseRounded /></IconButton></Tooltip>
+        <DialogTitle id="screensaver-title" className="flex items-center gap-2 text-sm font-bold"><span className="h-5 w-1 bg-accent" aria-hidden="true" />{round ? 'Point terminé' : 'Économiseur d’écran'}</DialogTitle>
+        <TooltipProvider><Tooltip disableHoverableContent><TooltipTrigger asChild><IconButton ref={closeButton} autoFocus aria-label={returnLabel} onClick={onClose} className="h-12! w-12! bg-white! text-brand! shadow-sm" variant="ghost" size="icon"><CloseRounded /></IconButton></TooltipTrigger><TooltipContent>{returnLabel}</TooltipContent></Tooltip></TooltipProvider>
       </header>
       <div data-screensaver-content className={`grid min-h-0 flex-1 gap-4 px-4 pb-4 sm:px-8 ${round ? 'grid-rows-[auto_minmax(0,1fr)] min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] min-[900px]:grid-rows-1 [@media(max-height:500px)]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]! [@media(max-height:500px)]:grid-rows-1!' : 'grid-cols-1'}`}>
         <div className={`flex min-h-0 min-w-0 flex-col items-center justify-center text-center ${round ? 'gap-2 min-[900px]:gap-5' : 'gap-5 [@media(max-height:500px)]:gap-2 [@media(max-height:400px)]:gap-1!'}`}>
-          <motion.div animate={{ y: moving ? [0, -9, 0] : 0, rotate: moving ? [0, -6, 0, 6, 0] : 0 }} transition={moving ? { duration: 5, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }} className={round ? 'hidden min-[900px]:block [@media(max-height:500px)]:hidden!' : '[@media(max-height:400px)]:hidden'}><Box component="img" src="/icon.svg" alt="Infomil" width="56" height="56" className="size-14 [@media(max-height:500px)]:size-9" /></motion.div>
+          <motion.div animate={{ y: moving ? [0, -9, 0] : 0, rotate: moving ? [0, -6, 0, 6, 0] : 0 }} transition={moving ? { duration: 5, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }} className={round ? 'hidden min-[900px]:block [@media(max-height:500px)]:hidden!' : '[@media(max-height:400px)]:hidden'}><img src="/icon.svg" alt="Infomil" width="56" height="56" className="size-14 [@media(max-height:500px)]:size-9" /></motion.div>
           <p title={teamName} className={`line-clamp-2 max-w-full break-words font-semibold ${round ? 'text-sm min-[900px]:text-xl' : 'text-lg sm:text-2xl'}`}>{teamName}</p>
           <time dateTime={now?.toISOString()} className={`flex max-w-full items-baseline font-light leading-none tabular-nums ${round ? 'text-5xl min-[900px]:text-8xl [@media(max-height:500px)]:text-4xl!' : 'text-7xl sm:text-9xl [@media(max-height:500px)]:text-6xl!'}`} aria-live="off">{now ? <><span>{String(now.getHours()).padStart(2, '0')}</span><motion.span animate={{ opacity: moving ? [1, .25, 1] : 1 }} transition={moving ? { duration: 2, repeat: Infinity } : { duration: 0 }}>:</motion.span><span>{String(now.getMinutes()).padStart(2, '0')}</span><span className="ml-2 border-l border-brand/30 pl-2 text-xl font-semibold text-brand">{String(now.getSeconds()).padStart(2, '0')}</span></> : '--:--'}</time>
           <p className={`text-sm font-semibold [@media(max-height:400px)]:hidden ${round ? 'hidden min-[900px]:block' : ''}`}>{now ? new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(now) : ''}</p>
@@ -49,9 +54,9 @@ export function TimerScreensaver({ open, onClose, onResume, teamName, speaker = 
         </section>}
       </div>
       <footer className="flex shrink-0 flex-wrap items-center justify-center gap-3 border-t border-brand/15 bg-white px-3 py-3 [@media(max-height:500px)]:py-1">
-        <Tooltip title={paused || reduced ? 'Animations arrêtées' : 'Arrêter les animations'}><span><IconButton disabled={Boolean(reduced)} aria-label={paused ? 'Animer le décor' : 'Arrêter les animations'} aria-pressed={paused || Boolean(reduced)} onClick={() => setPaused(value => !value)} className="size-12! text-brand!">{paused || reduced ? <PlayArrowRounded /> : <PauseRounded />}</IconButton></span></Tooltip>
-        <Button variant="contained" disableElevation startIcon={round ? <ArrowBackRounded /> : <PlayArrowRounded />} onClick={round ? onClose : onResume} className="min-h-12! rounded-lg! px-6! normal-case!">{round ? 'Revenir au bilan' : 'Reprendre le passage'}</Button>
+        <TooltipProvider><Tooltip disableHoverableContent><TooltipTrigger asChild><span><IconButton disabled={Boolean(reduced)} aria-label={paused ? 'Animer le décor' : 'Arrêter les animations'} aria-pressed={paused || Boolean(reduced)} onClick={() => setPaused(value => !value)} className="size-12! text-brand!" variant="ghost" size="icon">{paused || reduced ? <PlayArrowRounded /> : <PauseRounded />}</IconButton></span></TooltipTrigger><TooltipContent>{paused || reduced ? 'Animations arrêtées' : 'Arrêter les animations'}</TooltipContent></Tooltip></TooltipProvider>
+        <Button onClick={round ? onClose : onResume} className="min-h-12! rounded-lg! px-6! normal-case!" variant="default">{round ? <ArrowBackRounded /> : <PlayArrowRounded />}{round ? 'Revenir au bilan' : 'Reprendre le passage'}</Button>
       </footer>
     </div>
-  </Dialog>;
+  </DialogContent></Dialog>;
 }

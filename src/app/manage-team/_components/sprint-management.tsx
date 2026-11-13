@@ -1,10 +1,12 @@
 'use client';
+import { Button } from '@/components/ui/button';
+
 
 import { useState } from 'react';
 import { Loader } from '@infomil/scrum-shared/ui';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
-import LoginIcon from '@mui/icons-material/Login';
+import { RefreshCw as RefreshIcon } from 'lucide-react';
+import { Save as SaveOutlinedIcon } from 'lucide-react';
+import { LogIn as LoginIcon } from 'lucide-react';
 import { useTeam } from '@/providers/team-provider';
 import { useJiraResource } from '@/hooks/jira/use-jira-resource';
 import { SprintPicker } from '@/components/jira/sprint-picker';
@@ -22,9 +24,9 @@ export function SprintManagement() {
   return <section className="flex min-w-0 flex-col gap-3 border-b border-line pb-4" aria-labelledby="jira-sprint-heading">
     <h2 id="jira-sprint-heading" className="text-sm font-semibold text-ink">Sprint Jira</h2>
     {resource.loading && <Loader size="sm" label="Chargement du sprint…" className="self-center" />}
-    {resource.error && <div role="alert" className="text-xs text-danger">{resource.error}<button type="button" className={`${secondaryButton} mt-2`} onClick={resource.retry}><RefreshIcon fontSize="small" />Réessayer</button></div>}
+    {resource.error && <div role="alert" className="text-xs text-danger">{resource.error}<Button type="button" className={`${secondaryButton} mt-2`} onClick={resource.retry} variant="ghost"><RefreshIcon size={20} />Réessayer</Button></div>}
     {resource.data?.sprint && <SprintForm key={activeTeamId} sprint={resource.data.sprint} onSaved={resource.retry} />}
-    <form method="post" action="/api/jira/login"><button type="submit" className={secondaryButton}><LoginIcon fontSize="small" />Reconnecter Jira</button></form>
+    <form method="post" action="/api/jira/login"><Button type="submit" className={secondaryButton} variant="ghost"><LoginIcon size={20} />Reconnecter Jira</Button></form>
   </section>;
 }
 function SprintForm({ sprint, onSaved }: { sprint: Sprint; onSaved: () => void }) {
@@ -57,9 +59,9 @@ function SprintForm({ sprint, onSaved }: { sprint: Sprint; onSaved: () => void }
     <p className="break-words text-xs font-medium text-brand">{sprint.name}</p>
     <SprintPicker value={selection} onChange={setSelection} disabled={disabled} fixedBoard />
     {locked && <p role="status" className="text-xs text-muted">Point préparé · Synchronisation verrouillée</p>}
-    <button type="button" disabled={disabled || !selection.sprintId} className={primaryButton} onClick={() => setConfirm(true)}><RefreshIcon fontSize="small" />{pending ? 'Synchronisation…' : 'Synchroniser les participants'}</button>
+    <Button type="button" disabled={disabled || !selection.sprintId} className={primaryButton} onClick={() => setConfirm(true)} variant="ghost"><RefreshIcon size={20} />{pending ? 'Synchronisation…' : 'Synchroniser les participants'}</Button>
     <JiraDisplayPicker cloudId={sprint.cloudId} boardId={sprint.boardId} value={display} onChange={setDisplay} disabled={displayDisabled} />
-    <button type="button" disabled={displayDisabled || display.boardId === savedDisplay.boardId && display.scope === savedDisplay.scope} className={secondaryButton} onClick={() => void saveDisplay()}><SaveOutlinedIcon fontSize="small" />Enregistrer l’affichage</button>
+    <Button type="button" disabled={displayDisabled || display.boardId === savedDisplay.boardId && display.scope === savedDisplay.scope} className={secondaryButton} onClick={() => void saveDisplay()} variant="ghost"><SaveOutlinedIcon size={20} />Enregistrer l’affichage</Button>
     {notice && <p role="status" className="text-xs text-muted">{notice}</p>}
     <ConfirmDialog open={confirm} title="Synchroniser le sprint Jira ?" description="La liste des participants sera remplacée par les responsables des tickets visibles dans ce sprint. Les humeurs seront effacées. Les bilans archivés seront conservés." confirmLabel="Synchroniser" onClose={() => setConfirm(false)} onConfirm={() => { setConfirm(false); void sync(); }} />
   </>;

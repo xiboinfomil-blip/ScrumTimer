@@ -1,10 +1,16 @@
 'use client';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+
+import { cn } from 'cn';
+
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Checkbox, IconButton } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Button as IconButton } from '@/components/ui/button';
+import { ArrowLeft as ArrowBackIcon } from 'lucide-react';
+import { ArrowRight as ArrowForwardIcon } from 'lucide-react';
 import { useTeam } from '@/providers/team-provider';
 import { useNotify } from '@/providers/notification-provider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -46,11 +52,11 @@ export function ManageTeamPage({ modal = false }: { modal?: boolean } = {}) {
     <header className="relative isolate flex shrink-0 flex-wrap items-end justify-between gap-x-5 gap-y-4 overflow-hidden rounded-xl border border-line bg-[linear-gradient(112deg,#f7fbff_0%,#ffffff_64%,#fff8ef_100%)] px-4 py-4 sm:px-6 sm:py-5">
       <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-accent" />
       <div className="relative min-w-0 flex-1 basis-60">
-        {!modal && <Link href={`/teams?team=${activeTeamId}`} className="inline-flex min-h-11 items-center gap-2 rounded-lg text-xs font-semibold text-brand hover:text-brand-dark"><ArrowBackIcon className="size-4" fontSize="inherit" aria-hidden="true" />Toutes les équipes</Link>}
+        {!modal && <Link href={`/teams?team=${activeTeamId}`} className="inline-flex min-h-11 items-center gap-2 rounded-lg text-xs font-semibold text-brand hover:text-brand-dark"><ArrowBackIcon className="size-4" size={16} aria-hidden="true" />Toutes les équipes</Link>}
         <p className="mt-1 text-[10px] font-bold uppercase text-muted">Gestion de l’équipe</p>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1"><h1 id="manage-team-heading" className="min-w-0 text-2xl font-bold wrap-anywhere text-ink sm:text-[28px]">{activeTeamName}</h1><span className="inline-flex min-h-7 items-center rounded-full border border-line bg-white/80 px-3 text-xs font-medium text-muted">{state.roster.length} membre{state.roster.length === 1 ? '' : 's'}</span></div>
       </div>
-      <Link href={`/participants?team=${activeTeamId}`} className="group relative inline-flex min-h-12 items-center justify-center gap-3 rounded-lg bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-dark max-sm:w-full">Confirmer les présences<ArrowForwardIcon aria-hidden="true" fontSize="inherit" className="size-4 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" /></Link>
+      <Link href={`/participants?team=${activeTeamId}`} className="group relative inline-flex min-h-12 items-center justify-center gap-3 rounded-lg bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-dark max-sm:w-full">Confirmer les présences<ArrowForwardIcon aria-hidden="true" size={16} className="size-4 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" /></Link>
     </header>
     <div className="grid shrink-0 items-start gap-5 lg:grid-cols-[minmax(0,2.05fr)_minmax(280px,1fr)]">
       <div className="flex min-w-0 flex-col gap-4">
@@ -60,7 +66,7 @@ export function ManageTeamPage({ modal = false }: { modal?: boolean } = {}) {
             <div><h2 className="flex items-center gap-2 text-base font-bold text-ink">Les membres<span className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold tabular-nums text-brand">{state.roster.length}<span className="sr-only"> membres</span></span></h2><p className="mt-1 text-xs text-muted">La liste partagée de votre équipe</p></div>
             <span className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-[11px] ${cloudStatus === 'saved' ? 'border-emerald-100 bg-emerald-50 text-success' : cloudStatus === 'error' ? 'border-red-100 bg-red-50 text-danger' : 'border-line bg-slate-50 text-muted'}`}><NavIcon name={cloudStatus === 'saved' ? 'check' : 'cloud'} width="14" height="14" />{cloudStatus === 'saved' ? 'Enregistré' : cloudStatus === 'error' ? 'À vérifier' : 'Synchronisation…'}</span>
           </div>
-          {!isSprint && <div className="px-4 pt-4 sm:px-5 [&_.add-person_.MuiInputBase-root]:rounded-lg [&_.add-person_.MuiInputBase-root]:bg-slate-50/60 [&_.add-person_button]:rounded-lg">
+          {!isSprint && <div className="px-4 pt-4 sm:px-5 [&_.add-person_input]:rounded-lg [&_.add-person_input]:bg-slate-50/60 [&_.add-person_button]:rounded-lg">
           <h3 className="mb-2 text-xs font-semibold text-ink">Ajouter un membre</h3>
           <AddPersonForm />
           </div>}
@@ -69,26 +75,26 @@ export function ManageTeamPage({ modal = false }: { modal?: boolean } = {}) {
           <div className="flex items-center gap-2 rounded-lg border border-line bg-slate-50/60 px-3 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
             <NavIcon name="search" className="shrink-0 text-muted" width="16" height="16" />
             <label htmlFor="member-search" className="sr-only">Rechercher un membre</label>
-            <input id="member-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Rechercher un membre…" className="min-h-11 min-w-0 flex-1 bg-transparent text-xs text-ink outline-none placeholder:text-muted focus-visible:outline-none" />
+            <Input id="member-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Rechercher un membre…" className="min-h-11 min-w-0 flex-1 border-0 bg-transparent px-0 text-xs text-ink shadow-none outline-none placeholder:text-muted focus-visible:outline-none focus-visible:ring-0" />
           </div>
           {!isSprint && <div className="mt-1 flex min-h-11 flex-wrap items-center justify-between gap-x-2 text-xs">
-            <label className="flex min-h-11 items-center text-muted"><Checkbox size="small" sx={{ minHeight: 44, width: 44 }} checked={filtered.length > 0 && filtered.every(person => selected.has(person.id))} indeterminate={filtered.some(person => selected.has(person.id)) && !filtered.every(person => selected.has(person.id))} disabled={!filtered.length} onChange={event => { const next = new Set(selected); filtered.forEach(person => { if (event.target.checked) next.add(person.id); else next.delete(person.id); }); setSelected(next); }} />Tout sélectionner</label>
-            {selectedIds.length ? <button type="button" aria-label="Supprimer la sélection" onClick={() => setDeleting(selectedIds)} className="min-h-11 rounded-lg px-2 text-xs font-semibold text-danger hover:bg-danger-soft">Supprimer ({selectedIds.length})</button> : <span role="status" aria-live="polite" className="px-2 text-muted">{filtered.length} sur {state.roster.length}</span>}
+            <label className="flex min-h-11 items-center text-muted"><Checkbox checked={filtered.some(person => selected.has(person.id)) && !filtered.every(person => selected.has(person.id)) ? 'indeterminate' : filtered.length > 0 && filtered.every(person => selected.has(person.id))} disabled={!filtered.length} onCheckedChange={checked => { const next = new Set(selected); filtered.forEach(person => { if (checked === true) next.add(person.id); else next.delete(person.id); }); setSelected(next); }} />Tout sélectionner</label>
+            {selectedIds.length ? <Button type="button" aria-label="Supprimer la sélection" onClick={() => setDeleting(selectedIds)} className="min-h-11 rounded-lg px-2 text-xs font-semibold text-danger hover:bg-danger-soft" variant="ghost">Supprimer ({selectedIds.length})</Button> : <span role="status" aria-live="polite" className="px-2 text-muted">{filtered.length} sur {state.roster.length}</span>}
           </div>}
           <p role="status" aria-live="polite" className="sr-only">{selectedIds.length ? `${selectedIds.length} membre(s) sélectionné(s).` : ''}</p>
         </div>
         <div className="flex min-h-40 flex-1 flex-col border-t border-slate-100 px-2 pb-2 sm:px-3 [&_.checkin-list]:gap-0 [&_.checkin-list]:mt-0">
           {filtered.length ? <PaginatedList key={query} items={filtered} renderItem={person => <li key={person.id} className={`group flex h-14 shrink-0 items-center gap-1 rounded-lg border px-1 ${selected.has(person.id) ? 'border-brand/25 bg-blue-50' : 'border-transparent bg-white hover:border-line hover:bg-slate-50'}`}>
-            {!isSprint && <Checkbox size="small" sx={{ height: 44, width: 44, flexShrink: 0 }} slotProps={{ input: { 'aria-label': `Sélectionner ${person.name}` } }} checked={selected.has(person.id)} onChange={() => setSelected(current => { const next = new Set(current); if (next.has(person.id)) next.delete(person.id); else next.add(person.id); return next; })} />}
+            {!isSprint && <Checkbox aria-label={`Sélectionner ${person.name}`} checked={selected.has(person.id)} onCheckedChange={() => setSelected(current => { const next = new Set(current); if (next.has(person.id)) next.delete(person.id); else next.add(person.id); return next; })} />}
             <span aria-hidden="true" className="mr-2 grid size-8 shrink-0 place-items-center rounded-lg bg-blue-50 text-xs font-semibold text-brand max-[380px]:hidden">{Array.from(person.name)[0]?.toLocaleUpperCase('fr-FR')}</span>
             <strong className="min-w-0 flex-1 truncate text-xs font-medium text-ink" title={person.name}>{person.name}</strong>
-            {!isSprint && <IconButton aria-label={`Modifier le nom de ${person.name}`} title="Modifier le nom" sx={{ width: 44, height: 44, flexShrink: 0 }} className="text-muted hover:bg-blue-50 hover:text-brand" onClick={() => setEditing(person.id)}><ParticipantIcon name="edit" /></IconButton>}
-            {!isSprint && <IconButton aria-label={`Retirer ${person.name} de l’équipe`} title="Retirer de l’équipe" sx={{ width: 44, height: 44, flexShrink: 0 }} className="text-muted hover:bg-danger-soft hover:text-danger" onClick={() => setDeleting([person.id])}><ParticipantIcon name="trash" /></IconButton>}
+            {!isSprint && <IconButton aria-label={`Modifier le nom de ${person.name}`} title="Modifier le nom" className={cn("w-[44px] h-[44px] shrink-0", "text-muted hover:bg-blue-50 hover:text-brand")} onClick={() => setEditing(person.id)} variant="ghost" size="icon"><ParticipantIcon name="edit" /></IconButton>}
+            {!isSprint && <IconButton aria-label={`Retirer ${person.name} de l’équipe`} title="Retirer de l’équipe" className={cn("w-[44px] h-[44px] shrink-0", "text-muted hover:bg-danger-soft hover:text-danger")} onClick={() => setDeleting([person.id])} variant="ghost" size="icon"><ParticipantIcon name="trash" /></IconButton>}
           </li>} /> : <div className="grid min-h-48 flex-1 place-content-center justify-items-center gap-2 px-4 py-6 text-center motion-safe:animate-enter">
             <span aria-hidden="true" className="mb-1 grid size-11 place-items-center rounded-2xl bg-blue-50 text-brand"><NavIcon name={query ? 'search' : 'people'} /></span>
             <p className="text-sm font-semibold text-ink">{query ? 'Aucun membre trouvé.' : 'Votre équipe prend forme ici.'}</p>
             <p className="max-w-64 text-xs leading-relaxed text-muted">{query ? 'Essayez un autre nom ou effacez la recherche.' : 'Ajoutez votre premier membre pour préparer le point.'}</p>
-            <button type="button" onClick={() => { if (query) setQuery(''); else document.getElementById('checkin-name')?.focus(); }} className="mt-1 min-h-11 rounded-xl px-3 text-sm font-semibold text-brand hover:bg-blue-50">{query ? 'Effacer la recherche' : 'Ajouter le premier membre'}<ArrowForwardIcon aria-hidden="true" fontSize="inherit" className="ml-2 size-4" /></button>
+            <Button type="button" onClick={() => { if (query) setQuery(''); else document.getElementById('checkin-name')?.focus(); }} className="mt-1 min-h-11 rounded-xl px-3 text-sm font-semibold text-brand hover:bg-blue-50" variant="ghost">{query ? 'Effacer la recherche' : 'Ajouter le premier membre'}<ArrowForwardIcon aria-hidden="true" size={16} className="ml-2 size-4" /></Button>
           </div>}
         </div>
         <p className="flex shrink-0 items-start gap-2 border-t border-line bg-slate-50/70 px-4 py-3 text-[10px] leading-relaxed text-muted sm:px-5"><NavIcon name="help" width="13" height="13" className="mt-0.5 shrink-0" />{isSprint ? 'Participants · Responsables des tickets du sprint Jira' : 'Retirer un membre conserve ses bilans déjà archivés.'}</p>

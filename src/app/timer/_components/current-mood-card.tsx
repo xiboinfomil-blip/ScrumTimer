@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Paper } from '@mui/material';
-import MoodRounded from '@mui/icons-material/MoodRounded';
+
+import { Smile as MoodRounded } from 'lucide-react';
 import type { StandupTimer } from './timer-page';
 import { SpeakerMoodPicture } from './speaker-mood-picture';
 import { loadMoodCatalog, loadMoodTitles } from '@/lib/mood/mood-catalog-client';
@@ -47,9 +47,9 @@ export function CurrentMoodCard({ timer, compact = false }: { timer: StandupTime
   const detail = mood ? moodDetails[mood] : null;
   const label = person ? `Humeur de ${person.name} : ${mood ?? 'non renseignée'}${mood ? ' sur 4' : ''}` : 'Aucun passage en cours';
 
-  return <Paper component="section" elevation={0} aria-label={label} data-testid="current-speaker-mood" className={`min-w-0 overflow-hidden rounded-lg border bg-white ${detail?.tone ?? 'border-line'}`}>
+  return <section aria-label={label} data-testid="current-speaker-mood" className={`min-w-0 overflow-hidden rounded-lg border bg-white ${detail?.tone ?? 'border-line'}`}>
     <div className="flex items-center justify-between gap-3 border-b border-current/10 px-3 py-2">
-      <h2 className="flex items-center gap-2 text-sm font-bold"><MoodRounded fontSize="small" /> Humeur actuelle</h2>
+      <h2 className="flex items-center gap-2 text-sm font-bold"><MoodRounded size={20} /> Humeur actuelle</h2>
     </div>
     {person && mood && detail ? <motion.div key={`${person.id}:${mood}`} initial={reduced ? false : { opacity: 0, y: 10, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: reduced ? 0 : .4, ease: [.22, 1, .36, 1] }} id="speaker-mood" role="group" aria-label={`Humeur de ${person.name} : ${mood} sur 4`} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 p-3">
       <div className={`relative grid ${compact ? 'size-20' : 'size-24'} shrink-0 place-items-center overflow-hidden rounded-xl border border-current/15 bg-white text-4xl shadow-sm`} aria-hidden="true">
@@ -67,5 +67,5 @@ export function CurrentMoodCard({ timer, compact = false }: { timer: StandupTime
       <span className="grid size-12 shrink-0 place-items-center rounded-md bg-slate-50 text-muted"><MoodRounded /></span>
       <p className="text-xs leading-relaxed text-muted">{person ? 'Aucune humeur renseignée pour ce passage.' : 'La prochaine humeur apparaîtra avec la personne qui prend la parole.'}</p>
     </div>}
-  </Paper>;
+  </section>;
 }

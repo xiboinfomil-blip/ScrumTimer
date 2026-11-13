@@ -566,7 +566,7 @@ def main():
                 expect(start).to_be_enabled()
                 previous_button = phone.get_by_role('button', name='Passage précédent', exact=True)
                 expect(previous_button).to_be_disabled()
-                expect(phone.get_by_role('navigation')).to_have_count(0)
+                expect(phone.get_by_role('navigation', name=re.compile(r'^Pages · '))).to_have_count(len(api.entries[PAIR_ID]['snapshot'].get('lists', [])))
                 expect(phone.get_by_role('list', name='Progression du point quotidien')).to_have_count(0)
                 expect(phone.get_by_role('dialog')).to_have_count(0)
                 expect(phone.get_by_role('button', name='Fermer l’introduction', exact=True)).to_have_count(0)
@@ -611,6 +611,10 @@ def main():
                 restore = phone.get_by_role('button', name='Quitter l’économiseur', exact=True)
                 host_overlay = host.get_by_role('dialog', name='Économiseur d’écran', exact=True)
                 host_restore = host_overlay.get_by_role('button', name='Revenir au minuteur', exact=True).first
+                expect(host_overlay).to_be_visible()
+                host_restore.click()
+                expect(host_overlay).not_to_be_visible()
+                expect(restart).to_be_enabled()
 
                 # No/cancel is local only and retains the exact paused checkpoint.
                 before_cancel = len(api.commands)
@@ -631,6 +635,8 @@ def main():
                 expect(pause).to_be_enabled()
                 host.locator('#start-button').click()
                 expect(start).to_be_enabled()
+                host_restore.click()
+                expect(host_overlay).not_to_be_visible()
                 assert len(api.commands) == before_cancel
 
                 before_penalty = checkpoint(host)

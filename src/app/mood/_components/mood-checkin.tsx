@@ -1,4 +1,6 @@
 'use client';
+import { Button } from '@/components/ui/button';
+
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Fragment, useRef, useState } from 'react';
@@ -91,22 +93,22 @@ export function MoodCheckin({ className = '' }: { className?: string }) {
           <div className="flex shrink-0 items-center gap-1" role="group" aria-label={`Humeur de ${person.name} : choisissez de 1 à 4`}>
             {moodChoices.map(choice => (
               <Fragment key={choice.value}>
-              <button type="button" className={`relative grid size-11 shrink-0 place-items-center rounded-md border-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink aria-pressed:ring-2 aria-pressed:ring-brand/15 aria-pressed:ring-offset-1 motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-45 ${choice.tone}`}
+              <Button type="button" className={`relative grid size-11 shrink-0 place-items-center rounded-md border-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink aria-pressed:ring-2 aria-pressed:ring-brand/15 aria-pressed:ring-offset-1 motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-45 ${choice.tone}`}
                 disabled={!dailyReady} aria-label={`Humeur ${choice.value} pour ${person.name}`} aria-describedby={`mood-choice-${person.id}-${choice.value}`} aria-pressed={person.mood === choice.value}
-                onClick={() => chooseMood(person.id, choice.value)}>
+                onClick={() => chooseMood(person.id, choice.value)} variant="ghost">
                 {choice.value}
-              </button>
+              </Button>
               <span id={`mood-choice-${person.id}-${choice.value}`} className="sr-only">{choice.description}</span>
               </Fragment>
             ))}
           </div>
-          {!resuming && <button type="button" className="ml-auto min-h-11 shrink-0 rounded-xl px-1.5 text-[11px] font-semibold text-muted hover:bg-slate-100 aria-pressed:bg-amber-50 aria-pressed:text-amber-800 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Reporter l’humeur et le passage de ${person.name}`} aria-pressed={state.postponed?.includes(person.id) ?? false} disabled={!dailyReady} onClick={() => updateTeam(current => ({ ...current, session: [], postponed: current.postponed?.includes(person.id) ? current.postponed.filter(id => id !== person.id) : [...(current.postponed ?? []), person.id] }))}>{state.postponed?.includes(person.id) ? <>En attente <MoodIcon name="check" className="inline-block size-3.5" /></> : 'Reporter passage'}</button>}
+          {!resuming && <Button type="button" className="ml-auto min-h-11 shrink-0 rounded-xl px-1.5 text-[11px] font-semibold text-muted hover:bg-slate-100 aria-pressed:bg-amber-50 aria-pressed:text-amber-800 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Reporter l’humeur et le passage de ${person.name}`} aria-pressed={state.postponed?.includes(person.id) ?? false} disabled={!dailyReady} onClick={() => updateTeam(current => ({ ...current, session: [], postponed: current.postponed?.includes(person.id) ? current.postponed.filter(id => id !== person.id) : [...(current.postponed ?? []), person.id] }))} variant="ghost">{state.postponed?.includes(person.id) ? <>En attente <MoodIcon name="check" className="inline-block size-3.5" /></> : 'Reporter passage'}</Button>}
         </li>
       )} />
       </div>
       <div className="shrink-0 border-t border-line bg-slate-50/50 p-3">
         <p className={`mb-2 text-xs leading-snug ${canStartSession(state) && dailyReady ? 'text-success' : 'text-muted'}`} role="status">{canStartSession(state) ? <><MoodIcon name="check" className="inline-block size-3.5" /> Le tour peut commencer.</> : 'Choisissez 1 à 4 ou « Reporter passage ». Une personne au moins doit être prête.'}{postponed > 0 ? ` ${postponed} personne(s) en attente : humeur et passage possibles depuis le minuteur.` : ''}</p>
-        <button type="button" className="group inline-flex min-h-11 w-full items-center justify-between gap-2 rounded-xl bg-brand px-3 text-sm font-semibold text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-muted" disabled={!dailyReady || !canStartSession(state)} onClick={start}>{resuming ? 'Reprendre le tour en cours' : 'Continuer vers le minuteur'} <MoodIcon name="arrow" className="size-4 shrink-0 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" /></button>
+        <Button type="button" className="group inline-flex min-h-11 w-full items-center justify-between gap-2 rounded-xl bg-brand px-3 text-sm font-semibold text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-muted" disabled={!dailyReady || !canStartSession(state)} onClick={start} variant="ghost">{resuming ? 'Reprendre le tour en cours' : 'Continuer vers le minuteur'} <MoodIcon name="arrow" className="size-4 shrink-0 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" /></Button>
       </div>
     </section>
   );

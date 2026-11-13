@@ -1,9 +1,12 @@
 'use client';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Button, Dialog } from '@mui/material';
-import CheckIcon from '@mui/icons-material/Check';
-import ShuffleIcon from '@mui/icons-material/Shuffle';
+
+import { Button } from '@/components/ui/button';
+import { Check as CheckIcon } from 'lucide-react';
+import { Shuffle as ShuffleIcon } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { shuffle } from '@/lib/team/shuffle';
 
@@ -22,6 +25,7 @@ export function LineupRevealDialog({ people, order, onCancel, onComplete }: {
 }) {
   const reduced = useReducedMotion();
   const [open, setOpen] = useState(true);
+  const completed = useRef(false);
   const [displayOrder, setDisplayOrder] = useState(() => people.map(person => person.id));
   const [phase, setPhase] = useState<'gathering' | 'mixing' | 'ready' | 'leaving'>('gathering');
   const byId = new Map(people.map(person => [person.id, person]));
@@ -29,7 +33,7 @@ export function LineupRevealDialog({ people, order, onCancel, onComplete }: {
   const cards = useRef(new Map<string, HTMLLIElement>());
   const positions = useRef(new Map<string, DOMRect>());
 
-  // Explicit FLIP transforms keep cards moving even inside a scrolling MUI portal.
+  // Explicit FLIP transforms keep cards moving even inside a scrolling portal.
   useLayoutEffect(() => {
     const animations: Animation[] = [];
     cards.current.forEach((card, id) => {
@@ -74,14 +78,13 @@ export function LineupRevealDialog({ people, order, onCancel, onComplete }: {
 
   useEffect(() => {
     if (phase !== 'leaving') return;
-    const timeout = setTimeout(() => setOpen(false), reduced ? 0 : 650);
+    const timeout = setTimeout(() => { completed.current = true; setOpen(false); }, reduced ? 0 : 650);
     return () => clearTimeout(timeout);
   }, [phase, reduced]);
 
   const ready = phase === 'ready' || phase === 'leaving';
   return (
-    <Dialog open={open} onClose={onCancel} maxWidth="md" aria-labelledby="lineup-reveal-title" aria-describedby="lineup-reveal-description"
-      transitionDuration={reduced ? 0 : 350} slotProps={{ transition: { onExited: onComplete }, paper: { className: 'w-[calc(100%-24px)] !m-3 !flex !max-h-[calc(100dvh-24px)] !flex-col !overflow-hidden !rounded-3xl !p-0' } }}>
+    <Dialog open={open} onOpenChange={next => { if (!next) (onCancel)?.(); }}><DialogContent showCloseButton={false} className="min-h-0 w-[calc(100%-24px)] !flex !max-h-[calc(100dvh-24px)] !flex-col !overflow-hidden !rounded-3xl !p-0 max-w-[900px]" aria-labelledby="lineup-reveal-title" aria-describedby="lineup-reveal-description" onCloseAutoFocus={event => { if (completed.current) { event.preventDefault(); onComplete(); } }}>
       <motion.div className="flex min-h-0 flex-col" initial={false} animate={phase === 'leaving' && !reduced ? { opacity: 0, scale: .97, y: -12 } : { opacity: 1, scale: 1, y: 0 }} transition={{ duration: reduced ? 0 : .65, ease: [.22, 1, .36, 1] }}>
       <div className="relative shrink-0 overflow-hidden border-b border-line bg-blue-50/60 px-4 pb-4 pt-5 sm:px-7 sm:pt-7">
         <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-16 size-48 rounded-full border-[24px] border-brand/5" />
@@ -89,14 +92,14 @@ export function LineupRevealDialog({ people, order, onCancel, onComplete }: {
           <motion.span aria-hidden="true" className={`grid size-12 shrink-0 place-items-center rounded-2xl ${ready ? 'bg-success-soft text-success' : 'bg-brand text-white'}`}
             animate={!reduced && phase === 'mixing' ? { rotate: [0, 180, 360] } : { rotate: 0 }}
             transition={phase === 'mixing' ? { duration: 1.2, repeat: Infinity, ease: 'linear' } : { duration: 0 }}>
-            {ready ? <CheckIcon aria-hidden="true" sx={{ fontSize: 24 }} /> : <ShuffleIcon aria-hidden="true" sx={{ fontSize: 24 }} />}
+            {ready ? <CheckIcon aria-hidden="true" size={24} /> : <ShuffleIcon aria-hidden="true" size={24} />}
           </motion.span>
           <div className="min-w-0">
             <p className="mb-1 text-[10px] font-bold uppercase tracking-[.18em] text-brand">À chacun son moment</p>
-            <h2 id="lineup-reveal-title" className="text-lg font-bold tracking-tight text-ink sm:text-2xl">Place au hasard, place à l’équipe.</h2>
+            <DialogTitle id="lineup-reveal-title" className="text-lg font-bold tracking-tight text-ink sm:text-2xl">Place au hasard, place à l’équipe.</DialogTitle>
           </div>
         </div>
-        <p id="lineup-reveal-description" className="relative mt-3 text-xs leading-relaxed text-muted">Trois secondes pour préparer l’ordre de passage. Ensuite, place au baromètre d’humeur : cet ordre sera conservé jusqu’au minuteur.</p>
+        <DialogDescription id="lineup-reveal-description" className="relative mt-3 text-xs leading-relaxed text-muted">Trois secondes pour préparer l’ordre de passage. Ensuite, place au baromètre d’humeur : cet ordre sera conservé jusqu’au minuteur.</DialogDescription>
       </div>
 
       <div className="flex min-h-0 flex-col px-3 py-3 sm:px-7 sm:py-5">
@@ -128,12 +131,12 @@ export function LineupRevealDialog({ people, order, onCancel, onComplete }: {
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <p className="min-w-0 text-[11px] text-muted">{ready ? 'Tout est prêt. Place aux humeurs…' : 'Un nouvel ordre, une même équipe.'}</p>
           <div className="ml-auto flex gap-1">
-            <Button variant="text" onClick={onCancel}>Annuler</Button>
-            <Button variant="contained" disabled={phase === 'leaving'} onClick={() => setPhase('leaving')}>Aller aux humeurs</Button>
+            <Button onClick={onCancel} variant="ghost">Annuler</Button>
+            <Button disabled={phase === 'leaving'} onClick={() => setPhase('leaving')} variant="default">Aller aux humeurs</Button>
           </div>
         </div>
       </div>
       </motion.div>
-    </Dialog>
+    </DialogContent></Dialog>
   );
 }

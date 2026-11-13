@@ -1,11 +1,13 @@
 'use client';
+import { Button } from '@/components/ui/button';
+
 
 import { useEffect, useRef } from 'react';
-import CloseIcon from '@mui/icons-material/Close';
-import SentimentSatisfiedAltIcon from '@mui/icons-material/SentimentSatisfiedAlt';
-import SentimentVerySatisfiedIcon from '@mui/icons-material/SentimentVerySatisfied';
-import SentimentNeutralIcon from '@mui/icons-material/SentimentNeutral';
-import BoltIcon from '@mui/icons-material/Bolt';
+import { X as CloseIcon } from 'lucide-react';
+import { Smile as SentimentSatisfiedAltIcon } from 'lucide-react';
+import { Laugh as SentimentVerySatisfiedIcon } from 'lucide-react';
+import { Meh as SentimentNeutralIcon } from 'lucide-react';
+import { Zap as BoltIcon } from 'lucide-react';
 
 const moods = [
   { Icon: SentimentSatisfiedAltIcon, label: 'On se retrouve', color: 'bg-blue-100 text-brand', motion: 'motion-safe:animate-welcome-float' },
@@ -45,9 +47,9 @@ export function WelcomeEntrance({ onClose }: { onClose: () => void }) {
     </div>
     <header className="relative flex shrink-0 items-center justify-between gap-3 px-5 py-4 sm:px-10 sm:py-6">
       <span className="text-sm font-extrabold tracking-tight text-brand">infomil<span className="text-accent">.</span> <span className="ml-2 text-xs font-medium text-muted">Mauritius</span></span>
-      <button ref={closeRef} type="button" onClick={onClose} aria-label="Fermer l’introduction" className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border border-brand/15 bg-white/80 px-3 text-xs font-semibold text-brand hover:bg-white focus-visible:outline-3 focus-visible:outline-accent">
-        <span className="max-[380px]:hidden">Passer l’intro</span><CloseIcon fontSize="small" />
-      </button>
+      <Button ref={closeRef} type="button" onClick={onClose} aria-label="Fermer l’introduction" className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border border-brand/15 bg-white/80 px-3 text-xs font-semibold text-brand hover:bg-white focus-visible:outline-3 focus-visible:outline-accent" variant="ghost">
+        <span className="max-[380px]:hidden">Passer l’intro</span><CloseIcon size={20} />
+      </Button>
     </header>
     <div className="relative m-auto flex w-full max-w-3xl flex-col items-center px-5 py-6 text-center sm:px-10">
       <p className="mb-5 flex items-center gap-2 text-[10px] font-bold tracking-[.22em] text-brand uppercase motion-safe:animate-enter"><span className="size-2 rounded-full bg-accent" /> Un moment pour votre équipe</p>

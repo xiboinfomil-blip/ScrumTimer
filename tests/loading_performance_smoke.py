@@ -280,11 +280,11 @@ def prompts_case(browser, mock, width, height):
 
 
 def observe_ring(page):
-    page.locator('[data-testid="stopwatch-timer"] .MuiCircularProgress-circle').last.evaluate("""ring => {
+    page.locator('[data-testid="stopwatch-timer"] [data-timer-progress]').evaluate("""ring => {
         window.__ringProbe?.observer.disconnect();
-        const probe = {element: ring, mutations: 0, started: performance.now(), initial: ring.getAttribute('style')};
+        const probe = {element: ring, mutations: 0, started: performance.now(), initial: ring.getAttribute('stroke-dashoffset')};
         probe.observer = new MutationObserver(records => { probe.mutations += records.length; });
-        probe.observer.observe(ring, {attributes: true, attributeFilter: ['style']});
+        probe.observer.observe(ring, {attributes: true, attributeFilter: ['stroke-dashoffset']});
         window.__ringProbe = probe;
     }""")
 
@@ -292,7 +292,7 @@ def observe_ring(page):
 def ring_sample(page):
     return page.evaluate("""() => ({mutations: __ringProbe.mutations,
         seconds: (performance.now() - __ringProbe.started) / 1000,
-        initial: __ringProbe.initial, current: __ringProbe.element.getAttribute('style')})""")
+        initial: __ringProbe.initial, current: __ringProbe.element.getAttribute('stroke-dashoffset')})""")
 
 
 def timer_case(browser, mock, width, height):

@@ -1,10 +1,34 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 @import "../../../../packages/scrum-shared/src/loader.css";
 @source "../../../../packages/scrum-shared/src";
 @theme inline {
   --color-brand: #205f9d;
+  --color-brand-dark: #164b80;
   --color-accent: #ec8b23;
   --color-ink: #202b36;
+  --color-muted: #596979;
+  --color-line: #dce3e9;
+  --color-control: #7b8998;
+  --color-danger: #b94b43;
+  --color-success: #147d52;
+  --color-background: #f7f8fa;
+  --color-foreground: #202b36;
+  --color-primary: #205f9d;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #eaf2fc;
+  --color-secondary-foreground: #164b80;
+  --color-muted-surface: #edf0f3;
+  --color-muted-foreground: #596979;
+  --color-accent-foreground: #193752;
+  --color-destructive: #b94b43;
+  --color-border: #dce3e9;
+  --color-input: #7b8998;
+  --color-ring: #164b80;
+  --radius-sm: .25rem;
+  --radius-md: .375rem;
+  --radius-lg: .5rem;
+  --radius-xl: .5rem;
   --font-sans: "Aptos", "Trebuchet MS", sans-serif;
 }
 @layer base {

@@ -66,10 +66,10 @@ test('package boundaries and both app consumers use shared source, not validator
   assert.equal(manifest.version, '1.0.0');
   assert.equal(manifest.private, true);
   assert.equal(manifest.type, 'module');
-  assert.deepEqual(manifest.dependencies ?? {}, {});
+  assert.deepEqual(Object.keys(manifest.dependencies).sort(), ['class-variance-authority', 'cn', 'lucide-react', 'radix-ui']);
   assert.deepEqual(manifest.peerDependencies, { react: '>=19' });
   assert.deepEqual(manifest.exports, { './contracts': './src/contracts.ts', './types': './src/types.ts',
-    './statistics': './src/statistics.ts', './ui': './src/ui.tsx', './daily-hints': './src/daily-hints.ts' });
+    './statistics': './src/statistics.ts', './ui': './src/ui.tsx', './ui/*': './src/ui/*.tsx', './daily-hints': './src/daily-hints.ts' });
   const rootManifest = JSON.parse(read('../package.json'));
   assert.ok(rootManifest.workspaces.includes('apps/participants'));
   assert.ok(rootManifest.workspaces.includes('packages/*'));

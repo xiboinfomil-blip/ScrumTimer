@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import EmojiEventsRounded from '@mui/icons-material/EmojiEventsRounded';
-import MilitaryTechRounded from '@mui/icons-material/MilitaryTechRounded';
-import GroupsRounded from '@mui/icons-material/GroupsRounded';
+import { Trophy as EmojiEventsRounded } from 'lucide-react';
+import { Medal as MilitaryTechRounded } from 'lucide-react';
+import { Users as GroupsRounded } from 'lucide-react';
 import { dailyRoundStatistics, type HistoryRound } from '@/lib/history/history';
 import { formatTime } from '@/lib/timer/timer';
 import { ScoreBreakdown } from '@/components/ui/score-breakdown';
@@ -57,7 +57,7 @@ export function DailyDashboard({ round }: { round: HistoryRound }) {
             <div aria-label={`Rang ${rank}`} className={`relative flex w-full flex-col items-center justify-center overflow-hidden rounded-t-md border-t-2 border-x text-4xl font-extrabold tabular-nums shadow-[inset_0_1px_0_#ffffffb3] max-[650px]:text-2xl ${awards[rank].step}`}><span aria-hidden="true" className="absolute inset-y-0 left-2 w-px bg-white/40" /><span>{rank}</span><span className="mt-1 text-[9px] font-semibold uppercase max-[650px]:hidden [@media(max-height:650px)]:hidden">{awards[rank].label}</span></div>
           </motion.li>)}
         </ol> : <div className="grid min-h-36 place-content-center justify-items-center gap-3 text-muted"><GroupsRounded className="size-12!" /><p className="text-sm">Aucun passage mesuré</p></div>}
-        <p className="flex items-center gap-2 text-xs font-medium text-[#173c51] [@media(max-height:650px)]:hidden"><GroupsRounded fontSize="small" />Merci pour ces {round.people.length} passages partagés.</p>
+        <p className="flex items-center gap-2 text-xs font-medium text-[#173c51] [@media(max-height:650px)]:hidden"><GroupsRounded size={20} />Merci pour ces {round.people.length} passages partagés.</p>
       </section>
       <section className={`relative z-0 flex min-h-0 min-w-0 flex-col border-l border-brand/15 bg-white px-5 py-3 max-[1023px]:border-l-0 max-[650px]:px-2 max-[650px]:py-2 [@media(max-height:650px)]:py-2 ${view !== 'scores' ? 'max-[1023px]:hidden' : ''}`} data-dashboard-column="scores" aria-labelledby="daily-ranking-heading">
         <header className="flex shrink-0 items-center justify-between gap-2 border-b border-line pb-3 [@media(max-height:650px)]:pb-1"><div><h2 id="daily-ranking-heading" className="text-base font-bold text-brand">Classement du jour</h2><p className="mt-0.5 text-[11px] text-muted">{stats.ranked.length} participants · Égalités partagées</p></div><span className="shrink-0 text-[11px] font-semibold text-muted">/ 1 000 pts</span></header>

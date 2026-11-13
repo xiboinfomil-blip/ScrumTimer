@@ -1,7 +1,9 @@
 'use client';
+import { cn } from 'cn';
+
 
 import { useState } from 'react';
-import { Paper } from '@mui/material';
+
 import { WorkflowHeading } from '@/components/ui/workflow-heading';
 import { ScreenTabs } from '@/components/ui/screen-tabs';
 import { PaginatedList } from '@/components/ui/paginated-list';
@@ -24,7 +26,7 @@ export function SessionResults({ timer }: { timer: StandupTimer }) {
     <WorkflowHeading step={3} title="Bilan du tour" description={`${date} · ${timer.people.length} participants`} />
     <ScreenTabs className={segmentedTabs} label="Bilan du point quotidien" value={view} onChange={setView} tabs={[{ value: 'ranking', label: 'Classement' }, { value: 'stats', label: 'Statistiques' }]} />
     <div ref={panels} className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.3fr)_minmax(280px,1fr)] gap-3 max-[800px]:grid-cols-1">
-      <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} id="session-leaderboard" aria-labelledby="leaderboard-title" className={`${card} flex min-h-0 min-w-0 flex-col gap-2 p-3 ${view !== 'ranking' ? 'max-[800px]:hidden' : ''}`}>
+      <section id="session-leaderboard" aria-labelledby="leaderboard-title" className={cn("rounded-[8px]", `${card} flex min-h-0 min-w-0 flex-col gap-2 p-3 ${view !== 'ranking' ? 'max-[800px]:hidden' : ''}`)}>
         <div className="flex shrink-0 items-center justify-between border-b border-line pb-2"><h2 id="leaderboard-title" className="text-sm font-semibold">Classement · Maîtrise du temps</h2><span className="text-[10px] text-muted">/ 1 000 pts</span></div>
         <div className="shrink-0 rounded-lg border border-orange-200 bg-linear-to-r from-orange-50 to-white px-3 py-2 motion-safe:animate-enter">
           <span className="text-[10px] font-semibold text-amber-800">🏆 {winners.length > 1 ? `${winners.length} premiers ex æquo` : winners.length ? 'Meilleur score' : 'Aucun passage mesurable'}</span>
@@ -37,8 +39,8 @@ export function SessionResults({ timer }: { timer: StandupTimer }) {
           <div className="flex shrink-0 flex-col items-end"><strong className={`text-sm tabular-nums ${person.score === null ? 'text-muted' : 'text-brand'}`}>{person.score ?? '—'}<span className="ml-1 text-[9px] font-normal">pts</span></strong><ScoreBreakdown person={person} /></div>
         </li>} />
         <p className="shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">Même calcul pour le score en direct, le bilan et le total archivé. Référence fixe en secondes, indépendante du budget configuré, même différent de 120 s. Jusqu’à 5 s incluses : 0 ; après 5 s : max(125, (t − 5) × 10), sommet 1 000 à 105 s. Puis −5 pts/s jusqu’à 110 s (975), −10 pts/s jusqu’à 115 s (925), −15 pts/s jusqu’à 120 s (850). Après 120 s : −50 par tranche complète de 10 s, plancher 125 dès 270 s. Relance après réinitialisation : −100 (max. 200), sans descendre sous 125 après 5 s ; grâce à 0 conservée. Ensuite, pénalité manuelle : −50 par clic, cumulée et déduite après ce plancher, avec un total minimum de 0. Pauses exclues et sans pénalité ; moins de 1 s non mesuré. Archives antérieures inchangées. Gestion du temps uniquement, ni qualité ni humeur.</p>
-      </Paper>
-      <Paper component="section" elevation={0} sx={{ borderRadius: 3 }} id="session-statistics" aria-labelledby="statistics-title" className={`${card} flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto p-3 ${view !== 'stats' ? 'max-[800px]:hidden' : ''}`}>
+      </section>
+      <section id="session-statistics" aria-labelledby="statistics-title" className={cn("rounded-[8px]", `${card} flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto p-3 ${view !== 'stats' ? 'max-[800px]:hidden' : ''}`)}>
         <h2 id="statistics-title" className="shrink-0 border-b border-line pb-2 text-sm font-semibold">Le bilan d’aujourd’hui</h2>
         <dl className="grid shrink-0 grid-cols-2 gap-2">
           {[['Temps de parole', formatTime(stats.speakingSeconds)], ['Moyenne / personne', formatTime(stats.averageSeconds)], ['Dans le temps', `${stats.withinTime} / ${stats.measured}`], ['Dépassements', String(stats.expired)]].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-[10px] text-muted">{label}</dt><dd className="mt-0.5 text-xl font-semibold tabular-nums text-brand">{value}</dd></div>)}
@@ -48,7 +50,7 @@ export function SessionResults({ timer }: { timer: StandupTimer }) {
         </div>
         <MoodSlideSummary people={timer.people} />
         <p className="mt-auto shrink-0 border-t border-line pt-2 text-[10px] leading-snug text-muted">Tour terminé envoyé à Neon pour les statistiques des 5 derniers bilans. Vérifiez la confirmation « Neon enregistré » avant de quitter ; en cas d’échec, réessayez. Aucune copie locale. Pauses exclues ; le dépassement après le signal est mesuré.</p>
-      </Paper>
+      </section>
     </div>
   </div>;
 }

@@ -1,14 +1,20 @@
 'use client';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
-import { Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper, Tooltip } from '@mui/material';
-import PersonAddAltRounded from '@mui/icons-material/PersonAddAltRounded';
-import TimerRounded from '@mui/icons-material/TimerRounded';
-import CheckIcon from '@mui/icons-material/Check';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineRounded';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
-import NorthEastIcon from '@mui/icons-material/NorthEast';
-import SettingsRounded from '@mui/icons-material/SettingsRounded';
+import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+
+import { cn } from 'cn';
+
+
+import { Button, Button as IconButton } from '@/components/ui/button';
+import { UserRoundPlus as PersonAddAltRounded } from 'lucide-react';
+import { Timer as TimerRounded } from 'lucide-react';
+import { Check as CheckIcon } from 'lucide-react';
+import { CircleAlert as ErrorOutlineIcon } from 'lucide-react';
+import { Clock as AccessTimeIcon } from 'lucide-react';
+import { CircleDot as RadioButtonCheckedIcon } from 'lucide-react';
+import { ArrowUpRight as NorthEastIcon } from 'lucide-react';
+import { Settings as SettingsRounded } from 'lucide-react';
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -33,7 +39,7 @@ export function ActiveSpeaker({ timer }: { timer: StandupTimer }) {
       <p className="flex items-center justify-center gap-2 text-[10px] font-semibold text-muted"><span aria-hidden="true" className={`size-1.5 rounded-full ${timer.running ? 'bg-success motion-safe:animate-pulse' : 'bg-accent'}`} /><span>{timer.running ? 'À la parole' : timer.turnStarted ? 'Passage en pause' : 'À vous de jouer'}</span><span aria-hidden="true" className="h-3 w-px bg-line" /><span className="tabular-nums">{position > 0 ? `${position} / ${timer.people.length}` : 'En attente'}</span></p>
       <h2 id="speaker-name" title={person?.name} className="mx-auto mt-1.5 max-w-full line-clamp-2 text-4xl font-extrabold leading-tight text-[#173c51] [overflow-wrap:anywhere] max-[650px]:text-[28px] [@media(max-height:650px)]:mt-0 [@media(max-height:650px)]:text-2xl">{person?.name ?? 'Personnes reportées'}</h2>
     </div>
-    {person && <Tooltip disableInteractive title="Reporter ce passage"><IconButton type="button" aria-label={`Reporter le passage de ${person.name}`} onClick={() => timer.postpone(person.id)} className="absolute! top-1! right-0! size-11! text-brand! hover:bg-blue-50!"><TimerIcon name="later" className="size-5" /><span className="sr-only">Reporter ce passage</span></IconButton></Tooltip>}
+    {person && <TooltipProvider><Tooltip disableHoverableContent><TooltipTrigger asChild><IconButton type="button" aria-label={`Reporter le passage de ${person.name}`} onClick={() => timer.postpone(person.id)} className="absolute! top-1! right-0! size-11! text-brand! hover:bg-blue-50!" variant="ghost" size="icon"><TimerIcon name="later" className="size-5" /><span className="sr-only">Reporter ce passage</span></IconButton></TooltipTrigger><TooltipContent>{"Reporter ce passage"}</TooltipContent></Tooltip></TooltipProvider>}
   </header>;
 }
 
@@ -62,13 +68,13 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
   const pulse = running && critical ? 'motion-safe:animate-critical-glow' : running && nearly ? 'motion-safe:animate-warning-glow' : '';
   const FeedbackIcon = complete ? CheckIcon : ended ? ErrorOutlineIcon : nearly ? AccessTimeIcon : running ? RadioButtonCheckedIcon : NorthEastIcon;
   return (
-    <Paper component="section" elevation={0} className={`timer-panel relative isolate grid min-h-0 min-w-0 grid-cols-1 ${timer.focusMode ? 'grid-rows-[auto_auto_minmax(112px,1fr)_auto_auto]' : 'grid-rows-[auto_auto_minmax(112px,1fr)_auto_auto_auto]'} items-center gap-3 overflow-x-hidden overflow-y-auto rounded-none! border-0! bg-transparent! px-5 py-3 text-center shadow-none! max-[650px]:gap-2 max-[650px]:px-0 max-[650px]:py-1 [@media(max-height:650px)]:gap-0 [@media(max-height:650px)]:py-0 ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
+    <section className={`timer-panel relative isolate grid min-h-0 min-w-0 grid-cols-1 ${timer.focusMode ? 'grid-rows-[auto_auto_minmax(112px,1fr)_auto_auto]' : 'grid-rows-[auto_auto_minmax(112px,1fr)_auto_auto_auto]'} items-center gap-3 overflow-x-hidden overflow-y-auto rounded-none! border-0! bg-transparent! px-5 py-3 text-center shadow-none! max-[650px]:gap-2 max-[650px]:px-0 max-[650px]:py-1 [@media(max-height:650px)]:gap-0 [@media(max-height:650px)]:py-0 ${ended ? 'finished' : nearly ? 'warning' : ''} ${running ? 'running' : ''} ${complete ? 'session-complete' : ''} ${className}`} data-urgency={urgency} aria-labelledby="speaker-name">
       <div data-speaker-navigation className="col-span-full grid min-w-0 grid-cols-2 items-stretch gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:[&>div>button]:h-12">
         <div className="grid min-w-0 content-start">
-        <Button variant="text" className="group h-17 min-w-0! justify-start! gap-3! overflow-hidden rounded-lg! border! border-control! bg-white! px-3! text-left! normal-case! hover:bg-blue-50! disabled:bg-slate-50! max-[650px]:h-16 max-[650px]:gap-2! max-[650px]:px-2! [@media(max-height:650px)]:h-12" type="button" id="previous-button" disabled={!timer.canPrevious} onClick={timer.previous} aria-label="Précédent" aria-describedby="previous-speaker" title={previous ? `Revenir à ${previous.name}` : 'Début du tour'}><span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-full bg-[#edf3f8] text-brand group-disabled:bg-slate-100 group-disabled:text-muted max-[360px]:size-8"><TimerIcon name="back" className="size-5" /></span><span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[10px] font-medium text-muted">Précédent</span><span id="previous-speaker" className="line-clamp-2 min-w-0 text-lg font-bold leading-tight text-ink [overflow-wrap:anywhere] max-[650px]:text-sm [@media(max-height:650px)]:line-clamp-1 [@media(max-height:650px)]:text-sm">{previous?.name ?? 'Début du tour'}</span></span></Button>
+        <Button className="group h-17 min-w-0! justify-start! gap-3! overflow-hidden rounded-lg! border! border-control! bg-white! px-3! text-left! normal-case! hover:bg-blue-50! disabled:bg-slate-50! max-[650px]:h-16 max-[650px]:gap-2! max-[650px]:px-2! [@media(max-height:650px)]:h-12" type="button" id="previous-button" disabled={!timer.canPrevious} onClick={timer.previous} aria-label="Précédent" aria-describedby="previous-speaker" title={previous ? `Revenir à ${previous.name}` : 'Début du tour'} variant="ghost"><span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-full bg-[#edf3f8] text-brand group-disabled:bg-slate-100 group-disabled:text-muted max-[360px]:size-8"><TimerIcon name="back" className="size-5" /></span><span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[10px] font-medium text-muted">Précédent</span><span id="previous-speaker" className="line-clamp-2 min-w-0 text-lg font-bold leading-tight text-ink [overflow-wrap:anywhere] max-[650px]:text-sm [@media(max-height:650px)]:line-clamp-1 [@media(max-height:650px)]:text-sm">{previous?.name ?? 'Début du tour'}</span></span></Button>
         </div>
         <div className="grid min-w-0 content-start">
-        <Button variant="text" type="button" id="next-button" className="group h-17 min-w-0! justify-between! gap-3! overflow-hidden rounded-lg! border! border-[#bb752c]! bg-[#fff8ef]! px-3! text-left! normal-case! hover:bg-orange-100! disabled:border-slate-300! disabled:bg-slate-100! max-[650px]:h-16 max-[650px]:gap-2! max-[650px]:px-2! [@media(max-height:650px)]:h-12" disabled={!person} onClick={timer.next} aria-label="Suivant" aria-describedby="upcoming-speaker" title={next ? `Donner la parole à ${next.name}` : 'Terminer les passages disponibles'} aria-keyshortcuts="N"><span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[10px] font-medium text-[#8f4309]">À suivre</span><span id="upcoming-speaker" className="line-clamp-2 min-w-0 text-lg font-bold leading-tight text-ink [overflow-wrap:anywhere] max-[650px]:text-sm [@media(max-height:650px)]:line-clamp-1 [@media(max-height:650px)]:text-sm">{next?.name ?? 'Fin du tour'}</span></span><span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-full bg-[#a84f0b] text-white group-disabled:bg-slate-300 group-disabled:text-slate-600 max-[360px]:size-8"><TimerIcon name="next" className="size-5" /></span></Button>
+        <Button type="button" id="next-button" className="group h-17 min-w-0! justify-between! gap-3! overflow-hidden rounded-lg! border! border-[#bb752c]! bg-[#fff8ef]! px-3! text-left! normal-case! hover:bg-orange-100! disabled:border-slate-300! disabled:bg-slate-100! max-[650px]:h-16 max-[650px]:gap-2! max-[650px]:px-2! [@media(max-height:650px)]:h-12" disabled={!person} onClick={timer.next} aria-label="Suivant" aria-describedby="upcoming-speaker" title={next ? `Donner la parole à ${next.name}` : 'Terminer les passages disponibles'} aria-keyshortcuts="N" variant="ghost"><span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[10px] font-medium text-[#8f4309]">À suivre</span><span id="upcoming-speaker" className="line-clamp-2 min-w-0 text-lg font-bold leading-tight text-ink [overflow-wrap:anywhere] max-[650px]:text-sm [@media(max-height:650px)]:line-clamp-1 [@media(max-height:650px)]:text-sm">{next?.name ?? 'Fin du tour'}</span></span><span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-full bg-[#a84f0b] text-white group-disabled:bg-slate-300 group-disabled:text-slate-600 max-[360px]:size-8"><TimerIcon name="next" className="size-5" /></span></Button>
         </div>
       </div>
       <ActiveSpeaker timer={timer} />
@@ -79,12 +85,14 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
             <svg viewBox="0 0 200 200" className="absolute inset-0 size-full" fill="none">{dialMarks}</svg>
             <span className="absolute left-1/2 top-[1.5%] h-[3%] w-[1.2%] -translate-x-1/2 rounded-full bg-accent" />
             <div className="absolute inset-[7%]">
-              <CircularProgress variant="determinate" value={100} size="100%" thickness={1.5} className="absolute inset-0 text-[#dce6ee]" />
-              <CircularProgress variant="determinate" value={ratio * 100} size="100%" thickness={2.8} color="inherit" className="absolute inset-0 motion-reduce:[&_.MuiCircularProgress-circle]:transition-none" sx={{ '& circle': { strokeLinecap: 'round' } }} />
+              <svg data-timer-ring viewBox="0 0 44 44" fill="none" className="absolute inset-0 size-full -rotate-90">
+                <circle data-timer-track cx="22" cy="22" r="20.6" stroke="currentColor" strokeWidth="1.5" className="text-[#dce6ee]" />
+                <circle data-timer-progress cx="22" cy="22" r="20.6" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" pathLength="1" strokeDasharray="1" strokeDashoffset={1 - ratio} className="transition-[stroke-dashoffset] duration-300 motion-reduce:transition-none" />
+              </svg>
             </div>
           </div>
           <div className="pointer-events-none absolute inset-0 flex min-w-0 flex-col items-center justify-center gap-1 px-2">
-            <TimerRounded className="mb-1 text-current/70 max-[650px]:hidden [@media(max-height:650px)]:hidden" fontSize="small" />
+            <TimerRounded className="mb-1 text-current/70 max-[650px]:hidden [@media(max-height:650px)]:hidden" size={20} />
             <span id="timer-label" className="mb-1 text-[11px] font-medium text-current max-[650px]:text-[10px] [@media(max-height:650px)]:mb-0 [@media(max-height:650px)]:text-[9px]">{ended ? 'Dépassement' : critical ? 'Concluez maintenant' : nearly ? 'Bientôt la fin' : running ? 'Temps restant' : 'Temps par personne'}</span>
             <span id="timer-display" className="block text-[min(5.5rem,22cqw,24cqh)] font-bold leading-none tabular-nums" role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
               {ended ? '+' : ''}{String(minutes).padStart(2, '0')}:{String(secs).padStart(2, '0')}
@@ -100,32 +108,32 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
             <span className={`flex min-w-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium max-[650px]:sr-only ${statusColor}`} id="status-pill" data-status={status} role="status"><span className={`size-1.5 shrink-0 rounded-full bg-current ${running ? 'motion-safe:animate-pulse' : ''} motion-reduce:animate-none`} aria-hidden="true" />{status}</span>
           </div>
         </div>
-        <Button disableElevation variant="contained" sx={{ minHeight: 64, minWidth: 0, width: '100%', px: 1, borderRadius: '999px', textTransform: 'none', fontSize: 12, fontWeight: 700, flexDirection: 'row', gap: .75, boxShadow: 'inset 0 1px 0 #ffffff30, 0 6px 16px #205f9d25' }} type="button" id="start-button" className="mx-auto min-w-0" disabled={!person} onClick={timer.toggle} aria-keyshortcuts="Space">
+        <Button type="button" id="start-button" className={cn("min-h-[64px] min-w-[0px] w-[100%] px-[8px] rounded-[999px] normal-case text-[12px] font-[700] flex-row gap-[6px] shadow-[inset_0_1px_0_#ffffff30,_0_6px_16px_#205f9d25]", "mx-auto min-w-0")} disabled={!person} onClick={timer.toggle} aria-keyshortcuts="Space" variant="default">
           <TimerIcon name={running ? 'pause' : 'play'} className="size-5 shrink-0" /> <span className="truncate">{running ? 'Pause' : turnStarted ? 'Reprendre' : 'Démarrer'}</span>
         </Button>
         <div className="flex min-w-0 items-center justify-end gap-1">
-          {person && <Button onClick={() => setReadingNote(true)} aria-label={`Lire la note de ${person.name}`} title="Pense-bête" sx={{ minHeight: 44, minWidth: 44, px: 1, fontSize: 10, textTransform: 'none' }}><TimerIcon name="edit" className="size-3.5" /><span className="ml-1 max-[650px]:hidden">Pense-bête</span></Button>}
-          <IconButton sx={{ width: 44, height: 44 }} id="manage-timer-button" type="button" aria-label={timer.focusMode ? 'Modifier les réglages' : 'Réglages'} title={timer.focusMode ? 'Modifier les réglages' : 'Réglages'} onClick={timer.manage}><SettingsRounded fontSize="small" /></IconButton>
+          {person && <Button onClick={() => setReadingNote(true)} aria-label={`Lire la note de ${person.name}`} title="Pense-bête" variant="ghost" className="min-h-[44px] min-w-[44px] px-[8px] text-[10px] normal-case"><TimerIcon name="edit" className="size-3.5" /><span className="ml-1 max-[650px]:hidden">Pense-bête</span></Button>}
+          <IconButton id="manage-timer-button" type="button" aria-label={timer.focusMode ? 'Modifier les réglages' : 'Réglages'} title={timer.focusMode ? 'Modifier les réglages' : 'Réglages'} onClick={timer.manage} variant="ghost" size="icon" className="w-[44px] h-[44px]"><SettingsRounded size={20} /></IconButton>
         </div>
       </div>
       <div role="group" aria-label="Gestion de la file d’attente" data-queue-actions className="col-span-full flex min-h-11 min-w-0 items-center justify-between gap-2 border-t border-line px-1">
-        {waiting > 0 ? <Button aria-label="En attente" title={`${waiting} personne${waiting > 1 ? 's' : ''} en attente`} onClick={timer.openLateCheckin} startIcon={<PersonAddAltRounded fontSize="small" />} className="h-11! min-w-0! shrink-0! gap-1! px-1! text-[11px]! font-bold! normal-case! text-brand!">En attente<span className="grid min-w-5 place-items-center rounded bg-white px-1 text-[11px] tabular-nums">{waiting}</span></Button> : <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-muted"><PersonAddAltRounded fontSize="small" />File d’attente</span>}
-        {next && <Button data-postpone-next aria-label={`Reporter le prochain passage de ${next.name}`} title={`Reporter le prochain passage de ${next.name}`} onClick={() => timer.postpone(next.id)} startIcon={<TimerIcon name="later" className="size-4 shrink-0" />} className="h-11! min-w-0! justify-end! gap-1! px-1! text-left! normal-case! text-[#8f4309]!"><span className="grid min-w-0"><span className="text-[9px] font-medium text-muted">Prochain passage</span><span className="truncate text-[11px] font-bold">Reporter {next.name}</span></span></Button>}
+        {waiting > 0 ? <Button aria-label="En attente" title={`${waiting} personne${waiting > 1 ? 's' : ''} en attente`} onClick={timer.openLateCheckin} className="h-11! min-w-0! shrink-0! gap-1! px-1! text-[11px]! font-bold! normal-case! text-brand!" variant="ghost"><PersonAddAltRounded size={20} />En attente<span className="grid min-w-5 place-items-center rounded bg-white px-1 text-[11px] tabular-nums">{waiting}</span></Button> : <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-muted"><PersonAddAltRounded size={20} />File d’attente</span>}
+        {next && <Button data-postpone-next aria-label={`Reporter le prochain passage de ${next.name}`} title={`Reporter le prochain passage de ${next.name}`} onClick={() => timer.postpone(next.id)} className="h-11! min-w-0! flex-1! justify-end! gap-1! px-1! text-left! normal-case! text-[#8f4309]!" variant="ghost"><TimerIcon name="later" className="size-4 shrink-0" /><span className="grid min-w-0"><span className="text-[9px] font-medium text-muted">Prochain passage</span><span className="truncate text-[11px] font-bold">Reporter {next.name}</span></span></Button>}
       </div>
       <div id="timer-feedback" className={`sr-only ${feedbackColor}`}>
         {ended && <span id="time-up-alert" role="alert">{person?.name}, Temps utilisé. Merci de passer la parole.</span>}
-        <FeedbackIcon id="feedback-icon" className={`size-4 shrink-0 ${complete ? 'text-success' : ended ? 'text-danger' : nearly ? 'text-amber-700' : 'text-brand'}`} fontSize="inherit" aria-hidden="true" />
+        <FeedbackIcon id="feedback-icon" className={`size-4 shrink-0 ${complete ? 'text-success' : ended ? 'text-danger' : nearly ? 'text-amber-700' : 'text-brand'}`} size={16} aria-hidden="true" />
         <span id="feedback-text">{feedback}</span>
       </div>
-      <div className={`${timer.focusMode ? 'hidden' : 'flex'} min-h-11 min-w-0 items-center justify-between gap-2 border-t border-line text-[11px] text-muted [@media(max-height:650px)]:hidden`}><span className="flex min-w-0 items-center gap-1.5"><TimerIcon name="timer" className="size-3.5 shrink-0" />{`${Math.floor(timer.duration / 60)} min ${timer.duration % 60 ? `${timer.duration % 60} s` : ''} par personne`}</span>{!timer.focusMode && <IconButton size="small" sx={{ width: 44, height: 44 }} type="button" id="reset-button" aria-label="Réinitialiser le minuteur de la personne qui parle" title="Réinitialiser le minuteur (R)" onClick={timer.reset} aria-keyshortcuts="R"><TimerIcon name="reset" /></IconButton>}</div>
-      <Dialog open={readingNote} onClose={() => setReadingNote(false)} aria-labelledby="speaker-note-title" maxWidth="sm" fullWidth slotProps={{ paper: { sx: { maxHeight: 'calc(100dvh - 24px)', border: '1px solid #dce3e9', borderRadius: '14px' } } }}>
-        <DialogTitle id="speaker-note-title" className="border-t-2 border-t-accent pb-2! text-lg! font-bold!">Le pense-bête de {person?.name ?? 'ce participant'}</DialogTitle>
-        <DialogContent dividers>
+      <div className={`${timer.focusMode ? 'hidden' : 'flex'} min-h-11 min-w-0 items-center justify-between gap-2 border-t border-line text-[11px] text-muted [@media(max-height:650px)]:hidden`}><span className="flex min-w-0 items-center gap-1.5"><TimerIcon name="timer" className="size-3.5 shrink-0" />{`${Math.floor(timer.duration / 60)} min ${timer.duration % 60 ? `${timer.duration % 60} s` : ''} par personne`}</span>{!timer.focusMode && <IconButton type="button" id="reset-button" aria-label="Réinitialiser le minuteur de la personne qui parle" title="Réinitialiser le minuteur (R)" onClick={timer.reset} aria-keyshortcuts="R" variant="ghost" size="icon" className="w-[44px] h-[44px]"><TimerIcon name="reset" /></IconButton>}</div>
+      <Dialog open={readingNote} onOpenChange={next => { if (!next) (() => setReadingNote(false))?.(); }}><DialogContent showCloseButton={false} className="min-h-0 max-h-[calc(100dvh_-_24px)] border-[1px_solid_#dce3e9] rounded-[14px] max-w-[600px]" aria-labelledby="speaker-note-title">
+        <DialogTitle id="speaker-note-title" className={cn("shrink-0 px-5 pt-5 pb-2", "border-t-2 border-t-accent pb-2! text-lg! font-bold!")}>Le pense-bête de {person?.name ?? 'ce participant'}</DialogTitle>
+        <div className="min-h-0 overflow-y-auto px-5 py-3 border-y border-line">
           <p className="mb-3 text-[11px] text-muted">Note partagée avec l’équipe · aujourd’hui, heure de Maurice. Le minuteur garde son état : ouvrir cette note ne le suspend pas.</p>
-          {notes.loading ? <div className="grid min-h-32 place-items-center"><Loader label="Chargement de la note…" /></div> : notes.error ? <div role="alert"><p>{notes.error}</p><Button onClick={notes.retry}>Réessayer</Button></div> : <ParticipantNote hint={note?.hint ?? 'Aucun pense-bête préparé pour aujourd’hui.'} />}
-        </DialogContent>
-        <DialogActions className="border-t border-line"><Button onClick={() => setReadingNote(false)} sx={{ minHeight: 44 }}>Fermer</Button></DialogActions>
-      </Dialog>
-    </Paper>
+          {notes.loading ? <div className="grid min-h-32 place-items-center"><Loader label="Chargement de la note…" /></div> : notes.error ? <div role="alert"><p>{notes.error}</p><Button onClick={notes.retry} variant="ghost">Réessayer</Button></div> : <ParticipantNote hint={note?.hint ?? 'Aucun pense-bête préparé pour aujourd’hui.'} />}
+        </div>
+        <DialogFooter className="border-t border-line"><Button onClick={() => setReadingNote(false)} variant="ghost" className="min-h-[44px]">Fermer</Button></DialogFooter>
+      </DialogContent></Dialog>
+    </section>
   );
 }

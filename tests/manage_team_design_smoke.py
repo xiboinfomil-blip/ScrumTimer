@@ -65,6 +65,9 @@ class MockAPI:
             self.writes.append((method, path, None))
             route.fulfill(status=503 if self.share_error else 200,
                           json={'error': SHARE_ERROR} if self.share_error else {'url': LINK})
+        elif path == '/api/timer-remote' and method == 'POST' and request.post_data_json == {'operation': 'create'}:
+            assert request.headers.get('x-team-id') == TEAM
+            route.fulfill(status=503, json={'error': 'Télécommande indisponible dans ce scénario.'})
         else:
             # In particular DELETE is NEVER fulfilled as a successful mutation.
             route.fallback()
@@ -87,10 +90,10 @@ def correct_team_link(link, path):
 
 
 def controls_fit(scope, width):
-    """Measure rendered hit targets, not MUI's small inner text input glyph box."""
+    """Measure actionable controls, excluding Radix's hidden form inputs."""
     geometry = scope.evaluate('''root => [...root.querySelectorAll(
-        'button,a,input,summary')].filter(e => e.getClientRects().length).map(e => {
-        const target = e.closest('.MuiCheckbox-root,.MuiInputBase-root') || e;
+        'button,a,input,summary')].filter(e => e.getClientRects().length && e.getAttribute('aria-hidden') !== 'true').map(e => {
+        const target = e;
         const r = target.getBoundingClientRect();
         let left=r.left, right=r.right, top=r.top, bottom=r.bottom;
         for (let parent=e.parentElement; parent; parent=parent.parentElement) {
@@ -259,7 +262,8 @@ def journeys(page, mock, width):
 
     for error in (False, True):
         mock.share_error = error
-        page.get_by_role('button', name='Lien participants', exact=True).click()
+        page.get_by_role('button', name='Réglages et outils', exact=True).click()
+        page.get_by_role('menuitem', name='Lien participants', exact=True).click()
         share = page.get_by_role('dialog', name=f'Portail participants · {NAME}', exact=True)
         expect(share).to_be_visible()
         if error:
@@ -268,7 +272,7 @@ def journeys(page, mock, width):
             expect(share.get_by_role('textbox')).to_have_count(0)
             expect(share.get_by_role('button', name='Copier le lien', exact=True)).to_have_count(0)
         else:
-            name_field = share.get_by_role('textbox', name='Nom de l’équipe dans le lien', exact=True)
+            name_field = share.get_by_role('textbox', name='Nom d’équipe dans le lien', exact=True)
             link_field = share.get_by_role('textbox', name='Lien à partager', exact=True)
             expect(name_field).to_have_value(NAME)
             expect(link_field).to_have_attribute('readonly', '')

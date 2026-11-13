@@ -1,8 +1,10 @@
 'use client';
+import { cn } from 'cn';
+
 
 import { useEffect, useState } from 'react';
 import { Loader } from '@infomil/scrum-shared/ui';
-import { Button, Paper } from '@mui/material';
+import { Button } from '@/components/ui/button';
 import { type MoodMeterSlide } from '@/lib/mood/mood-meter';
 import { loadMoodCatalog, loadMoodDeck } from '@/lib/mood/mood-catalog-client';
 import type { SessionSpeaker } from '@/lib/history/session-results';
@@ -30,14 +32,14 @@ export function MoodSlideSummary({ people }: { people: SessionSpeaker[] }) {
   }, [contextKey]);
   if (!contexts.length) return <p className="text-[10px] text-muted">Diapositive non enregistrée pour ces humeurs. Choisissez à nouveau une humeur pour associer son baromètre.</p>;
   return <div id="used-mood-slides" className="space-y-3">
-    <div className="flex items-center justify-between gap-2"><h3 className="text-xs font-semibold">Baromètres utilisés</h3>{[...slides.values()].some(slide => slide.overlays.length > 0 || /\.gif$/i.test(slide.image)) && <Button disableElevation size="small" variant="text" sx={{ minHeight: 44, minWidth: 0, textTransform: 'none', fontSize: 11 }} type="button" className="min-h-11 rounded-lg px-2 text-[11px] text-brand hover:bg-blue-50" aria-pressed={playing} onClick={() => setPlaying(value => !value)}>{playing ? 'Stop' : 'Lire les GIF'}</Button>}</div>
+    <div className="flex items-center justify-between gap-2"><h3 className="text-xs font-semibold">Baromètres utilisés</h3>{[...slides.values()].some(slide => slide.overlays.length > 0 || /\.gif$/i.test(slide.image)) && <Button type="button" className={cn("min-h-[44px] min-w-[0px] normal-case text-[11px]", "min-h-11 rounded-lg px-2 text-[11px] text-brand hover:bg-blue-50")} aria-pressed={playing} onClick={() => setPlaying(value => !value)} variant="ghost" size="sm">{playing ? 'Stop' : 'Lire les GIF'}</Button>}</div>
     {contexts.map((context, index) => {
       const peopleForSlide = people.filter(person => person.moodSlide?.image === context.image);
       const slide = slides.get(context.image);
-      return <Paper component="article" elevation={0} sx={{ borderRadius: 2 }} key={context.image} className="rounded-lg border border-line p-2"><h4 className="truncate text-xs font-medium" title={context.title}>{context.title} · Diapositive {context.slideNumber}</h4>
+      return <article key={context.image} className={cn("rounded-[8px]", "rounded-lg border border-line p-2")}><h4 className="truncate text-xs font-medium" title={context.title}>{context.title} · Diapositive {context.slideNumber}</h4>
         <div className="mt-2 flex h-40 min-w-0 flex-col">{slide ? <MeterSlide idPrefix={`result-meter-${index}`} slide={slide} title={`${context.title} — diapositive ${context.slideNumber}`} paused={!playing} /> : <div className="grid h-full place-items-center bg-slate-50">{error || slides.size ? <p role="status" className="text-[11px] text-muted">Aperçu indisponible.</p> : <Loader size="sm" label="Chargement du baromètre…" />}</div>}</div>
         <ul className="mt-2 space-y-1 text-[10px] text-muted">{peopleForSlide.map(person => <li key={person.id}><span className="font-medium text-ink">{person.name}</span> · Humeur {person.mood}</li>)}</ul>
-      </Paper>;
+      </article>;
     })}
     <p className="text-[10px] text-muted">Les nombres renvoient à ces images. Des baromètres différents peuvent donner un sens différent au même nombre.</p>
   </div>;
