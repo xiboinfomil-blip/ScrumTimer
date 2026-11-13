@@ -556,6 +556,8 @@ def run_timer_design(browser, width, height, motion, long_names=False):
         assert dial.locator('line').count() == 60
         assert dial.locator('[data-timer-track], [data-timer-progress]').count() == 2
         assert page.locator('#timer-display').evaluate('el => { const dial = el.closest("#timer-stage").querySelector("[data-timer-dial]").getBoundingClientRect(); const text = el.getBoundingClientRect(); return text.left >= dial.left && text.right <= dial.right && text.top >= dial.top && text.bottom <= dial.bottom; }'), (label, state, 'countdown outside dial')
+        assert page.locator('#timer-display').evaluate('el => { const face = el.closest("[data-stopwatch-readout]").getBoundingClientRect(); const text = el.getBoundingClientRect(); return text.left >= face.left - 1 && text.right <= face.right + 1 && text.top >= face.top - 1 && text.bottom <= face.bottom + 1; }'), (label, state, 'countdown overlaps progress arc')
+        assert dial.locator('[data-stopwatch-crown]').count() == 1
         for control in page.locator('#next-button, #start-button, #manage-timer-button, [data-active-speaker] button, [data-queue-actions] button').all():
             control.scroll_into_view_if_needed()
             box = control.bounding_box()
@@ -576,11 +578,15 @@ def run_timer_design(browser, width, height, motion, long_names=False):
         expect(page.locator('#start-button')).to_have_text('Pause')
         check_layout('running')
         page.locator('#timer-display').evaluate('el => { window.__timerDigits = el; }')
+        indicator = page.locator('[data-stopwatch-indicator]')
+        previous_rotation = indicator.get_attribute('style')
         for seconds, urgency, value in [(95, 'warning', '00:25'), (16, 'critical', '00:09'), (13, 'expired', '+00:04')]:
             page.evaluate('seconds => { window.__timerNow += seconds * 1000; document.dispatchEvent(new Event("visibilitychange")); }', seconds)
             expect(page.locator('.timer-panel')).to_have_attribute('data-urgency', urgency)
             expect(page.locator('#timer-display')).to_have_text(value)
             assert page.locator('#timer-display').evaluate('el => el === window.__timerDigits'), 'Digits must not remount on each tick'
+            assert indicator.get_attribute('style') != previous_rotation, 'Stopwatch indicator must follow the countdown'
+            previous_rotation = indicator.get_attribute('style')
             check_layout(urgency)
         page.locator('#start-button').click()
         saver = page.get_by_role('dialog', name='Économiseur d’écran', exact=True)

@@ -8,7 +8,6 @@ import { cn } from 'cn';
 
 import { Button, Button as IconButton } from '@/components/ui/button';
 import { UserRoundPlus as PersonAddAltRounded } from 'lucide-react';
-import { Timer as TimerRounded } from 'lucide-react';
 import { Check as CheckIcon } from 'lucide-react';
 import { CircleAlert as ErrorOutlineIcon } from 'lucide-react';
 import { Clock as AccessTimeIcon } from 'lucide-react';
@@ -78,25 +77,34 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
         </div>
       </div>
       <ActiveSpeaker timer={timer} />
-      <div id="timer-stage" key={`${timer.activeId}-${timer.focusMode}`} className="row-start-3 flex min-h-0 min-w-0 flex-col items-center justify-center gap-3 self-stretch overflow-hidden bg-transparent text-ink [container-type:inline-size] max-[650px]:gap-2 [@media(max-height:650px)]:gap-0">
-        <motion.div initial={reduced ? false : { opacity: 0, scale: .96 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: reduced ? 0 : .5, delay: reduced ? 0 : .08, ease: [.22, 1, .36, 1] }} data-testid="stopwatch-timer" data-urgency={urgency} className={`relative grid h-full max-h-[min(28rem,100cqw)] min-h-0 w-full max-w-[28rem] flex-1 place-items-center self-center [container-type:size] ${ended || critical ? 'text-danger' : nearly ? 'text-amber-800' : 'text-brand'} ${pulse}`}>
-          <div data-timer-dial className="relative size-[min(100cqw,100cqh)] rounded-full border border-[#d1dde7] bg-[#f3f7fa] shadow-[inset_0_2px_3px_#ffffff,0_8px_24px_#205f9d0a]" aria-hidden="true">
-            <div className="absolute inset-[15%] rounded-full border border-white bg-white shadow-[0_1px_8px_#205f9d08]" />
-            <svg viewBox="0 0 200 200" className="absolute inset-0 size-full" fill="none">{dialMarks}</svg>
-            <span className="absolute left-1/2 top-[1.5%] h-[3%] w-[1.2%] -translate-x-1/2 rounded-full bg-accent" />
-            <div className="absolute inset-[7%]">
-              <svg data-timer-ring viewBox="0 0 44 44" fill="none" className="absolute inset-0 size-full -rotate-90">
-                <circle data-timer-track cx="22" cy="22" r="20.6" stroke="currentColor" strokeWidth="1.5" className="text-[#dce6ee]" />
-                <circle data-timer-progress cx="22" cy="22" r="20.6" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" pathLength="1" strokeDasharray="1" strokeDashoffset={1 - ratio} className="transition-[stroke-dashoffset] duration-300 motion-reduce:transition-none" />
-              </svg>
+      <div id="timer-stage" key={`${timer.activeId}-${timer.focusMode}`} className="row-start-3 flex min-h-0 min-w-0 flex-col items-center justify-center self-stretch overflow-hidden bg-transparent text-ink [container-type:inline-size]">
+        <motion.div initial={reduced ? false : { opacity: 0, scale: .94, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: reduced ? 0 : .6, ease: [.22, 1, .36, 1] }} data-testid="stopwatch-timer" data-urgency={urgency} className={`relative h-full max-h-[min(31rem,108cqw)] min-h-0 w-full max-w-[30rem] flex-1 self-center [container-type:size] ${ended || critical ? 'text-danger' : nearly ? 'text-amber-800' : 'text-brand'} ${pulse}`}>
+          <div data-timer-dial className="absolute left-1/2 top-[54%] size-[min(92cqw,88cqh)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#b8cbd8] bg-[linear-gradient(145deg,#ffffff_0%,#e1e9ef_45%,#ffffff_100%)] shadow-[0_12px_30px_-16px_#173c5138,inset_0_1px_0_#ffffff] [container-type:size]">
+            <div aria-hidden="true" data-stopwatch-crown className="absolute -top-[11%] left-1/2 -z-10 h-[13%] w-[18%] -translate-x-1/2">
+              <span className="absolute inset-x-[25%] bottom-0 h-[68%] rounded-t-sm border border-[#b8cbd8] bg-[#dce6ee]" />
+              <span className="absolute inset-x-0 top-0 h-[50%] rounded-[3px] border border-[#bc6817] bg-[repeating-linear-gradient(90deg,#ec8b23_0px,#ec8b23_3px,#d67a19_3px,#d67a19_4px)] shadow-[inset_0_2px_0_#ffffff66,0_2px_3px_#173c5115]" />
             </div>
-          </div>
-          <div className="pointer-events-none absolute inset-0 flex min-w-0 flex-col items-center justify-center gap-1 px-2">
-            <TimerRounded className="mb-1 text-current/70 max-[650px]:hidden [@media(max-height:650px)]:hidden" size={20} />
-            <span id="timer-label" className="mb-1 text-[11px] font-medium text-current max-[650px]:text-[10px] [@media(max-height:650px)]:mb-0 [@media(max-height:650px)]:text-[9px]">{ended ? 'Dépassement' : critical ? 'Concluez maintenant' : nearly ? 'Bientôt la fin' : running ? 'Temps restant' : 'Temps par personne'}</span>
-            <span id="timer-display" className="block text-[min(5.5rem,22cqw,24cqh)] font-bold leading-none tabular-nums" role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
-              {ended ? '+' : ''}{String(minutes).padStart(2, '0')}:{String(secs).padStart(2, '0')}
-            </span>
+            <span aria-hidden="true" className="absolute -right-[1%] top-[6%] -z-10 h-[6%] w-[13%] rotate-45 rounded-[3px] border border-[#b8cbd8] bg-[linear-gradient(#ffffff,#dce6ee)]" />
+            <div aria-hidden="true" className="absolute inset-[2%] rounded-full border border-white bg-[#fbfdff] shadow-[inset_0_0_24px_#dce6ee80]" />
+            <div aria-hidden="true" className="absolute inset-[24%] rounded-full bg-white shadow-[0_0_24px_#205f9d05]" />
+            <svg aria-hidden="true" viewBox="0 0 200 200" className="absolute inset-0 size-full text-[#46697f]" fill="none">{dialMarks}<circle cx="100" cy="100" r="60" stroke="currentColor" strokeWidth=".5" strokeDasharray=".5 3" opacity=".2" /></svg>
+            <span aria-hidden="true" className="absolute left-1/2 top-[4.5%] h-[4%] w-[1.4%] -translate-x-1/2 rounded-full bg-accent" />
+            <div aria-hidden="true" className="absolute inset-[11%]">
+              <svg data-timer-ring viewBox="0 0 44 44" fill="none" className="absolute inset-0 size-full -rotate-90">
+                <circle data-timer-track cx="22" cy="22" r="20.6" stroke="currentColor" strokeWidth="1.1" className="text-[#e5edf3]" />
+                <circle data-timer-progress cx="22" cy="22" r="20.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" pathLength="1" strokeDasharray="1" strokeDashoffset={1 - ratio} className="transition-[stroke-dashoffset] duration-300 ease-linear motion-reduce:transition-none" />
+              </svg>
+              <div data-stopwatch-indicator className="absolute inset-0 rounded-full transition-transform duration-300 ease-linear motion-reduce:transition-none" style={{ transform: `rotate(${(ratio - 1) * 360}deg)` }}>
+                <span className="absolute left-1/2 top-[3.2%] size-[5%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-[0_0_0_2px_#ffffff,0_2px_4px_#173c5130]" />
+              </div>
+            </div>
+            <div data-stopwatch-readout className="pointer-events-none absolute inset-[17%] flex min-w-0 flex-col items-center justify-center gap-2 [@media(max-height:650px)]:gap-0.5">
+              <span id="timer-label" className="text-[11px] font-medium text-muted max-[650px]:text-[10px] [@media(max-height:650px)]:text-[9px]">{ended ? 'Dépassement' : critical ? 'Concluez maintenant' : nearly ? 'Bientôt la fin' : running ? 'Temps restant' : 'Temps par personne'}</span>
+              <span id="timer-display" className="block whitespace-nowrap text-[min(5.5rem,20cqw,22cqh)] font-bold leading-none tabular-nums" role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
+                {ended ? '+' : ''}{String(minutes).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+              </span>
+              <span aria-hidden="true" className="mt-1 flex items-center gap-1.5 text-[9px] font-semibold text-muted [@media(max-height:650px)]:hidden"><span className={`size-1 rounded-full ${running ? 'bg-success motion-safe:animate-pulse' : 'bg-accent'}`} />{complete ? 'Terminé' : running ? 'En cours' : turnStarted ? 'En pause' : 'Prêt'}</span>
+            </div>
           </div>
         </motion.div>
         <div className="sr-only" role="progressbar" aria-label="Temps écoulé" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((1 - ratio) * 100)} />
@@ -108,8 +116,8 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
             <span className={`flex min-w-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium max-[650px]:sr-only ${statusColor}`} id="status-pill" data-status={status} role="status"><span className={`size-1.5 shrink-0 rounded-full bg-current ${running ? 'motion-safe:animate-pulse' : ''} motion-reduce:animate-none`} aria-hidden="true" />{status}</span>
           </div>
         </div>
-        <Button type="button" id="start-button" className={cn("min-h-[64px] min-w-[0px] w-[100%] px-[8px] rounded-[999px] normal-case text-[12px] font-[700] flex-row gap-[6px] shadow-[inset_0_1px_0_#ffffff30,_0_6px_16px_#205f9d25]", "mx-auto min-w-0")} disabled={!person} onClick={timer.toggle} aria-keyshortcuts="Space" variant="default">
-          <TimerIcon name={running ? 'pause' : 'play'} className="size-5 shrink-0" /> <span className="truncate">{running ? 'Pause' : turnStarted ? 'Reprendre' : 'Démarrer'}</span>
+        <Button type="button" id="start-button" className="mx-auto size-16! min-w-0! flex-col! gap-0.5! rounded-full! border! border-white/40! px-1! text-[11px]! font-bold! shadow-[inset_0_1px_0_#ffffff40,0_6px_16px_-4px_#205f9d55]!" disabled={!person} onClick={timer.toggle} aria-keyshortcuts="Space" variant="default">
+          <TimerIcon name={running ? 'pause' : 'play'} className="size-5 shrink-0" /><span className="truncate">{running ? 'Pause' : turnStarted ? 'Reprendre' : 'Démarrer'}</span>
         </Button>
         <div className="flex min-w-0 items-center justify-end gap-1">
           {person && <Button onClick={() => setReadingNote(true)} aria-label={`Lire la note de ${person.name}`} title="Pense-bête" variant="ghost" className="min-h-[44px] min-w-[44px] px-[8px] text-[10px] normal-case"><TimerIcon name="edit" className="size-3.5" /><span className="ml-1 max-[650px]:hidden">Pense-bête</span></Button>}
