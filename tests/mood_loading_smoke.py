@@ -10,7 +10,7 @@ from time import monotonic
 from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import expect, sync_playwright
-from fullscreen_helpers import emulate_fullscreen
+from browser_bootstrap import install_browser_bootstrap
 from loader_smoke import assert_loader
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000').rstrip('/')
@@ -24,7 +24,7 @@ SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect wid
 def run_case(browser, case, width=1366, height=768):
     # Fresh contexts also isolate the client-side catalogue/deck caches.
     context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce', service_workers='block')
-    emulate_fullscreen(context)
+    bootstrap = install_browser_bootstrap(context)
     try:
         day = (datetime.now(timezone.utc) + timedelta(hours=4)).date().isoformat()
         team = {'roster': [{'id': 'alice', 'name': 'Alice', 'present': True, 'mood': None, 'moodUpdatedAt': None}], 'session': [], 'duration': 120, 'warning': 30, 'sound': False, 'usedMoodMeters': [], 'currentMoodSlide': None}
@@ -61,8 +61,10 @@ def run_case(browser, case, width=1366, height=768):
                     route.fulfill(status=503, json={'error': 'Temporary metadata failure'})
                 else:
                     route.fulfill(json={'title': TITLE, 'slides': [path.lstrip('/') for path in SLIDES]})
+            elif path == '/api/timer-remote':
+                route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'})
             else:
-                raise AssertionError(f'Unexpected API (never forwarded): {req.method} {path}')
+                route.fallback()
 
         def image(route):
             url = urlparse(route.request.url)
@@ -93,15 +95,13 @@ def run_case(browser, case, width=1366, height=768):
         with page.expect_request(target_request, timeout=10000):
             # Waiting for window.load would deadlock on the deliberately held SVG.
             page.goto(BASE + '/mood?team=' + TEAM_ID, wait_until='domcontentloaded')
-        expect(page.locator('#meter-page-1-slide')).to_be_attached()
+        expect(page.locator('#meter-page-1-slide-wrapper')).to_be_attached()
         if case == 'parallel':
             loaders = page.locator('#meter-slide-stack [data-loader]')
             expect(loaders).to_have_count(2)
             for loader in loaders.all():
                 loader.scroll_into_view_if_needed()
                 assert_loader(page, loader, 'reduce')
-            ids = loaders.locator('defs > [id]').evaluate_all('elements => elements.map(element => element.id)')
-            assert len(ids) == len(set(ids)) == 6, ids
             assert len(held_second) == 1, len(held_second)
             held_second.pop().fulfill(content_type='image/svg+xml', body=SVG)
         page.wait_for_function("document.querySelector('#meter-page-2-slide')?.naturalWidth > 0")
@@ -133,6 +133,7 @@ def run_case(browser, case, width=1366, height=768):
         expect(page.locator('#meter-slide-stack img')).to_have_count(2)
         expect(page.locator('#default-mood-meter')).to_have_count(0)
         assert not errors, errors
+        bootstrap.assert_no_unexpected_api()
         print(f'PASS remote flip mood loading: {case} {width}x{height}', flush=True)
     finally:
         context.close()

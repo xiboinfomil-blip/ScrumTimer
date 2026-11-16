@@ -184,7 +184,7 @@ test('install dialog opens after hydration unless opted out or standalone, and s
   assert.match(component, /installedRef\.current = true;\s*setInstalled\(true\);\s*setOpen\(false\)/);
   assert.match(component, /if \(installedRef\.current\) \{\s*setDeferredPrompt\(null\);\s*setOpen\(false\)/);
   assert.match(component, /installedRef\.current \|\| isStandalone\(\)/);
-  assert.match(component, /<Button onClick=\{\(\) => setOpen\(true\)\} aria-haspopup="dialog"/);
+  assert.match(component, /<Button ref=\{trigger\} onClick=\{\(\) => setOpen\(true\)\} aria-haspopup="dialog"/);
   assert.match(component, /Ajouter l’application/);
   assert.match(component, /onOpenChange=\{next => \{ if \(!next\)/);
   assert.match(component, /aria-labelledby="companion-install-title" aria-describedby="companion-install-description"/);

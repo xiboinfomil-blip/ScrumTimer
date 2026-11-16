@@ -2,7 +2,8 @@
 import os
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
-from fullscreen_helpers import emulate_fullscreen
+from browser_bootstrap import install_browser_bootstrap
+from team_directory_smoke import creation_panel
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 TEAM_ID = 'a' * 64
@@ -11,8 +12,8 @@ with sync_playwright() as p:
     browser = p.chromium.launch()
     for motion in ['reduce', 'no-preference']:
         for width, height in [(320, 568), (768, 1024), (1440, 900)]:
-            context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion=motion)
-            emulate_fullscreen(context)
+            context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion=motion, service_workers='block')
+            bootstrap = install_browser_bootstrap(context)
             teams = [{'id': TEAM_ID, 'name': 'Équipe Alpha', 'memberCount': 2}] + [
                 {'id': f'{i:064x}', 'name': f'Équipe {i} ' + ('TrèsLongNomSansEspace' * 2 if i == 7 else 'Produit'), 'memberCount': i}
                 for i in range(1, 8)
@@ -30,8 +31,10 @@ with sync_playwright() as p:
                     route.fulfill(json={'team': {'roster': [], 'duration': 120, 'warning': 30, 'sound': False, 'session': [], 'usedMoodMeters': [], 'currentMoodSlide': None}, 'revision': 1})
                 elif path == '/api/history':
                     route.fulfill(json={'rounds': []})
+                elif path == '/api/jira':
+                    route.fulfill(json={'configured': False, 'connected': False})
                 else:
-                    raise AssertionError(path)
+                    route.fallback()
 
             context.route('**/api/**', api)
             page = context.new_page()
@@ -53,11 +56,11 @@ with sync_playwright() as p:
             expect(listing.locator('li')).to_have_count(1)
             expect(page.get_by_role('navigation', name='Pagination des équipes')).to_have_count(0)
             search.fill('inexistant')
-            page.get_by_role('button', name='Effacer la recherche', exact=True).click()
+            page.get_by_role('button', name='Afficher toutes les équipes', exact=True).click()
             expect(listing.locator('li')).to_have_count(6)
 
-            field = page.get_by_role('textbox', name='Nom de l’équipe', exact=True)
-            page.get_by_role('button', name='Créer une équipe', exact=True).click()
+            panel, field = creation_panel(page, width)
+            panel.get_by_role('button', name='Créer l’équipe', exact=True).click()
             expect(field).to_be_focused()
             expect(field).to_have_attribute('aria-invalid', 'true')
             expect(page.locator('#team-create-error')).to_be_visible()
@@ -76,6 +79,7 @@ with sync_playwright() as p:
             expect(field).to_be_focused()
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             assert not errors, errors
+            bootstrap.assert_no_unexpected_api()
             context.close()
             print(f'PASS directory/pagination/form/empty-state {width}x{height} {motion}')
     browser.close()

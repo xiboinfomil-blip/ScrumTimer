@@ -135,6 +135,10 @@ def geometry(page, width, height, controls=()):
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
     for control in controls:
         expect(control).to_be_visible()
+        control.scroll_into_view_if_needed()
+        page.wait_for_function('''() => !document.getAnimations().some(animation =>
+            animation.playState === 'running' &&
+            Number.isFinite(animation.effect?.getComputedTiming().endTime))''')
         box = control.bounding_box()
         assert box and box['height'] >= 44 - 0.5, (width, 'target height', box)
         assert box['x'] >= -0.5 and box['x'] + box['width'] <= width + 1, (width, box)
@@ -142,7 +146,7 @@ def geometry(page, width, height, controls=()):
 
 
 def team_view(page, width):
-    page.get_by_role('button', name='Actions du minuteur', exact=True).click()
+    page.get_by_role('button', name='Réglages et outils', exact=True).click()
     page.get_by_role('menuitem', name='Voir le tour de parole', exact=True).click()
     expect(page.get_by_role('dialog', name='Le tour de parole', exact=True)).to_be_visible()
 
@@ -161,7 +165,8 @@ def open_late_checkin(page, db, source, meter_value):
     timer_url = page.url
     assert urlparse(timer_url).path == '/timer', timer_url
     if source is not None:
-        source.get_by_role('button', name='Renseigner les humeurs', exact=True).click()
+        source.get_by_role('button', name='Fermer les réglages', exact=True).click()
+        page.get_by_role('button', name='En attente', exact=True).click()
     modal = page.get_by_role('dialog', name='Un instant pour votre humeur', exact=True)
     expect(modal).to_be_visible()
     if source is not None:
@@ -181,8 +186,8 @@ def open_late_checkin(page, db, source, meter_value):
     if db.remote:
         stack = modal.locator('#meter-slide-stack')
         expect(stack.locator('img')).to_have_count(2)
-        for path in REMOTE_SLIDES:
-            image = stack.locator(f'img[src="/{path}"]')
+        for index in range(1, len(REMOTE_SLIDES) + 1):
+            image = stack.locator(f'#meter-page-{index}-slide')
             expect(image).to_be_attached()
             expect(image).to_have_js_property('complete', True)
             expect(image).not_to_have_js_property('naturalWidth', 0)
@@ -405,17 +410,17 @@ def run_case(browser, width, height, skip=False, late_at_end=False, remote=False
         close_late_checkin(page, db, modal, timer_url)
         expect(choice).not_to_be_visible()
         expect(page.locator('#speaker-name')).to_have_text('Bob')
-        expect(page.locator('#status-pill')).to_have_attribute('data-status', 'Prêt à démarrer')
-        expect(page.locator('#timer-display')).to_have_text('02:00')
+        expect(page.locator('#status-pill')).to_have_attribute('data-status', 'En pause')
+        expect(page.locator('#timer-display')).to_have_text('01:56')
         advance(page, 10)
-        expect(page.locator('#timer-display')).to_have_text('02:00')
+        expect(page.locator('#timer-display')).to_have_text('01:56')
         no_archive(page, db)
-        page.get_by_role('button', name='Démarrer', exact=True).click()
+        page.get_by_role('button', name='Reprendre', exact=True).click()
         advance(page, 6)
         page.locator('#next-button').click()
         daily_round = page.get_by_role('region', name='Point quotidien du jour', exact=True)
         expect(daily_round).to_be_visible()
-        expect(daily_round.get_by_text('Point quotidien terminé aujourd’hui', exact=True)).to_be_visible()
+        expect(daily_round.get_by_role('heading', name='Bilan du jour', exact=True)).to_be_visible()
         saved(page)
         assert len(db.history_posts) == len(db.rounds) == 1
         archived = deepcopy(db.rounds[0])
@@ -425,22 +430,19 @@ def run_case(browser, width, height, skip=False, late_at_end=False, remote=False
         assert people['bob']['speakingSeconds'] == 10, people
         assert people['alice']['mood'] == 2 and people['bob']['mood'] == 3
         assert all(person['budgetSeconds'] == 120 and not person['timeUp'] for person in people.values())
-        view_results = daily_round.get_by_role('button', name='Voir le bilan du jour', exact=True)
-        geometry(page, width, height, [view_results])
         # Handoff shortcut with no active speaker and results rerenders must not archive again.
         page.locator('#main-content').focus()
         page.keyboard.press('n')
         advance(page, 30)
-        view_results.click()
-        expect(daily_round.get_by_role('heading', name='Bilan enregistré · Classement', exact=True)).to_be_visible()
+        if width < 1024:
+            daily_round.get_by_role('button', name='Classement', exact=True).click()
         ranking = daily_round.locator('[data-dashboard-column="scores"]')
         expect(ranking.get_by_text('Alice', exact=True)).to_be_visible()
         expect(ranking.get_by_text('00:08 / 02:00', exact=True)).to_be_visible()
-        if width <= 800:
+        if not ranking.get_by_text('Bob', exact=True).is_visible():
             ranking.get_by_role('navigation', name='Pages de la liste').get_by_role('button', name='Page suivante').click()
         expect(ranking.get_by_text('Bob', exact=True)).to_be_visible()
         expect(ranking.get_by_text('00:10 / 02:00', exact=True)).to_be_visible()
-        daily_round.get_by_role('button', name='Masquer le bilan', exact=True).click()
         saved(page)
         assert db.history_posts == [archived] and db.rounds == [archived]
         assert db.writes and not db.unexpected, db.unexpected

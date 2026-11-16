@@ -2,6 +2,7 @@
 from copy import deepcopy
 import os
 from playwright.sync_api import sync_playwright, expect
+from browser_bootstrap import install_browser_bootstrap, mauritius_day
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 TEAM_ID = 'a' * 64
@@ -10,7 +11,8 @@ NO_STORAGE = """for (const name of ['localStorage', 'sessionStorage']) Object.de
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    context = browser.new_context(viewport={'width': 1366, 'height': 768})
+    context = browser.new_context(viewport={'width': 1366, 'height': 768}, service_workers='block')
+    bootstrap = install_browser_bootstrap(context)
     context.add_init_script(NO_STORAGE)
     errors = []
     page = context.new_page()
@@ -22,7 +24,7 @@ with sync_playwright() as p:
         assert route.request.headers.get('x-team-id') == TEAM_ID
         if route.request.method == 'POST' and db['daily'] is None:
             db['daily'] = deepcopy(route.request.post_data_json)
-        route.fulfill(json={'day': '2026-10-14', 'meter': db['daily']})
+        route.fulfill(json={'day': mauritius_day(), 'meter': db['daily']})
 
     def team_api(route):
         if db['offline']:
@@ -54,6 +56,9 @@ with sync_playwright() as p:
     context.route('**/api/teams', lambda route: route.fulfill(json={'teams': [{'id': TEAM_ID, 'name': 'Mon équipe', 'memberCount': len(db['team']['roster'])}], 'activeTeamId': TEAM_ID}))
     context.route('**/api/daily-meter', daily_api)
     context.route('**/api/history', history_api)
+    context.route('**/api/daily-hints', lambda route: route.fulfill(json={'day': mauritius_day(), 'hints': []}))
+    context.route('**/api/meeting-settings', lambda route: route.fulfill(json={'prompts': [], 'revision': 0}))
+    context.route('**/api/timer-remote', lambda route: route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'}))
     context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
     context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=[{'title': 'Used meter', 'remoteId': 'deck-1234567890abcdef1234', 'slides': []}, {'title': 'New meter', 'remoteId': 'deck-abcdef1234567890abcd', 'slides': []}]))
     context.route('**/api/mood-meters/decks/*', lambda route: route.fulfill(json={'title': 'Meter', 'slides': ['mood-meters/slides/deck-abcdef1234567890abcd/page1.svg', 'mood-meters/slides/deck-abcdef1234567890abcd/page2.svg']}))
@@ -75,13 +80,18 @@ with sync_playwright() as p:
     expect(page.locator('#meter-slide-stack img')).to_have_count(2)
     for width, height in [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]:
         page.set_viewport_size({'width': width, 'height': height})
+        page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
         page.wait_for_function("Array.from(document.querySelectorAll('#meter-slide-stack img')).every(img => img.complete && img.naturalWidth > 0)")
-        images = page.locator('#meter-slide-stack img')
-        first, second = images.nth(0).bounding_box(), images.nth(1).bounding_box()
+        layout = page.locator('#meter-slide-stack').evaluate('''el => {
+            const rect = node => { const {x, y, width, height} = node.getBoundingClientRect();
+                return {x, y, width, height}; };
+            return {stack: rect(el), images: [...el.querySelectorAll('img')].map(rect)};
+        }''')
+        first, second = layout['images']
         assert first and second and abs(second['y'] - first['y']) <= 1, (width, 'flip faces do not overlap')
         assert first['width'] > 0 and second['width'] > 0, (width, 'empty slide')
         assert abs(second['width'] - first['width']) <= 1 and abs(second['height'] - first['height']) <= 1, (width, 'flip faces differ in size')
-        stack = page.locator('#meter-slide-stack').bounding_box()
+        stack = layout['stack']
         assert stack and second['y'] + second['height'] <= stack['y'] + stack['height'] + 1, (width, 'flip face clipped')
         assert page.locator('#meter-slide-stack').evaluate('el => el.scrollHeight <= el.clientHeight + 2'), (width, 'flip surface should not add page height')
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
@@ -101,7 +111,7 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Démarrer', exact=True).click()
     page.evaluate('''() => { const original = Date.now; Date.now = () => original() + 1000; document.dispatchEvent(new Event('visibilitychange')); Date.now = original; }''')
     page.get_by_role('button', name='Suivant', exact=True).click()
-    page.wait_for_function("document.querySelector('header').innerText.includes('Neon ✓')")
+    expect(page.get_by_role('status', name='Équipe enregistrée dans Neon.', exact=True)).to_be_visible()
     assert len(db['rounds']) == 1
     assert db['rounds'][0]['people'][0]['speakingSeconds'] >= 1
     assert writes
@@ -116,13 +126,15 @@ with sync_playwright() as p:
     page.reload()
     summary = page.get_by_role('region', name='Point quotidien du jour', exact=True)
     expect(summary).to_be_visible()
-    summary.get_by_role('button', name='Voir le bilan du jour', exact=True).click()
     leaderboard = summary.locator('.daily-score-list')
+    expect(leaderboard).to_be_visible()
     expect(leaderboard.get_by_text('Expired participant', exact=True)).to_have_count(0)
     expect(leaderboard.get_by_text('Alice <safe>', exact=True)).to_have_count(1)
     expect(leaderboard.get_by_label('Rang 1', exact=True)).to_have_count(1)
     for width, height in [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]:
         page.set_viewport_size({'width': width, 'height': height})
+        if width < 1024:
+            summary.get_by_role('button', name='Classement', exact=True).click()
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
         row = leaderboard.locator('li').first.bounding_box()
         assert row and row['x'] >= 0 and row['x'] + row['width'] <= width, width
@@ -134,6 +146,7 @@ with sync_playwright() as p:
     db['history_offline'] = False
     page.get_by_role('button', name='Réessayer Neon', exact=True).click()
     expect(summary).to_be_visible()
+    bootstrap.assert_no_unexpected_api()
     assert not errors, errors
     context.close()
     browser.close()

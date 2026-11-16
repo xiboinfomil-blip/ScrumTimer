@@ -42,6 +42,9 @@ class DirectoryMock:
     def api(self, route):
         request = route.request
         path, method = urlparse(request.url).path, request.method
+        if path == '/api/timer-remote' and method == 'POST':
+            route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'})
+            return
         if path == '/api/jira' and method == 'GET':
             assert parse_qs(urlparse(request.url).query).get('action', ['status']) == ['status']
             route.fulfill(json={'configured': False, 'connected': False})
@@ -176,8 +179,6 @@ def screenshot(page, screenshots, name):
 
 def creation_panel(page, width):
     button = page.get_by_role('button', name='Ajouter une nouvelle équipe', exact=True)
-    button.scroll_into_view_if_needed()
-    expect(button).to_be_in_viewport()
     button.click()
     panel = page.get_by_role('dialog', name='Ajouter une nouvelle équipe', exact=True)
     field = panel.get_by_role('textbox', name='Nom de l’équipe', exact=True)

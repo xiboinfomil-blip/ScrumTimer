@@ -91,7 +91,7 @@ class MockTeams:
             del self.db[target]
             if self.failure == 'timeout':
                 # The server committed, but the response never arrives. The
-                # provider's actual 15s AbortController must block stale writes.
+                # provider's actual 60s request deadline must block stale writes.
                 self.held.append(route)
                 return
             route.fulfill(json=self.listing())
@@ -134,6 +134,7 @@ def fits(page):
 
 
 def teams_page(page):
+    page.wait_for_url('**/teams*')
     expect(page.locator('#teams-heading:visible')).to_have_count(1)
     assert urlparse(page.url).path == '/teams', page.url
     expect(page.get_by_role('button', name='Supprimer l’équipe ', exact=False)).to_have_count(0)
@@ -258,8 +259,6 @@ def failure_case(page, mock, failure):
     before = deepcopy(mock.db)
     manage(page, A)
     mock.failure = failure
-    if failure == 'timeout':
-        page.clock.install()
     dialog = confirm_delete(page, A)
     if failure == 'timeout':
         expect(dialog.get_by_role('button', name='Suppression…', exact=True)).to_be_disabled()
@@ -268,8 +267,7 @@ def failure_case(page, mock, failure):
         # Allow route dispatch before advancing the real provider timeout.
         page.wait_for_timeout(50)
         assert len(mock.held) == 1
-        page.clock.fast_forward(16000)
-    expect(dialog).not_to_be_visible()
+    expect(dialog).not_to_be_visible(timeout=65000 if failure == 'timeout' else 15000)
     expect(page.get_by_role('button', name='Réessayer Neon', exact=True)).to_be_visible()
     expect(page.locator('.site-header [role="status"]')).to_have_attribute(
         'title', 'Échec de l’enregistrement de l’équipe dans Neon. Réessayez.')

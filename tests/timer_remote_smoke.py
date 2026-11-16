@@ -1,7 +1,7 @@
-"""DEV-only, fail-closed remote smoke: two contexts, shared in-memory transport.
+"""Local-only, fail-closed remote smoke: two contexts, shared in-memory transport.
 
 No request to an application API is allowed through to Neon/Redis. Run directly
-with Python; BROWSER_TEST_URL may only select localhost development port 3001.
+with Python; BROWSER_TEST_URL may only select localhost port 3001.
 """
 from copy import deepcopy
 import base64
@@ -21,7 +21,7 @@ from browser_bootstrap import (
 
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3001').rstrip('/')
-assert BASE in ('http://localhost:3001', 'http://127.0.0.1:3001'), 'DEV port 3001 only'
+assert BASE in ('http://localhost:3001', 'http://127.0.0.1:3001'), 'Local port 3001 only'
 SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1080)]
 PAIR_ID, OWNER, CONTROL = 'i' * 43, 'o' * 43, 'c' * 43
 REMOTE_URL = f'{BASE}/remote#{PAIR_ID}.{CONTROL}'
@@ -58,8 +58,11 @@ def current_person(timer):
 
 def post_command(phone, action, version, request_id='92345678-1234-4234-8234-123456789abc'):
     return phone.evaluate("""async command => {
+        const phoneId = localStorage.getItem('standup.companion.phone.v1');
+        if (!phoneId) throw new Error('The test phone must be paired.');
         const response = await fetch('/api/timer-remote', {method:'POST',
-            headers:{'Content-Type':'application/json', Authorization:'Bearer ' + command.token},
+            headers:{'Content-Type':'application/json', Authorization:'Bearer ' + command.token,
+                'X-Remote-Phone-Id':phoneId},
             body:JSON.stringify({operation:'command', id:command.id, command:{
                 requestId:command.requestId, action:command.action, version:command.version}})});
         return response.status;
@@ -91,7 +94,7 @@ def now_ms():
 
 
 def measured_command(host, phone, action, label, measurements):
-    """Warm DEV UI observations over mocked transport, NOT real-network timings.
+    """Warm localhost UI observations over mocked transport, NOT real-network timings.
 
     Start before Playwright's click (including actionability); phone confirmation
     requires the authoritative running/paused UI, not POST acceptance/status.
@@ -126,7 +129,7 @@ def measured_command(host, phone, action, label, measurements):
         observed = lambda value: 'NOT CONFIRMED' if value is None else f'{value:.1f}ms'
         print(f'LATENCY {label} {action}: click-to-host={observed(host_ms)} '
               f'click-to-phone-confirmed={observed(phone_ms)} elapsed={elapsed_ms:.1f}ms '
-              f'limit={MAX_COMMAND_MS}ms (warm localhost DEV, mocked APIs; '
+              f'limit={MAX_COMMAND_MS}ms (warm localhost, mocked APIs; '
               'sequential assertion observations, not real-network latency)', flush=True)
 
 
@@ -387,8 +390,9 @@ def geometry(page, label, failures, *, host=False, timer=True):
         expect(page.get_by_label('Temps restant', exact=True)).to_be_visible()
         expect(page.get_by_role('region', name='Passage en cours').locator('svg circle')).to_have_count(0)
         expect(page.get_by_role('region', name='Commandes à distance')).to_be_visible()
-    page.wait_for_function("""() => document.getAnimations().every(a =>
-        a.playState !== 'running' || a.effect.getTiming().iterations === Infinity)""")
+    page.wait_for_function("""host => document.querySelector(host ? '.site-header' : 'main')
+        .getAnimations({subtree:true}).every(animation => animation.playState !== 'running' ||
+            !Number.isFinite(animation.effect?.getComputedTiming().endTime))""", arg=host)
     report = page.evaluate("""host => {
         const root = host ? document.querySelector('.site-header') : document.querySelector('main');
         const box = root.getBoundingClientRect();
@@ -438,8 +442,8 @@ def geometry(page, label, failures, *, host=False, timer=True):
                 const back = background(next);
                 const text = over(rgba(style.color), back);
                 const contrast = ratio(text, back);
-                if (text.some(channel => channel !== 255) || contrast < 4.5)
-                    contrastFailures.push({name: 'Passage suivant', check: 'white text / background >= 4.5',
+                if (contrast < 4.5)
+                    contrastFailures.push({name: 'Passage suivant', check: 'text / background >= 4.5',
                         color: style.color, background: style.backgroundColor, contrast});
             }
             // Only the three secondary controls, not labels, icons or disabled scenes.
@@ -583,7 +587,8 @@ def main():
                 statuses = phone.evaluate("""async ({id, token, command}) =>
                     Promise.all(Array.from({length:3}, async () => {
                         const response = await fetch('/api/timer-remote', {method:'POST',
-                            headers:{'Content-Type':'application/json', Authorization:`Bearer ${token}`},
+                            headers:{'Content-Type':'application/json', Authorization:`Bearer ${token}`,
+                                'X-Remote-Phone-Id':localStorage.getItem('standup.companion.phone.v1')},
                             body:JSON.stringify({operation:'command', id, command})});
                         return response.status;
                     }))""", {'id': PAIR_ID, 'token': CONTROL, 'command': {
@@ -684,7 +689,7 @@ def main():
                 black.click()
                 expect(host_overlay).to_be_visible()
                 expect(restore).to_be_enabled()
-                expect(start).to_be_disabled()
+                expect(start).to_be_enabled()
                 expect(restart).to_be_disabled()
                 expect(penalty).to_be_disabled()
                 expect(phone.get_by_role('button', name='Passage suivant', exact=True)).to_be_disabled()
@@ -703,7 +708,7 @@ def main():
                 assert current_person(hidden)['manualPenalty'] == 50
                 blocked_version = api.entries[PAIR_ID]['snapshot']['version']
                 before_blocked = len(api.commands)
-                for action in ('start', 'pause', 'next', 'restart', 'penalty'):
+                for action in ('pause', 'next', 'restart', 'penalty'):
                     assert post_command(phone, action, blocked_version) == 409, action
                 assert len(api.commands) == before_blocked
                 restore.click()
@@ -727,6 +732,9 @@ def main():
                 assert current_person(running_restarted)['speakingSeconds'] >= current_person(before_running_restart)['speakingSeconds']
                 assert current_person(running_restarted)['manualPenalty'] == 50
                 assert running_restarted['activeId'] == baseline['activeId']
+                expect(host_overlay).to_be_visible()
+                host_restore.click()
+                expect(host_overlay).not_to_be_visible()
                 # Paused activation + local host restore is another non-resuming path.
                 black.click()
                 expect(host_overlay).to_be_visible()
@@ -745,17 +753,16 @@ def main():
                 api.entries[PAIR_ID].update(pending={'id': stale_id, 'action': 'penalty',
                     'version': stale_version, 'createdAt': now_ms() - 5001},
                     lastCommandId=stale_id, lastCommandVersion=stale_version)
-                phone.wait_for_function("""async ({id, token, version}) => {
-                    const response = await fetch('/api/timer-remote?id=' + id,
-                        {headers:{Authorization:'Bearer ' + token}});
-                    const body = await response.json();
-                    return body.snapshot && body.snapshot.version !== version;
-                }""", arg={'id': PAIR_ID, 'token': CONTROL, 'version': stale_version})
+                with phone.expect_response(lambda response: response.request.method == 'GET'
+                        and '/api/timer-remote?' in response.url
+                        and (response.json().get('snapshot') or {}).get('version') != stale_version
+                        and (response.json().get('snapshot') or {}).get('version')
+                            == api.entries[PAIR_ID]['snapshot']['version']
+                        and api.entries[PAIR_ID]['pending'] is None):
+                    phone.evaluate('() => new Promise(requestAnimationFrame)')
+                phone.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
                 assert checkpoint(host) == running_restarted
                 assert post_command(phone, 'penalty', stale_version) == 409
-                # The injected expiry was observed by a separate fetch above;
-                # allow the companion's own 500ms poll to observe that version.
-                phone.wait_for_timeout(650)
                 finished_first = deepcopy(current_person(running_restarted))
                 next_button = phone.get_by_role('button', name='Passage suivant', exact=True)
                 next_button.click()
@@ -788,6 +795,10 @@ def main():
                 expect(previous_button).to_be_disabled()
                 next_button.click()
                 phone.get_by_role('button', name='Confirmer', exact=True).click()
+                expect(host.locator('#speaker-name')).to_have_text(second)
+                final_first = next(person for person in checkpoint(host)['people'] if person['id'] == finished_first['id'])
+                assert final_first['speakingSeconds'] >= finished_first['speakingSeconds']
+                finished_first = deepcopy(final_first)
                 expect(host.locator('#speaker-name')).to_have_text(second)
 
                 for width, height in (SIZES if phone_size[0] == 390 else [phone_size]):
@@ -830,6 +841,7 @@ def main():
                 geometry(phone, (motion, phone_size, 'disabled-waiting'), failures, timer=False)
                 # Keep the same phone document open: polling must recover unaided.
                 phone_document = phone.evaluate('performance.timeOrigin')
+                new_lease_commands = len(api.commands)
                 host.goto(BASE + '/timer')
                 expect(host.locator('#speaker-name')).to_be_visible()
                 host.get_by_role('button', name='Télécommande mobile', exact=True).click()
@@ -895,19 +907,21 @@ def main():
                     'participant-continue', 'mood-4', 'mood-4', 'mood-3', 'mood-continue',
                     'start', 'pause', 'penalty', 'restart', 'start', 'black-screen',
                     'black-screen', 'start', 'restart', 'black-screen', 'next',
-                    'pause', 'start'], api.commands
+                    'previous', 'next', 'pause', 'start'], api.commands
                 deadline = time.monotonic() + 5
                 while not all(c['id'] in api.acks for c in api.commands) and time.monotonic() < deadline:
                     host.wait_for_timeout(100)
                 assert all(c['id'] in api.acks for c in api.commands), (api.commands, api.acks)
-                assert len({c['version'] for c in api.commands}) == len(api.commands) == 22, api.commands
+                assert len(api.commands) == 24, api.commands
+                for commands in (api.commands[:new_lease_commands], api.commands[new_lease_commands:]):
+                    assert len({c['version'] for c in commands}) == len(commands), commands
                 # Complete with native host controls after forgetting the phone.
                 # Archived score is derived from preserved speaking time, retries
                 # and the -50 deduction, without adding score UI to the timer.
                 host.locator('#next-button').click()
                 expect(host.locator('#speaker-name')).not_to_have_text(second)
                 host.locator('#next-button').click()
-                expect(host.get_by_role('button', name='Voir le bilan du jour')).to_be_visible()
+                expect(host.get_by_role('heading', name='Bilan du jour', exact=True)).to_be_visible()
                 assert len(api.archived) == 1, api.archived
                 archive = api.archived[0].get('round', api.archived[0])
                 archived_first = next(person for person in archive['people'] if person['id'] == finished_first['id'])
@@ -946,6 +960,11 @@ def main():
                 second_phone_guard.assert_no_unexpected_api()
                 print(f'PASS {motion} {phone_size}: route-aware pairing/actions, state-bound restart Yes/No, retained metrics/retries/manual score, black-screen guards and remote/local restore without resume, stale/expired recovery, permanent QR waiting/re-enable/fresh owner, remembered pairing/invalid explicit/forget', flush=True)
             except Exception:
+                entry = api.entries.get(PAIR_ID, {})
+                print('REMOTE STATE', {
+                    'commands': api.commands[-3:], 'acks': api.acks[-3:],
+                    'snapshot': entry.get('snapshot'), 'pending': entry.get('pending'),
+                }, flush=True)
                 for label, page in (('host', host), ('phone', phone)):
                     if page.is_closed():
                         continue
@@ -968,8 +987,8 @@ def main():
             values = [sample[index] for sample in samples]
             print(f'LATENCY RANGE {action} click-to-{target}: '
                   f'{min(values):.1f}..{max(values):.1f}ms; n={len(values)}; '
-                  f'limit={MAX_COMMAND_MS}ms (warm localhost DEV, mocked APIs only)', flush=True)
-    print('PASS: timer remote DEV smoke, 4 phone lifecycle cases + 12 viewport/motion geometry combinations; mocked APIs only, no Neon writes', flush=True)
+                  f'limit={MAX_COMMAND_MS}ms (warm localhost, mocked APIs only)', flush=True)
+    print('PASS: timer remote local smoke, 4 phone lifecycle cases + 12 viewport/motion geometry combinations; mocked APIs only, no Neon writes', flush=True)
 
 
 def synchronized_smoke():
@@ -1082,12 +1101,12 @@ def synchronized_smoke():
                 host.get_by_role('button', name='Continuer vers le minuteur', exact=True).click()
                 expect(host.locator('#timer-page')).to_be_visible()
                 order = phone.get_by_role('list', name='Ordre de parole', exact=True)
-                hidden_lineup = host.locator('[aria-labelledby="lineup-dialog-title"]')
-                matching(hidden_lineup.locator('.person-row'), order)
-                assert order.get_by_role('listitem').count() > 3
+                expect(order).to_contain_text(host.locator('#speaker-name').inner_text())
                 host.get_by_role('button', name='Réglages et outils', exact=True).click()
                 host.get_by_role('menuitem', name='Voir le tour de parole', exact=True).click()
                 lineup = host.get_by_role('dialog', name='Le tour de parole', exact=True)
+                matching(lineup.locator('.person-row'), order)
+                assert order.get_by_role('listitem').count() > 3
                 measured = fitted_rows(lineup)
                 assert measured['fits'] and measured['count'] == min(12, measured['capacity']), measured
                 lineup.get_by_role('button', name='Page suivante', exact=True).click()
@@ -1125,12 +1144,21 @@ def synchronized_smoke():
                 for width, height in SIZES:
                     host.set_viewport_size({'width': width, 'height': height})
                     expect(saver.get_by_role('button', name='Reprendre le passage', exact=True)).to_be_in_viewport()
+                    host.wait_for_function("""() => {
+                        const box = document.querySelector('[data-testid="timer-screensaver"]').getBoundingClientRect();
+                        return box.x <= 1 && box.y <= 1 &&
+                            box.width >= innerWidth - 2 && box.height >= innerHeight - 2;
+                    }""")
                     assert host.evaluate('document.documentElement.scrollWidth <= innerWidth')
                     box = scene.bounding_box()
                     assert box and box['x'] <= 1 and box['y'] <= 1 and box['width'] >= width - 2 and box['height'] >= height - 2, box
                     if width in (320, 1366):
                         host.screenshot(path=str(screenshots / f'screensaver-{motion}-{width}.png'))
-                matching(hidden_lineup.locator('.person-row'), order)
+                snapshot = next(iter(api.entries.values()))['snapshot']
+                visible_indices = snapshot['lists'][0]['indices']
+                expect(order.get_by_role('listitem')).to_have_count(len(visible_indices))
+                for index in visible_indices:
+                    expect(order).to_contain_text(snapshot['participants'][index]['name'])
                 with phone.expect_response(lambda response: response.request.method == 'GET'
                         and '/api/timer-remote?' in response.url
                         and (response.json().get('snapshot') or {}).get('version') == next(iter(api.entries.values()))['snapshot']['version']):
@@ -1172,15 +1200,18 @@ def synchronized_smoke():
                 for number in range(2, 13):
                     expect(host.locator('#speaker-name')).to_have_text(f'Participant {number:02}')
                     host.locator('#next-button').click()
-                completed = host.get_by_role('dialog', name='Point terminé', exact=True)
+                completed = host.get_by_role('region', name='Point quotidien du jour', exact=True)
                 expect(completed).to_be_visible()
+                expect(completed.get_by_role('heading', name='Bilan du jour', exact=True)).to_be_visible()
                 expect(completed.get_by_role('heading', name='Classement du jour', exact=True)).to_be_visible()
-                expect(completed.locator('[data-completed]')).to_have_attribute('data-completed', 'true')
+                expect(host.get_by_test_id('timer-screensaver')).to_have_count(0)
                 assert len(api.archived) == 1, api.archived
                 assert len(api.archived[0]['people']) == 12
+                completed.get_by_role('button', name='Présenter le bilan', exact=True).click()
+                expect(completed.get_by_role('button', name='Quitter la présentation du bilan', exact=True)).to_have_attribute('aria-pressed', 'true')
                 host.screenshot(path=str(screenshots / f'completed-{motion}.png'))
-                completed.get_by_role('button', name='Revenir au bilan', exact=True).first.click()
-                expect(completed).not_to_be_visible()
+                completed.get_by_role('button', name='Quitter la présentation du bilan', exact=True).click()
+                expect(completed.get_by_role('button', name='Présenter le bilan', exact=True)).to_be_visible()
                 expect(host.locator('.daily-score-list')).to_be_visible()
                 expect(host.get_by_role('button', name='Voir le bilan du jour', exact=True)).to_have_count(0)
                 host.reload()
@@ -1191,7 +1222,7 @@ def synchronized_smoke():
                 assert not errors, errors
                 host_guard.assert_no_unexpected_api()
                 phone_guard.assert_no_unexpected_api()
-                print(f'PASS adaptive capacities {capacities}, mirrored phone pages, shared SVG reuse, stacked notes/mood, pause/resume, automatic completion leaderboard and reload without duplicate archive: {motion}', flush=True)
+                print(f'PASS adaptive capacities {capacities}, mirrored phone pages, shared SVG reuse, stacked notes/mood, pause/resume, daily summary/presentation and reload without duplicate archive: {motion}', flush=True)
             except Exception:
                 print('Host state:', host.evaluate('''() => ({hidden:document.hidden,
                     fullscreen:Boolean(document.fullscreenElement),

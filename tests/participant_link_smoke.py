@@ -14,6 +14,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from playwright.sync_api import expect, sync_playwright
+from browser_bootstrap import install_browser_bootstrap
 
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000').rstrip('/')
@@ -110,6 +111,7 @@ def screenshot(page, width, state):
 def ui_case(browser, width, height):
     context = browser.new_context(viewport={'width': width, 'height': height},
                                   reduced_motion='reduce', service_workers='block')
+    bootstrap = install_browser_bootstrap(context)
     mock = MockAPI()
     context.route('**/api/**', mock.route)
     # Deterministic clipboard denial, without touching the system clipboard.
@@ -125,22 +127,16 @@ def ui_case(browser, width, height):
     page.on('pageerror', lambda error: errors.append(str(error)))
     try:
         page.goto(f'{BASE}/manage-team?team={TEAM}')
-        introduction = page.get_by_role('button', name='Fermer l’introduction', exact=True)
-        if introduction.count():
-            introduction.click()
-        continue_without_fullscreen = page.get_by_role('button', name='Continuer sans plein écran', exact=True)
-        if width >= 1024:
-            expect(continue_without_fullscreen).to_be_visible()
-            continue_without_fullscreen.click()
         expect(page.locator('#manage-team-heading')).to_have_text(NAME)
         expect(page.locator('.site-header [role="status"]')).to_have_attribute(
             'title', 'Équipe enregistrée dans Neon.')
-        button = page.get_by_role('button', name='Lien participants', exact=True)
+        button = page.get_by_role('button', name='Réglages et outils', exact=True)
         expect(button).to_be_visible()
         assert button.bounding_box()['height'] >= 44
         roster_fits(page)
         screenshot(page, width, 'roster')
         button.click()
+        page.get_by_role('menuitem', name='Lien participants', exact=True).click()
         dialog = page.get_by_role('dialog', name=f'Portail participants · {NAME}', exact=True)
         expect(dialog).to_be_visible()
         field = dialog.get_by_role('textbox', name='Lien à partager', exact=True)
@@ -175,6 +171,7 @@ def ui_case(browser, width, height):
 
         mock.unavailable = True
         button.click()
+        page.get_by_role('menuitem', name='Lien participants', exact=True).click()
         expect(dialog).to_be_visible()
         expect(dialog.get_by_role('alert')).to_contain_text(UNAVAILABLE)
         expect(dialog.get_by_role('textbox')).to_have_count(0)
@@ -194,6 +191,7 @@ def ui_case(browser, width, height):
             expect(page.locator(stale_links)).to_have_count(0)
         assert not [r for r in mock.requests if r[0] == 'PUT'], mock.requests
         assert not errors, errors
+        bootstrap.assert_no_unexpected_api()
         assert not mock.unexpected, mock.unexpected
         assert [r for r in mock.requests if r[0] != 'GET'] == [
             ('POST', '/api/participant-link', TEAM), ('POST', '/api/participant-link', TEAM)]

@@ -167,7 +167,8 @@ def read_history(page, db, team_id):
 
 def daily_readback(page, person, other):
     expect(page.get_by_role('heading', name='Bilan du jour', exact=True)).to_be_visible()
-    page.get_by_role('button', name='Voir le bilan du jour', exact=True).click()
+    if page.viewport_size['width'] < 1024:
+        page.get_by_role('button', name='Classement', exact=True).click()
     scores = page.locator('.daily-score-list')
     expect(scores.get_by_text(person, exact=True)).to_be_visible()
     expect(scores.get_by_text(other, exact=True)).to_have_count(0)
@@ -205,6 +206,7 @@ with sync_playwright() as p:
         context.route('**/api/mood-meters/catalog', lambda route: route.fulfill(json=CATALOG))
         context.route('**/api/mood-meters/decks/*', lambda route: route.fulfill(json={
             'title': 'Mock slides', 'slides': [f'mood-meters/slides/{route.request.url.rsplit("/", 1)[-1]}/page1.svg']}))
+        context.route('**/api/mood-meters/decks/*/titles', lambda route: route.fulfill(json={'titles': [None], 'subtitles': [None]}))
         context.route('**/mood-meters/slides/**/*.svg', lambda route: route.fulfill(
             content_type='image/svg+xml', body='<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="1600" height="900" fill="#eaf2fa"/></svg>'))
         page = context.new_page()

@@ -72,6 +72,8 @@ with sync_playwright() as p:
         page.goto(BASE + '/timer')
         expect(page.locator('#daily-dashboard')).to_be_visible()
         expect(page.get_by_role('button', name='Voir le bilan du jour', exact=True)).to_have_count(0)
+        if width < 1024:
+            page.get_by_role('button', name='Classement', exact=True).click()
         page.get_by_role('button', name='Comprendre le score de Alice').click()
         dialog = page.get_by_role('dialog')
         expect(dialog).to_contain_text('Score enregistré : 867 pts')

@@ -29,7 +29,7 @@ def run():
     for origin, path in [(MASTER, '/help'), (PORTAL, '/')]:
         status, _, body = request(origin, path)
         assert status == 200 and b'<html' in body, (origin, path, status)
-    for path in ['/statistics', '/daily-notes']:
+    for path in ['/statistics', '/daily-notes', '/unknown-page', '/unknown-page/nested']:
         assert request(MASTER, path)[0] == 404, path
     assert request(MASTER, '/api/participant-portal')[0] == 403
     status, headers, _ = request(PORTAL, '/api/team')

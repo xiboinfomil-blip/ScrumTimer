@@ -4,6 +4,7 @@ import tempfile
 from copy import deepcopy
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
+from browser_bootstrap import install_browser_bootstrap, mauritius_day
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 TEAM_ID = 'a' * 64
@@ -12,7 +13,8 @@ SIZES = [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768), (1920, 1
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for preference in ['no-preference', 'reduce']:
-        context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion=preference)
+        context = browser.new_context(viewport={'width': 1366, 'height': 768}, reduced_motion=preference, service_workers='block')
+        bootstrap = install_browser_bootstrap(context)
         state = {'team': {'roster': [dict(id=str(i), name=name, present=i != 3, mood=None, moodUpdatedAt=None) for i, name in enumerate(['Alice', 'Benoît', 'Chloé', 'David'])], 'duration': 120, 'warning': 30, 'sound': False, 'session': [], 'usedMoodMeters': []}, 'revision': 1}
         errors = []
         def api(route):
@@ -25,13 +27,15 @@ with sync_playwright() as p:
                     state['revision'] += 1
                 route.fulfill(json=state)
             elif path == 'history':
-                route.fulfill(json={'rounds': [], 'day': '2026-10-15'})
+                route.fulfill(json={'rounds': [], 'day': mauritius_day()})
             elif path == 'daily-meter':
-                route.fulfill(json={'day': '2026-10-15', 'meter': {'meterId': 'original', 'title': 'Baromètre original'}})
+                route.fulfill(json={'day': mauritius_day(), 'meter': {'meterId': 'original', 'title': 'Baromètre original'}})
             elif path == 'mood-meters/catalog':
                 route.fulfill(json=[])
+            elif path == 'timer-remote':
+                route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'})
             else:
-                raise AssertionError(f'Unexpected API {path}')
+                route.fallback()
         context.route('**/api/**', api)
         context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
         page = context.new_page()
@@ -67,6 +71,7 @@ with sync_playwright() as p:
         if preference == 'reduce':
             assert page.evaluate("document.getAnimations().filter(a => a.playState === 'running').length") == 0
         assert not errors, errors
+        bootstrap.assert_no_unexpected_api()
         context.close()
         print(f'PASS accessible workflow navigation / guarded timer / route transitions / six viewports / {preference}')
     browser.close()

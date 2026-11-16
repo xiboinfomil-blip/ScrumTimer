@@ -338,8 +338,8 @@ def run_case(browser, width, height, motion, screenshots):
             page.get_by_role('button', name='Tickets & pense-bête', exact=True).click()
         expect(sidebar).to_contain_text(('jira:b' if first_id == 'jira:a' else 'jira:a') + ' ticket 1')
         expect(sidebar.get_by_role('combobox', name='Filtrer les tickets Jira', exact=True)).to_have_value('speaker')
-        assert db.ticket_reads == ['initial'] * 3 + ['1', '1'], db.ticket_reads
-        assert db.ticket_statuses == ['indeterminate', 'done', 'new', 'indeterminate', 'indeterminate'], db.ticket_statuses
+        assert db.ticket_reads == ['initial', '1', '1'], db.ticket_reads
+        assert db.ticket_statuses == ['all', 'all', 'all'], db.ticket_statuses
         page.goto(BASE + '/manage-team?team=' + SPRINT)
         expect(page.get_by_role('button', name='Synchroniser les participants', exact=True)).to_be_disabled()
         bootstrap.assert_no_unexpected_api()

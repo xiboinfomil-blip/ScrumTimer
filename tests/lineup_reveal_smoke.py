@@ -101,6 +101,7 @@ with sync_playwright() as p:
     for width, height in [(320, 568), (390, 844), (768, 1024), (1024, 576), (1366, 768)]:
         for motion in ['no-preference', 'reduce']:
             context, page, start, db, errors = setup(browser, width, height, motion, 40)
+            mixing_started = monotonic()
             start.click()
             dialog = page.get_by_role('dialog', name='Place au hasard, place à l’équipe.')
             expect(dialog).to_be_visible()
@@ -115,7 +116,6 @@ with sync_playwright() as p:
             if motion == 'no-preference':
                 original = cards.evaluate_all('nodes => nodes.map(n => n.dataset.personId)')
                 expect(dialog.get_by_role('status')).to_have_text('Le hasard redistribue les cartes…')
-                mixing_started = monotonic()
                 page.wait_for_function("original => JSON.stringify([...document.querySelectorAll('[role=dialog] li[data-person-id]')].map(n => n.dataset.personId)) !== JSON.stringify(original)", arg=original)
                 moving = page.evaluate("""async () => {
                     const cards = [...document.querySelectorAll('[role=dialog] li[data-person-id]')];

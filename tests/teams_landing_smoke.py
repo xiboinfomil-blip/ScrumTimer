@@ -6,6 +6,7 @@ from copy import deepcopy
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
 from browser_bootstrap import install_browser_bootstrap, team_fixture
+from team_directory_smoke import creation_panel
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 A, B, C = 'a' * 64, 'b' * 64, 'c' * 64
@@ -40,6 +41,9 @@ with sync_playwright() as p:
                         db[key]['revision'] += 1
                     route.fulfill(json={'team': deepcopy(db[key]['team']), 'revision': db[key]['revision']})
                 elif path == '/api/history': route.fulfill(json={'rounds': []})
+                elif path == '/api/jira': route.fulfill(json={'configured': False, 'connected': False})
+                elif path == '/api/timer-remote' and req.method == 'POST':
+                    route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'})
                 else: route.fallback()
             context.route('**/api/**', api)
             page = context.new_page()
@@ -78,7 +82,8 @@ with sync_playwright() as p:
             expect(page.get_by_role('button', name='Déplacer Bob vers les présents', exact=True)).to_be_visible()
             page.get_by_role('button', name='Déplacer Bob vers les présents', exact=True).click()
             saved()
-            page.get_by_role('link', name='Gérer l’équipe', exact=True).click()
+            page.get_by_role('button', name='Réglages et outils', exact=True).click()
+            page.get_by_role('menuitem', name='Gérer l’équipe', exact=True).click()
             expect(page.locator('#manage-team-heading')).to_have_text('Équipe Bêta')
             page.locator('#checkin-name').fill('Charlie <safe>')
             page.get_by_role('button', name='Enregistrer cette personne', exact=True).click()
@@ -102,12 +107,14 @@ with sync_playwright() as p:
             saved()
             assert [person['name'] for person in db[B]['team']['roster']] == ['Bob']
             assert [person['name'] for person in db[A]['team']['roster']] == ['Alice', 'Alex']
-            page.get_by_role('link', name='Toutes les équipes', exact=True).click()
+            page.get_by_role('button', name='Fermer la gestion de l’équipe', exact=True).click()
+            page.get_by_role('link', name='Accueil du point quotidien Infomil Mauritius', exact=True).click()
             expect(page.locator('#teams-heading')).to_be_visible()
             fits()
             if motion == 'reduce' and width in [320, 1366]: page.screenshot(path=str(Path(tempfile.gettempdir()) / f'scrum-teams-{width}.png'))
-            page.get_by_role('textbox', name='Nom de l’équipe', exact=True).fill('Gamma')
-            page.get_by_role('button', name='Créer une équipe', exact=True).click()
+            panel, field = creation_panel(page, width)
+            field.fill('Gamma')
+            panel.get_by_role('button', name='Créer l’équipe', exact=True).click()
             expect(page.locator('#manage-team-heading')).to_have_text('Gamma')
             expect(page.get_by_text('Votre équipe prend forme ici.', exact=True)).to_be_visible()
             page.reload()

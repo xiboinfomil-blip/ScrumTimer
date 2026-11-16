@@ -54,6 +54,10 @@ with sync_playwright() as p:
                 route.fulfill(json=[{'title': f'Meter {i}', 'remoteId': deck, 'slides': []} for i, deck in enumerate(DECKS)])
             elif path.startswith('/api/mood-meters/decks/'):
                 route.fulfill(json={'title': 'Meter', 'slides': ['mood-meters/slides/test/page.svg']})
+            elif path == '/api/jira':
+                route.fulfill(json={'connected': False})
+            elif path == '/api/timer-remote' and req.method == 'POST':
+                route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'})
             else:
                 route.fallback()
 
@@ -108,7 +112,8 @@ with sync_playwright() as p:
         page.wait_for_url('**/teams*')
         page.get_by_role('button', name='Ouvrir l’équipe Alpha', exact=True).click()
         expect(page.get_by_role('button', name='Choisir une équipe : Alpha', exact=True)).to_have_count(0)
-        page.wait_for_function("new URL(location.href).searchParams.get('team') === '" + A + "'")
+        page.wait_for_function("location.pathname === '/participants' && new URL(location.href).searchParams.get('team') === '" + A + "'")
+        expect(page.locator('#participants-page')).to_be_visible()
         page.reload()
         expect(page.get_by_text('Alice', exact=True)).to_be_visible()
         page.goto(BASE + '/participants?team=deleted')

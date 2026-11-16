@@ -1,7 +1,7 @@
 """Tab recovery and automatic Neon retries; all APIs mocked, no database writes."""
 import os
 from playwright.sync_api import sync_playwright, expect
-from fullscreen_helpers import emulate_fullscreen
+from browser_bootstrap import install_browser_bootstrap, mauritius_day
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3001')
 TEAM_ID = 'a' * 64
@@ -9,12 +9,12 @@ TEAM_ID = 'a' * 64
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for width, height in [(320, 568), (1366, 768)]:
-        context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce')
-        emulate_fullscreen(context)
+        context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce', service_workers='block')
+        bootstrap = install_browser_bootstrap(context)
         model = {'team': {'roster': [
             {'id': name.lower(), 'name': name, 'present': True, 'mood': 2, 'moodUpdatedAt': None}
             for name in ['Alice', 'Bob']], 'session': [], 'duration': 120,
-            'warning': 20, 'sound': False, 'usedMoodMeters': []},
+            'warning': 30, 'sound': False, 'usedMoodMeters': []},
             'revision': 1, 'loads': 0, 'writes': 0, 'outage': False, 'history_posts': 0, 'meter': None}
 
         def api(route):
@@ -55,15 +55,17 @@ with sync_playwright() as p:
             elif path == 'daily-meter':
                 if method == 'POST':
                     model['meter'] = route.request.post_data_json
-                route.fulfill(json={'day': '2026-10-19', 'meter': model['meter']})
+                route.fulfill(json={'day': mauritius_day(), 'meter': model['meter']})
             elif path == 'mood-meters/catalog':
                 route.fulfill(json=[])
             elif path == 'daily-hints':
-                route.fulfill(json={'day': '2026-10-19', 'hints': []})
+                route.fulfill(json={'day': mauritius_day(), 'hints': []})
             elif path == 'meeting-settings':
                 route.fulfill(json={'prompts': ['Hier ?', 'Aujourd’hui ?', 'Blocages ?'], 'revision': 0})
+            elif path == 'timer-remote':
+                route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'})
             else:
-                route.fulfill(status=404, json={})
+                route.fallback()
 
         context.route('**/api/**', api)
         page = context.new_page()
@@ -86,7 +88,7 @@ with sync_playwright() as p:
         page.reload()
         expect(page.locator('#speaker-name')).to_have_text(first)
         expect(page.locator('#start-button')).to_contain_text('Pause')
-        expect(page.locator('#speaker-turn-cue')).to_contain_text('Merci de passer la parole')
+        expect(page.locator('#time-up-alert')).to_contain_text('Merci de passer la parole')
         page.locator('#start-button').click()
         paused = page.locator('#timer-display').inner_text()
         page.reload()
@@ -104,6 +106,7 @@ with sync_playwright() as p:
         page.wait_for_function("!Object.keys(sessionStorage).some(key => key.startsWith('standup.timer.tab.v1:'))", timeout=15000)
         assert model['history_posts'] >= 3, model
         assert not errors, errors
+        bootstrap.assert_no_unexpected_api()
         print(f'PASS {width}x{height}: load retries, lost PUT reconciliation, running/overtime/paused refresh, handoff, history retries')
         context.close()
     browser.close()

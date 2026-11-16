@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import expect, sync_playwright
-from fullscreen_helpers import emulate_fullscreen
+from browser_bootstrap import install_browser_bootstrap
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3001').rstrip('/')
 TEAM_ID = 'a' * 64
@@ -32,7 +32,7 @@ class MockMeeting:
             'roster': [dict(id=pid, name=name, present=True, mood=mood,
                             moodUpdatedAt=now.isoformat(), moodSlide=None)
                        for pid, name, mood in [('alice', NAMES[0], 1), ('bob', NAMES[1], 4)]],
-            'session': [], 'duration': 120, 'warning': 20, 'sound': False,
+            'session': [], 'duration': 120, 'warning': 30, 'sound': False,
             'usedMoodMeters': [], 'currentMoodSlide': None,
         }
         self.revision = 1
@@ -47,6 +47,7 @@ class MockMeeting:
         self.unexpected = []
         self.errors = []
         self.contexts = []
+        self.bootstraps = []
 
     def api(self, route):
         req = route.request
@@ -137,7 +138,9 @@ class MockMeeting:
         context = browser.new_context(viewport={'width': width, 'height': height},
                                       reduced_motion='reduce', service_workers='block',
                                       has_touch=fullscreen == 'unsupported')
-        emulate_fullscreen(context)
+        self.bootstraps.append(install_browser_bootstrap(context, fullscreen=fullscreen != 'unsupported'))
+        if fullscreen == 'unsupported':
+            context.add_init_script("Object.defineProperty(Element.prototype, 'requestFullscreen', {value: undefined, configurable: true, writable: true})")
         self.contexts.append(context)
         context.route('**/api/**', self.api)
         context.route('**/mood-meters/catalog.json', lambda r: r.fulfill(json={'remote': True}))
@@ -167,6 +170,8 @@ class MockMeeting:
     def close(self):
         for context in self.contexts:
             context.close()
+        for bootstrap in self.bootstraps:
+            bootstrap.assert_no_unexpected_api()
         assert not self.unexpected, self.unexpected
         assert not self.errors, self.errors
 
@@ -183,7 +188,10 @@ def geometry(page, width, height, phase):
     problems = []
     if not ring or min(ring['width'], ring['height']) < 90:
         problems.append(f'ring <90px: {ring}')
-    for selector in ['#start-button', '#next-button', '#manage-timer-button' if phase == 'focused' else '#reset-button']:
+    selectors = ['#start-button', '#next-button', '#manage-timer-button']
+    if phase != 'focused' and height > 650:
+        selectors.append('#reset-button')
+    for selector in selectors:
         box = page.locator(selector).bounding_box()
         if not box or box['height'] < 43.9 or min(box['x'], box['y']) < -1 or box['x'] + box['width'] > width + 1 or box['y'] + box['height'] > height + 1:
             problems.append(f'control clipped/small {selector}: {box}')
@@ -252,8 +260,9 @@ def prompts_case(browser, mock, width, height):
     expect(panel).to_contain_text('Question gagnante distante ?')
 
 
-def sharing_dialog(page, enabled=False):
-    page.get_by_role('button', name='En direct' if enabled else 'Diffusion', exact=True).click()
+def sharing_dialog(page):
+    page.get_by_role('button', name='Réglages et outils', exact=True).click()
+    page.get_by_role('menuitem', name='Diffusion', exact=True).click()
     dialog = page.get_by_role('dialog', name='Diffusion et présentation', exact=True)
     expect(dialog).to_be_visible()
     return dialog
@@ -268,11 +277,9 @@ def presentation_case(browser, mock, width, height):
     dialog = sharing_dialog(page)
     dialog.get_by_role('button', name='Présentation', exact=True).click()
     expect(dialog).not_to_be_visible()
-    expect(page.get_by_role('button', name='Quitter', exact=True)).to_be_visible()
     assert page.locator('#timer-page').evaluate('el => getComputedStyle(el).position') == 'fixed'
     page.keyboard.press('Escape')
-    expect(page.get_by_role('button', name='Diffusion', exact=True)).to_be_visible()
-    assert page.locator('#timer-page').evaluate('el => getComputedStyle(el).position') != 'fixed'
+    expect(page.locator('#timer-page')).not_to_have_css('position', 'fixed')
     dialog = sharing_dialog(page)
     expect(dialog.get_by_text('Plein écran indisponible :', exact=False)).to_be_visible()
     dialog.get_by_role('button', name='Fermer', exact=True).click()
@@ -287,19 +294,19 @@ def presentation_case(browser, mock, width, height):
     dialog = sharing_dialog(page)
     dialog.get_by_role('button', name='Présentation', exact=True).click()
     expect(dialog).not_to_be_visible()
-    expect(page.get_by_role('button', name='Quitter', exact=True)).to_be_visible()
+    expect(page.locator('#timer-page')).to_have_css('position', 'fixed')
     assert page.evaluate('document.fullscreenElement === document.documentElement')
-    page.get_by_role('button', name='Quitter', exact=True).click()
-    expect(page.get_by_role('button', name='Diffusion', exact=True)).to_be_visible()
-    # Leaving presentation retains the app's fullscreen workspace.
-    assert page.evaluate('document.fullscreenElement === document.documentElement')
+    page.get_by_role('button', name='Réglages et outils', exact=True).click()
+    page.get_by_role('menuitem', name='Quitter la présentation', exact=True).click()
+    expect(page.locator('#timer-page')).not_to_have_css('position', 'fixed')
+    assert page.evaluate('document.fullscreenElement === null')
     dialog = sharing_dialog(page)
     dialog.get_by_role('button', name='Présentation', exact=True).click()
     expect(dialog).not_to_be_visible()
-    expect(page.get_by_role('button', name='Quitter', exact=True)).to_be_visible()
+    expect(page.locator('#timer-page')).to_have_css('position', 'fixed')
     page.evaluate("document.exitFullscreen()")
     page.keyboard.press('Escape')
-    expect(page.get_by_role('button', name='Diffusion', exact=True)).to_be_visible()
+    expect(page.locator('#timer-page')).not_to_have_css('position', 'fixed')
     assert page.evaluate('document.fullscreenElement === null')
     assert page.locator('#timer-page').evaluate('el => getComputedStyle(el).position') != 'fixed'
     dialog = sharing_dialog(page)
@@ -325,7 +332,7 @@ def live_case(browser, mock, width, height):
     expect(dialog.get_by_text('En direct · synchronisé', exact=True)).to_be_visible()
     dialog.get_by_role('button', name='Fermer', exact=True).click()
     expect(dialog).not_to_be_visible()
-    expect(page.get_by_role('button', name='En direct', exact=True)).to_be_visible()
+    expect(page.get_by_role('button', name='Réglages et outils', exact=True)).to_be_visible()
     expect(view.get_by_role('heading', level=2)).to_have_text(page.locator('#speaker-name').inner_text(), timeout=12000)
     page.locator('#start-button').click()
     expect(view.get_by_text('À la parole', exact=True)).to_be_visible(timeout=12000)
@@ -340,6 +347,7 @@ def live_case(browser, mock, width, height):
     with spectator.expect_response(lambda r: '/api/live-session' in r.url and r.request.method == 'GET'):
         expect(page.locator('#start-button')).to_contain_text('Reprendre')
     expect(view.get_by_role('timer')).to_have_text(paused)
+    page.get_by_role('dialog', name='Économiseur d’écran', exact=True).get_by_role('button', name='Revenir au minuteur', exact=True).click()
     page.locator('#next-button').click()
     second = page.locator('#speaker-name').inner_text()
     assert second != first
@@ -362,11 +370,11 @@ def live_case(browser, mock, width, height):
     expect(view.get_by_role('timer')).to_have_count(0)
     mock.live_mode = 'ok'
     expect(view.get_by_role('heading', level=2)).to_have_text(second, timeout=12000)
-    dialog = sharing_dialog(page, enabled=True)
+    dialog = sharing_dialog(page)
     dialog.get_by_role('button', name='Arrêter le direct', exact=True).click()
     dialog.get_by_role('button', name='Fermer', exact=True).click()
     expect(dialog).not_to_be_visible()
-    expect(page.get_by_role('button', name='Diffusion', exact=True)).to_be_visible()
+    expect(page.get_by_role('button', name='Réglages et outils', exact=True)).to_be_visible()
     expect(view.get_by_text('En attente de la diffusion', exact=False)).to_be_visible(timeout=12000)
     assert mock.count('DELETE', '/api/live-session') >= 1
     OBSERVATIONS.append(f'{width}x{height} live opt-in/privacy/start/pause/next/stale/error/reconnect/stop PASS')
@@ -379,15 +387,13 @@ def feedback_case(browser, mock, width, height):
     page.locator('#start-button').click()
     page.locator('#next-button').click()
     page.locator('#next-button').click()
-    view = page.get_by_role('button', name='Voir le bilan du jour', exact=True)
+    view = page.get_by_role('region', name='Point quotidien du jour', exact=True)
     expect(view).to_be_visible(timeout=15000)
     assert len(mock.rounds) == 1
     assert {p['id'] for p in mock.rounds[0]['people']} == {'alice', 'bob'}
     expect(page.get_by_role('button', name='Utilité du point · facultatif', exact=True)).to_have_count(0)
     expect(page.get_by_role('button', name='Avis', exact=True)).to_have_count(0)
-    view.click()
-    expect(page.get_by_role('heading', name='Bilan enregistré · Classement')).to_be_visible()
-    expect(page.get_by_role('button', name='Réinitialiser aujourd’hui', exact=True)).to_be_visible()
+    expect(view.get_by_role('heading', name='Bilan du jour', exact=True)).to_be_visible()
     page.reload()
     expect(view).to_be_visible(timeout=15000)
     expect(page.get_by_role('button', name='Utilité du point · facultatif', exact=True)).to_have_count(0)

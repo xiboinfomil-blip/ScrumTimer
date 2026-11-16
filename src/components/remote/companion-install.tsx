@@ -32,6 +32,7 @@ export function CompanionInstall() {
   const [storageError, setStorageError] = useState('');
   const mounted = useRef(false);
   const installedRef = useRef(false);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     mounted.current = true;
@@ -139,12 +140,12 @@ export function CompanionInstall() {
     <aside aria-label="Installer la télécommande" className="rounded-2xl border border-slate-200/80 bg-white p-3 text-xs text-slate-600">
       {!installed && (
         <>
-          <Button onClick={() => setOpen(true)} aria-haspopup="dialog"
+          <Button ref={trigger} onClick={() => setOpen(true)} aria-haspopup="dialog"
             aria-controls={open ? 'companion-install-dialog' : undefined}
             className={cn("min-h-[44px] min-w-[44px] normal-case", "text-brand")} variant="ghost" size="sm">
             Ajouter l’application
           </Button>
-          <Dialog open={open} onOpenChange={next => { if (!next) (() => setOpen(false))?.(); }}><DialogContent showCloseButton={false} className="min-h-0 max-w-[600px]" aria-labelledby="companion-install-title" aria-describedby="companion-install-description" id={'companion-install-dialog'}>
+          <Dialog open={open} onOpenChange={next => { if (!next) (() => setOpen(false))?.(); }}><DialogContent showCloseButton={false} className="min-h-0 max-w-[600px]" aria-labelledby="companion-install-title" aria-describedby="companion-install-description" id={'companion-install-dialog'} onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus(); }}>
             <DialogTitle id="companion-install-title" className="shrink-0 px-5 pt-5 pb-2">Installer la télécommande</DialogTitle>
             <div className="min-h-0 overflow-y-auto px-5 py-3 border-y border-line">
               <DialogDescription id="companion-install-description" className="mb-3 text-sm leading-relaxed text-slate-600">

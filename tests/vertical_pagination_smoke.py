@@ -65,6 +65,9 @@ def setup(browser, width, height, motion):
                                            'title': 'Baromètre original'}}
         elif path == '/api/mood-meters/catalog' and request.method == 'GET':
             payload = []
+        elif path == '/api/timer-remote' and request.method == 'POST':
+            route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'})
+            return
         else:
             db['unexpected'].append(f'{request.method} {path}')
             route.fulfill(status=501, json={'error': 'Unexpected mocked API'})

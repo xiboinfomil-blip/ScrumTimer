@@ -3,12 +3,14 @@ import os
 import tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
+from browser_bootstrap import install_browser_bootstrap, mauritius_day
 
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3000')
 SIZES = [(320, 568), (390, 844), (768, 1024), (820, 568), (900, 600), (1024, 576), (1366, 768)]
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    context = browser.new_context(reduced_motion='reduce')
+    context = browser.new_context(reduced_motion='reduce', service_workers='block')
+    bootstrap = install_browser_bootstrap(context)
     roster = [dict(id=str(i), name='Une personne avec un nom particulièrement long ' + str(i), present=True, mood=2, moodUpdatedAt=None) for i in range(30)]
     team = dict(roster=roster, session=[person['id'] for person in roster], duration=120, warning=30, sound=False, usedMoodMeters=[])
     def api(route):
@@ -20,9 +22,19 @@ with sync_playwright() as p:
         elif path == 'history':
             value = dict(rounds=[])
         elif path == 'daily-meter':
-            value = dict(day='2026-10-15', meter=dict(meterId='original', title='Baromètre original'))
-        else:
+            value = dict(day=mauritius_day(), meter=dict(meterId='original', title='Baromètre original'))
+        elif path == 'daily-hints':
+            value = dict(day=mauritius_day(), hints=[])
+        elif path == 'meeting-settings':
+            value = dict(prompts=[], revision=0)
+        elif path == 'timer-remote':
+            route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'})
+            return
+        elif path == 'mood-meters/catalog':
             value = []
+        else:
+            route.fallback()
+            return
         route.fulfill(json=value)
     context.route('**/api/**', api)
     context.route('**/mood-meters/catalog.json', lambda route: route.fulfill(json={'remote': True}))
@@ -73,5 +85,6 @@ with sync_playwright() as p:
     expect(page.locator('#meter-catalogue-select')).to_have_value('-2')
     assert attempts[0] == 5
     print('PASS catalogue 503 message and retry recovery')
+    bootstrap.assert_no_unexpected_api()
     context.close()
     browser.close()

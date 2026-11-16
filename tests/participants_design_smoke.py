@@ -26,6 +26,8 @@ with sync_playwright() as p:
                 route.fulfill(json={'rounds': [], 'day': '2026-10-15'})
             elif path == 'participant-link' and route.request.method == 'POST':
                 route.fulfill(json={'url': 'https://participants.example/t/signed-team-link'})
+            elif path == 'timer-remote':
+                route.fulfill(status=503, json={'error': 'Remote controls are disabled in this test.'})
             else:
                 raise AssertionError(path)
         context.route('**/api/**', api)
@@ -34,7 +36,9 @@ with sync_playwright() as p:
             data['team']['roster'] = [dict(id=str(i), name=f'Participant au nom particulièrement long {i}', present=i % 3 != 0, mood=None, moodUpdatedAt=None) for i in range(count)]
             page.goto(BASE + '/participants')
             expect(page.get_by_role('heading', name='Présences', exact=True)).to_be_visible()
-            expect(page.get_by_role('link', name='Gérer l’équipe', exact=True)).to_be_visible()
+            page.get_by_role('button', name='Réglages et outils', exact=True).click()
+            expect(page.get_by_role('menuitem', name='Gérer l’équipe', exact=True)).to_be_visible()
+            page.keyboard.press('Escape')
             expect(page.locator('#checkin-name')).to_have_count(0)
             expect(page.get_by_role('button', name='Continuer vers les humeurs')).to_be_enabled() if count else expect(page.get_by_role('button', name='Continuer vers les humeurs')).to_be_disabled()
             for width, height in SIZES:
@@ -71,15 +75,16 @@ with sync_playwright() as p:
                 expect(page.get_by_role('button', name=f'Déplacer {name} vers les présents', exact=True)).to_be_visible()
                 search.fill('')
         page.set_viewport_size({'width': 320, 'height': 568})
-        page.get_by_role('button', name='Lien participants', exact=True).click()
+        page.get_by_role('button', name='Réglages et outils', exact=True).click()
+        page.get_by_role('menuitem', name='Lien participants', exact=True).click()
         dialog = page.get_by_role('dialog', name='Portail participants · Équipe Produit', exact=True)
         expect(dialog).to_be_visible()
-        team_name = dialog.get_by_role('textbox', name='Nom d’équipe pour le partage')
+        team_name = dialog.get_by_role('textbox', name='Nom d’équipe dans le lien', exact=True)
         expect(team_name).to_have_value('Équipe Produit')
         expect(dialog.get_by_role('img', name='QR code du lien participant pour Équipe Produit')).to_be_visible()
         team_name.fill('Équipe mobile')
         expect(dialog.get_by_role('img', name='QR code du lien participant pour Équipe mobile')).to_be_visible()
-        dialog.get_by_role('button', name='Reprendre le nom de l’équipe').click()
+        dialog.get_by_role('button', name='Utiliser le nom de l’équipe', exact=True).click()
         expect(team_name).to_have_value('Équipe Produit')
         expect(dialog.get_by_role('img', name='QR code du lien participant pour Équipe Produit')).to_be_visible()
         dialog.get_by_role('button', name='Fermer').click()

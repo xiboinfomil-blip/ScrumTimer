@@ -57,6 +57,7 @@ export function TeamsPage() {
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [loginTeamId, setLoginTeamId] = useState<string | null>(null);
   const nameInput = useRef<HTMLInputElement>(null);
+  const createTrigger = useRef<HTMLElement | null>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
   const results = filterTeams(teams, { favoritesOnly: view === 'favorites' })
     .filter(team => searchable(team.name).includes(searchable(query.trim())));
@@ -70,6 +71,7 @@ export function TeamsPage() {
     setDirection(next > currentPage ? 1 : -1); setPage(next); listHeading.current?.focus();
   }
   function revealCreate() {
+    createTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setCreateError('');
     setShowCreate(true);
   }
@@ -168,7 +170,7 @@ export function TeamsPage() {
         </div>
       </section>
 
-      <Dialog open={showCreate} onOpenChange={next => { if (!next) (() => { if (!pending) setShowCreate(false); })?.(); }}><DialogContent showCloseButton={false} className="min-h-0 max-h-[calc(100dvh-24px)] w-[calc(100%-24px)] rounded-lg sm:max-h-[calc(100dvh-64px)] max-w-[600px]" aria-labelledby="create-team-heading" aria-describedby="create-team-description" onOpenAutoFocus={event => { event.preventDefault(); (() => nameInput.current?.focus())(); }}>
+      <Dialog open={showCreate} onOpenChange={next => { if (!next) (() => { if (!pending) setShowCreate(false); })?.(); }}><DialogContent showCloseButton={false} className="min-h-0 max-h-[calc(100dvh-24px)] w-[calc(100%-24px)] rounded-lg sm:max-h-[calc(100dvh-64px)] max-w-[600px]" aria-labelledby="create-team-heading" aria-describedby="create-team-description" onOpenAutoFocus={event => { event.preventDefault(); (() => nameInput.current?.focus())(); }} onCloseAutoFocus={event => { event.preventDefault(); createTrigger.current?.focus(); }}>
         <div className="flex shrink-0 items-start justify-between gap-3 border-t-4 border-brand bg-slate-50/70 px-5 pt-4 pb-5 sm:px-7 sm:pt-6"><div className="min-w-0"><span aria-hidden="true" className="mb-3 grid size-11 place-items-center rounded-lg bg-blue-50 text-brand"><NavIcon name="people" width="24" height="24" /></span><DialogTitle id="create-team-heading" className={cn("shrink-0 px-5 pt-5 pb-2", "p-0 text-xl leading-7 font-bold text-ink")}>Ajouter une nouvelle équipe</DialogTitle><DialogDescription id="create-team-description" className="mt-1 text-xs leading-5 text-muted">Un espace partagé pour votre point quotidien.</DialogDescription></div><Button type="button" disabled={pending} onClick={() => setShowCreate(false)} aria-label="Fermer" title="Fermer" className="grid size-11 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand disabled:opacity-50" variant="ghost"><CloseIcon aria-hidden="true" size={20} /></Button></div>
         <div className={cn("min-h-0 overflow-y-auto px-5 py-3", "border-t border-line px-5 py-5 sm:px-7 sm:py-6")}>
           <form id="create-team-form" onSubmit={event => void create(event)} className="flex flex-col gap-3" noValidate aria-busy={pending && !openingId}>

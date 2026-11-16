@@ -35,12 +35,7 @@ with sync_playwright() as p:
             page.clock.run_for(1100)
             expect(intro).to_have_count(0)
             assert not page.locator('#main-content').evaluate('(el) => !!el.closest("[inert]")')
-            if width >= 1024:
-                gate = page.get_by_role('dialog', name='Place à votre équipe', exact=True)
-                expect(gate).to_be_visible()
-                gate.get_by_role('button', name='Entrer en plein écran', exact=True).click()
-                page.clock.run_for(1000)
-                expect(gate).not_to_be_visible()
+            expect(page.get_by_role('dialog', name='Place à votre équipe', exact=True)).to_have_count(0)
             page.get_by_role('link', name='Guide d’utilisation', exact=True).click()
             expect(page).to_have_url(BASE + '/help')
             expect(intro).to_have_count(0)
