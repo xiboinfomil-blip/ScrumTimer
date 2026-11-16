@@ -4,12 +4,12 @@ import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
-import { beginJiraLogin, endJiraLogin, finishJiraLogin, jiraAccessToken, jiraCookie, jiraHash, jiraRequestCookie, jiraSession, jiraStateCookie, openJiraToken, sealJiraToken } from '../src/lib/jira/jira-auth.ts';
+import { beginJiraLogin, endJiraLogin, finishJiraLogin, jiraAccessToken, jiraCookie, jiraFetch, jiraHash, jiraRequestCookie, jiraSession, jiraStateCookie, openJiraToken, sealJiraToken } from '../src/lib/jira/jira-auth.ts';
 import { JiraService } from '../src/lib/jira/jira-service.ts';
 import { assertJiraRoster, authorizeJiraTeam, jiraTeamSprint, saveJiraDisplay, syncJiraRoster, visibleJiraTeams } from '../src/lib/jira/jira-store.ts';
 import { createTeam, deleteTeam, listTeams } from '../src/lib/team/workspace-store.ts';
 import { readTeam, writeTeam } from '../src/lib/persistence/relational-store.ts';
-import { jiraTicketDetails, jiraTickets, sprintParticipants, validateJiraDisplay, validateJiraSelection } from '../src/lib/jira/jira.ts';
+import { groupJiraTickets, jiraTicketDetails, jiraTickets, sprintParticipants, validateJiraDisplay, validateJiraSelection } from '../src/lib/jira/jira.ts';
 import { validateTeamCreation } from '../src/lib/team/team-directory.ts';
 import { JiraResourceCache } from '../src/lib/jira/jira-resource-cache.ts';
 
@@ -47,6 +47,95 @@ test('Jira resource cache does not retain failures or refill cleared entries', a
 });
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+test('Jira read failures are not mislabeled as failed status transitions', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const status of [400, 409, 422]) {
+      globalThis.fetch = async () => new Response(null, { status });
+      await assert.rejects(jiraFetch('https://api.atlassian.com/ex/jira/site/rest/agile/1.0/board'), {
+        status: 502, message: 'Jira est momentanément indisponible.',
+      });
+      await assert.rejects(jiraFetch('https://api.atlassian.com/ex/jira/site/rest/api/3/issue/DEV-1/transitions'), {
+        status: 502, message: 'Jira est momentanément indisponible.',
+      });
+      await assert.rejects(jiraFetch('https://api.atlassian.com/ex/jira/site/rest/api/3/issue/DEV-1/transitions', { method: 'POST' }), {
+        status: 409, message: 'Jira a refusé la transition. Actualisez les statuts ou ouvrez le ticket dans Jira pour compléter les champs requis.',
+      });
+    }
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('Jira hierarchy groups only subtasks, retains filtered parent context and standalone orphans', () => {
+  const issue = (id: string, parent?: string, subtask = false) => ({ id, key: `DEV-${id}`, fields: {
+    summary: `Ticket ${id}`, status: { name: 'Ouvert' }, issuetype: { name: subtask ? 'Sous-tâche' : 'Task', subtask },
+    ...(parent ? { parent: { key: parent } } : {}),
+  } });
+  const tickets = jiraTickets([issue('2', 'DEV-1', true), issue('1', 'DEV-9'), issue('3', 'DEV-1', true), issue('4'), issue('5', 'DEV-99', true), issue('9')], 'https://example.atlassian.net');
+  const groups = groupJiraTickets(tickets, tickets);
+  assert.deepEqual(groups.map(group => [group.ticket.key, group.subtasks.map(child => child.key)]), [
+    ['DEV-1', ['DEV-2', 'DEV-3']], ['DEV-4', []], ['DEV-5', []], ['DEV-9', []],
+  ]);
+  assert.ok(groups.every(group => !group.context));
+  assert.deepEqual(groupJiraTickets(tickets, [tickets[2]]), [{ ticket: tickets[1], subtasks: [tickets[2]], context: true }]);
+  assert.deepEqual(groupJiraTickets(tickets, [tickets[1]]), [{ ticket: tickets[1], subtasks: [], context: false }]);
+  assert.deepEqual(groupJiraTickets(tickets, []), []);
+  assert.throws(() => jiraTickets([issue('6', 'DEV-1 OR key != DEV-2', true)], 'https://example.atlassian.net'), /parente/);
+});
+
+test('Jira transitions verify board membership, workflow requirements and propagate write failures', async () => {
+  const originalFetch = globalThis.fetch;
+  const selection = { cloudId: '12345678-1234-1234-1234-123456789abc', boardId: 1 };
+  let member = true; let permitted = true; let writeStatus = 204; let writes = 0; let backlog = false;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/oauth/token/accessible-resources') return Response.json([{ id: selection.cloudId, name: 'Jira', url: 'https://example.atlassian.net', scopes: ['read:board-scope:jira-software'] }]);
+    if (url.pathname.endsWith('/board')) return Response.json({ values: permitted ? [{ id: 1, name: 'Board', type: 'scrum' }] : [], startAt: 0, isLast: true });
+    if (url.pathname.endsWith('/board/1/issue') || url.pathname.endsWith('/board/1/backlog')) {
+      assert.equal(url.pathname.endsWith('/backlog'), backlog);
+      assert.equal(url.searchParams.get('jql'), 'key = "DEV-2"');
+      return Response.json({ issues: member ? [{ id: '2', key: 'DEV-2' }] : [] });
+    }
+    assert.ok(url.pathname.endsWith('/issue/DEV-2/transitions'));
+    if (init?.method === 'POST') {
+      writes++;
+      assert.deepEqual(JSON.parse(String(init.body)), { transition: { id: '21' } });
+      return new Response(null, { status: writeStatus });
+    }
+    assert.equal(url.searchParams.get('expand'), 'transitions.fields');
+    return Response.json({ transitions: [
+      { id: '21', name: 'Démarrer', to: { name: 'En cours' }, fields: {} },
+      { id: '31', name: 'Clôturer', to: { name: 'Terminé' }, fields: { resolution: { required: true, hasDefaultValue: false } } },
+    ] });
+  };
+  try {
+    const service = () => new JiraService('transition-fixture');
+    assert.deepEqual(await service().transitions(selection, 'DEV-2'), [
+      { id: '21', name: 'Démarrer', status: 'En cours', requiresFields: false },
+      { id: '31', name: 'Clôturer', status: 'Terminé', requiresFields: true },
+    ]);
+    assert.deepEqual(await service().transition(selection, 'DEV-2', '21'), { status: 'En cours' });
+    assert.equal(writes, 1);
+    await assert.rejects(service().transition(selection, 'DEV-2', '31'), { status: 422 });
+    await assert.rejects(service().transition(selection, 'DEV-2', '99'), { status: 409 });
+    await assert.rejects(service().transition(selection, 'DEV-2', '../21'), { status: 400 });
+    await assert.rejects(service().transitions(selection, 'DEV-2 OR key != DEV-1'), { status: 400 });
+    assert.equal(writes, 1);
+    backlog = true;
+    await service().transition(selection, 'DEV-2', '21', true);
+    backlog = false;
+    for (const [status, expected] of [[400, 409], [401, 401], [403, 403], [429, 429], [503, 502]]) {
+      writeStatus = status;
+      await assert.rejects(service().transition(selection, 'DEV-2', '21'), { status: expected });
+    }
+    const before = writes;
+    member = false;
+    await assert.rejects(service().transition(selection, 'DEV-2', '21'), { status: 404 });
+    member = true; permitted = false;
+    await assert.rejects(service().transition(selection, 'DEV-2', '21'), { status: 403 });
+    assert.equal(writes, before);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test('Jira display selection validates strict creation payloads and keeps old defaults', () => {
   const selection = { cloudId: '12345678-1234-1234-1234-123456789abc', boardId: 1, sprintId: 2 };
   assert.deepEqual(validateJiraSelection(selection), selection);
@@ -314,7 +403,7 @@ test('Jira board tickets share all assignees and pages without skipping fresh au
       return Response.json({ startAt: 0, isLast: true, values: forbidden ? [] : [{ id: 7, name: 'Tableau produit', type: 'scrum' }] });
     }
     assert.ok(url.pathname.endsWith('/rest/software/1.0/board/7/issue'));
-    assert.equal(url.searchParams.get('fields'), 'summary,status,priority,assignee,issuetype');
+    assert.equal(url.searchParams.get('fields'), 'summary,status,priority,assignee,issuetype,parent');
     filters.push(url.searchParams.get('jql'));
     assert.ok([null, 'statusCategory = "In Progress"', 'statusCategory = "To Do"', 'statusCategory = "Done"'].includes(url.searchParams.get('jql')));
     issueReads++;

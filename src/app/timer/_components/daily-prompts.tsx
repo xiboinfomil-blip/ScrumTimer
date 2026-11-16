@@ -42,13 +42,14 @@ type SpeakerContent = {
   remaining?: number;
   onReturn?: () => void;
   compact?: boolean;
+  pageScroll?: boolean;
 };
 
 export function DailyPrompts({ className = '', compact = false, ...speaker }: SpeakerContent & { className?: string }) {
   const { activeTeamId, teams } = useTeam();
   return <TeamPrompts key={activeTeamId ?? 'none'} teamId={activeTeamId} sprint={teams.find(team => team.id === activeTeamId)?.kind === 'sprint'} className={className} compact={compact} {...speaker} />;
 }
-function TeamPrompts({ teamId, sprint, className, compact, speakerId, note, notesError, retryNotes, running, remaining = 0, onReturn }: SpeakerContent & { teamId: string | null; sprint: boolean; className: string; compact: boolean }) {
+function TeamPrompts({ teamId, sprint, className, compact, pageScroll = false, speakerId, note, notesError, retryNotes, running, remaining = 0, onReturn }: SpeakerContent & { teamId: string | null; sprint: boolean; className: string; compact: boolean }) {
   const reduced = useReducedMotion();
   const [view, setView] = useState<'notes' | 'tickets'>(sprint ? 'tickets' : 'notes');
   const [settings, setSettings] = useState<MeetingSettings>({ prompts: [...DEFAULT_DISCUSSION_PROMPTS], revision: 0 });
@@ -101,13 +102,13 @@ function TeamPrompts({ teamId, sprint, className, compact, speakerId, note, note
   };
   const standard = settings.prompts.length === 3 && settings.prompts.every((prompt, index) => prompt === DEFAULT_DISCUSSION_PROMPTS[index]);
   return (
-    <section className={`daily-prompts flex min-h-0 min-w-0 flex-col overflow-hidden rounded-none! border-0 bg-white ${compact ? 'gap-2 p-3 [@media(max-height:650px)]:p-2' : 'p-4 [@media(max-height:650px)]:p-3'} ${className}`} aria-labelledby={sprint && view === 'tickets' ? 'jira-tickets-heading' : note ? 'sidebar-note-title' : 'prompts-title'} data-speaker-sidebar>
+    <section className={`daily-prompts flex min-h-0 min-w-0 flex-col ${pageScroll ? '' : 'overflow-hidden'} rounded-none! border-0 bg-white ${compact ? 'gap-2 p-3 [@media(max-height:650px)]:p-2' : 'p-4 [@media(max-height:650px)]:p-3'} ${className}`} aria-labelledby={sprint && view === 'tickets' ? 'jira-tickets-heading' : note ? 'sidebar-note-title' : 'prompts-title'} data-speaker-sidebar>
       <Button type="button" onClick={onReturn} className={`mb-1 flex min-h-11 shrink-0 items-center justify-between gap-3 rounded-md bg-blue-50 px-3 text-left min-[1100px]:hidden ${sprint ? '[@media(max-height:400px)]:hidden' : ''}`} aria-label="Revenir au minuteur" variant="ghost">
         <span className="min-w-0 text-xs font-semibold text-brand">{running ? 'À la parole · voir le minuteur' : 'Revenir au minuteur'}</span>
         <span className={`shrink-0 text-xl font-bold tabular-nums ${remaining < 0 ? 'text-danger' : 'text-brand'}`}>{remaining < 0 ? '+' : ''}{String(Math.floor(Math.ceil(Math.abs(remaining)) / 60)).padStart(2, '0')}:{String(Math.ceil(Math.abs(remaining)) % 60).padStart(2, '0')}</span>
       </Button>
       {sprint && <div role="group" aria-label="Contenu de l’intervenant" className="mb-1 flex h-11 shrink-0 gap-4 border-b border-line">{(['tickets', 'notes'] as const).map(tab => <Button key={tab} type="button" aria-pressed={view === tab} onClick={() => setView(tab)} className={`min-h-11 min-w-0 flex-1 border-b-2 px-2 text-sm font-semibold ${view === tab ? 'border-brand text-brand' : 'border-transparent text-muted hover:bg-slate-50'}`} variant="ghost">{tab === 'tickets' ? 'Tickets Jira' : note ? 'Pense-bête' : 'Questions'}</Button>)}</div>}
-      {sprint && <div className={view === 'tickets' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><JiraTickets teamId={teamId} participantId={speakerId} /></div>}
+      {sprint && <div className={view === 'tickets' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><JiraTickets pageScroll={pageScroll} teamId={teamId} participantId={speakerId} /></div>}
       {(!sprint || view === 'notes') && <>
       <motion.div key={`${speakerId ?? 'none'}-${note ? 'note' : 'questions'}`} initial={reduced ? false : { x: '100%' }} animate={{ x: 0 }} transition={reduced ? { duration: 0 } : { duration: .32, ease: [.22, 1, .36, 1] }} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" data-sidebar-slide>
       {notesError && <div role="alert" className="shrink-0 text-[11px] text-danger">{notesError} <Button onClick={retryNotes} variant="ghost" size="sm">Réessayer les notes</Button></div>}
@@ -115,7 +116,7 @@ function TeamPrompts({ teamId, sprint, className, compact, speakerId, note, note
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line pb-2">
           <h2 id="sidebar-note-title" className="flex min-w-0 items-center gap-2 text-sm font-bold"><EditNoteRounded size={20} className="shrink-0 text-amber-800" /><span className="truncate">Le pense-bête</span></h2><span className="shrink-0 rounded-full border border-orange-300 bg-orange-50 px-2.5 py-1 text-[10px] font-extrabold uppercase text-amber-950">À lire</span>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-md border border-orange-200 border-l-4 border-l-accent bg-orange-50/60 px-3 py-2">
+        <div className={`min-h-0 flex-1 ${pageScroll ? '' : 'overflow-y-auto overscroll-contain'} rounded-md border border-orange-200 border-l-4 border-l-accent bg-orange-50/60 px-3 py-2`}>
           <div data-speaker-hint className="text-ink [&_.participant-note]:whitespace-normal [&_p]:whitespace-pre-line [&_p]:text-sm [&_p]:leading-relaxed [&_li]:text-sm [&_li]:leading-relaxed"><ParticipantNote hint={note} /></div>
         </div>
       </> : <>
@@ -126,7 +127,7 @@ function TeamPrompts({ teamId, sprint, className, compact, speakerId, note, note
       {!loaded && !error && <PageSkeleton variant="timer" scope="section" label="Chargement des questions de l’équipe…" />}
       {error && !editing && <div role="alert" className="text-[11px] text-danger">{error} {!loaded && 'Questions par défaut affichées.'} <Button onClick={retry} variant="ghost" size="sm">Réessayer</Button></div>}
       {notice && <p role="status" className="text-[11px] text-success">{notice}</p>}
-      {(loaded || error) && <div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
+      {(loaded || error) && <div className={`flex min-h-0 flex-col gap-2 ${pageScroll ? '' : 'overflow-y-auto'}`}>
         {settings.prompts.map((prompt, index) => (
           <article className="grid min-w-0 shrink-0 grid-cols-[24px_minmax(0,1fr)] gap-x-3 border-b border-line py-3 last:border-0" key={index}>
             <span aria-hidden="true" className="row-span-3 pt-0.5 text-xs font-bold tabular-nums text-brand">{String(index + 1).padStart(2, '0')}</span><span className="text-[11px] font-semibold text-muted">{standard ? defaultHeadings[index] : 'ÉQUIPE'}</span>

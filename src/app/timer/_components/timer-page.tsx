@@ -71,6 +71,7 @@ export function TimerPage() {
   const note = notes.data?.hints.find(hint => hint.participantId === timer.person?.id);
   const target = useRef<HTMLDivElement>(null);
   const presentation = usePresentation(target);
+  const pageScroll = isSprint && !presentation.presenting;
   const waitingForPostponed = !timer.activeId && timer.people.some(person => person.postponed && !person.done);
   const index = timer.people.findIndex(person => person.id === timer.activeId);
   const lineupPages = Math.max(1, Math.ceil(timer.people.length / lineupCapacity));
@@ -113,7 +114,7 @@ export function TimerPage() {
   if (timer.people.length > 0 && !timer.activeId && timer.people.every(person => person.done)) return <SessionResults timer={{ ...timer, people: roundSpeakers(timer.people) }} />;
 
   return (
-    <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-1 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-0 ${presentation.presenting ? 'fixed inset-x-0 bottom-0 top-[68px] z-[1200] max-w-none! bg-slate-50 p-3 sm:p-6 max-[800px]:top-[105px]' : 'mx-auto w-full'} overflow-hidden`} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
+    <motion.div initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease: [.22, 1, .36, 1] }} ref={target} id="timer-page" className={`flex min-h-0 flex-col gap-3 max-[650px]:gap-2 [@media(max-height:650px)]:gap-0 ${pageScroll ? 'flex-none' : 'flex-1 overflow-hidden'} ${presentation.presenting ? 'fixed inset-x-0 bottom-0 top-[68px] z-[1200] max-w-none! bg-slate-50 p-3 sm:p-6 max-[800px]:top-[105px]' : 'mx-auto w-full'}`} data-page-scroll={pageScroll ? '' : undefined} data-mode={timer.focusMode ? 'speaking' : 'setup'}>
         {navbarActions && createPortal(<TeamNavbarActions onOpenChange={setToolsOpen} timerTools={[
           <DropdownMenuItem key="screensaver" onSelect={() => { if (timer.running) timer.toggle(); setBlackScreen(true); }}><WallpaperRounded />Économiseur d’écran</DropdownMenuItem>,
           <DropdownMenuItem key="lineup" onSelect={() => { if (timer.running) timer.toggle(); setLineupOpen(true); }}><GroupsRounded />Voir le tour de parole</DropdownMenuItem>,
@@ -147,10 +148,10 @@ export function TimerPage() {
         onChange={setView}
         tabs={[{ value: 'timer', label: 'Minuteur' }, { value: 'prompts', label: isSprint ? 'Tickets & pense-bête' : 'Pense-bête & humeur' }]}
       />}
-      <div ref={panels} className="workspace grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-1 items-stretch gap-3 overflow-hidden max-[650px]:gap-2 min-[1100px]:grid-cols-[minmax(0,1.35fr)_minmax(320px,.75fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1" data-view={presentation.presenting ? presentationView : view}>
-        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`min-[1100px]:col-start-1 ${presentation.presenting ? presentationView === 'notes' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
-        <aside aria-label="Pense-bête et humeur" className={`notes-rail grid min-h-0 min-w-0 ${isSprint ? 'grid-rows-[minmax(min(520px,100%),1fr)_auto] overflow-y-auto' : 'grid-rows-[minmax(0,1fr)_auto] overflow-hidden'} gap-3 min-[1100px]:border-l min-[1100px]:border-line min-[1100px]:pl-3 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? presentationView === 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'prompts' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`}>
-          <DailyPrompts compact={timer.focusMode} speakerId={timer.activeId} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => presentation.presenting ? setPresentationView('timer') : setView('timer')} />
+      <div ref={panels} className={`workspace grid min-h-0 min-w-0 grid-cols-1 gap-3 max-[650px]:gap-2 min-[1100px]:grid-cols-[minmax(0,1.35fr)_minmax(320px,.75fr)] min-[1100px]:gap-4 [@media(max-height:650px)]:grid-cols-1 ${pageScroll ? 'flex-none grid-rows-[auto] items-start' : 'flex-1 grid-rows-1 items-stretch overflow-hidden'}`} data-view={presentation.presenting ? presentationView : view}>
+        <TimerPanel notes={notes} timer={{ ...timer, manage: () => { if (presentation.presenting) void presentation.toggle(); timer.manage(); } }} className={`min-[1100px]:col-start-1 ${pageScroll ? 'h-[calc(100dvh-140px)] min-h-[480px] overflow-visible! min-[1100px]:sticky min-[1100px]:top-0' : ''} ${presentation.presenting ? presentationView === 'notes' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`} />
+        <aside aria-label="Pense-bête et humeur" className={`notes-rail grid min-h-0 min-w-0 ${pageScroll ? 'grid-rows-[auto_auto]' : isSprint ? 'grid-rows-[minmax(min(520px,100%),1fr)_auto] overflow-y-auto' : 'grid-rows-[minmax(0,1fr)_auto] overflow-hidden'} gap-3 min-[1100px]:border-l min-[1100px]:border-line min-[1100px]:pl-3 [@media(max-height:650px)]:gap-1 ${presentation.presenting ? presentationView === 'timer' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : '' : view !== 'prompts' ? 'max-[1099px]:hidden [@media(max-height:650px)]:hidden' : ''}`}>
+          <DailyPrompts pageScroll={pageScroll} compact={timer.focusMode} speakerId={timer.activeId} note={note?.hint} notesError={notes.error} retryNotes={notes.retry} running={timer.running} remaining={timer.remaining} onReturn={() => presentation.presenting ? setPresentationView('timer') : setView('timer')} />
           <CurrentMoodCard compact={timer.focusMode} timer={timer} />
         </aside>
       </div>

@@ -2,7 +2,9 @@ export type JiraDisplaySelection = { boardId: number; scope: 'board' | 'backlog'
 export type JiraSprintSelection = { cloudId: string; boardId: number; sprintId: number; display?: JiraDisplaySelection };
 export type JiraOption = { id: string; name: string };
 export type JiraStatusCategory = 'new' | 'indeterminate' | 'done';
-export type JiraTicket = { id: string; key: string; summary: string; status: string; statusCategory?: JiraStatusCategory; issueType?: string; priority: string | null; assigneeId: string | null; assigneeName: string | null; url: string };
+export type JiraTicket = { id: string; key: string; summary: string; status: string; statusCategory?: JiraStatusCategory; issueType?: string; subtask?: boolean; parent?: string | null; priority: string | null; assigneeId: string | null; assigneeName: string | null; url: string };
+export type JiraTransition = { id: string; name: string; status: string; requiresFields: boolean };
+export type JiraTicketGroup = { ticket: JiraTicket; subtasks: JiraTicket[]; context: boolean };
 export type JiraTicketDetails = JiraTicket & { description: string; estimate: { label: string; value: number } | null; estimateUnavailable?: boolean; reporter: string | null; labels: string[]; components: string[]; updated: string | null; dueDate: string | null; parent: string | null };
 export type JiraParticipant = { id: string; name: string; present: boolean; mood: null; moodUpdatedAt: null; moodSlide: null };
 export type JiraConnection = { configured: boolean; connected: boolean; name?: string };
@@ -38,13 +40,32 @@ export function jiraTickets(value: unknown, siteUrl: string): JiraTicket[] {
     const category = status.statusCategory == null ? undefined : jiraObject(status.statusCategory).key;
     const key = jiraText(issue.key, 100);
     if (!/^[A-Z][A-Z0-9_]*-\d+$/.test(key)) throw new Error('Clé Jira invalide.');
+    const parent = fields.parent == null ? null : jiraText(jiraObject(fields.parent).key, 100);
+    if (parent && !/^[A-Z][A-Z0-9_]*-\d+$/.test(parent)) throw new Error('Clé Jira parente invalide.');
     return { id: jiraText(issue.id, 100), key, summary: jiraText(fields.summary), status: jiraText(status.name, 100),
+      parent, subtask: fields.issuetype != null && jiraObject(fields.issuetype).subtask === true,
       ...(category === 'new' || category === 'indeterminate' || category === 'done' ? { statusCategory: category } : {}),
       ...(fields.issuetype == null ? {} : { issueType: jiraText(jiraObject(fields.issuetype).name, 100) }),
       priority: fields.priority == null ? null : jiraText(jiraObject(fields.priority).name, 100),
       assigneeId: assignee ? jiraText(assignee.accountId, 100) : null, assigneeName: assignee ? jiraText(assignee.displayName, 300) : null,
       url: new URL(`/browse/${encodeURIComponent(key)}`, origin.origin).href };
   });
+}
+export function groupJiraTickets(tickets: readonly JiraTicket[], matches: readonly JiraTicket[]): JiraTicketGroup[] {
+  const byKey = new Map(tickets.map(ticket => [ticket.key, ticket]));
+  const matched = new Set(matches.map(ticket => ticket.key));
+  const groups = new Map<string, JiraTicketGroup>();
+  for (const ticket of matches) {
+    const parent = ticket.subtask && ticket.parent ? byKey.get(ticket.parent) : undefined;
+    const root = parent && !parent.subtask ? parent : ticket;
+    let group = groups.get(root.key);
+    if (!group) {
+      group = { ticket: root, subtasks: [], context: !matched.has(root.key) };
+      groups.set(root.key, group);
+    }
+    if (root !== ticket) group.subtasks.push(ticket);
+  }
+  return [...groups.values()];
 }
 export function sprintParticipants(tickets: readonly JiraTicket[]): JiraParticipant[] {
   const people = new Map<string, JiraParticipant>();

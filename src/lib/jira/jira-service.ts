@@ -1,4 +1,4 @@
-import { jiraObject, jiraText, jiraTicketDetails, jiraTickets, sprintParticipants, type JiraOption, type JiraSprintSelection, type JiraStatusCategory } from './jira.ts';
+import { jiraObject, jiraText, jiraTicketDetails, jiraTickets, sprintParticipants, type JiraOption, type JiraSprintSelection, type JiraStatusCategory, type JiraTransition } from './jira.ts';
 import { jiraFetch } from './jira-auth.ts';
 import { WorkspaceError } from '../team/workspace-store.ts';
 import { createHash } from 'node:crypto';
@@ -109,15 +109,46 @@ export class JiraService {
     const estimateField = field ? { id: jiraText(field.fieldId, 100), name: jiraText(field.displayName, 200) } : undefined;
     if (estimateField && !/^(?:customfield_\d+|[a-zA-Z]+)$/.test(estimateField.id)) throw new WorkspaceError(502, 'Champ d’estimation Jira invalide.');
     const fields = ['summary', 'status', 'priority', 'assignee', 'issuetype', 'description', 'reporter', 'labels', 'components', 'updated', 'duedate', 'parent', ...(estimateField ? [estimateField.id] : [])];
+    const issue = await this.boardIssue(selection, key, fields, backlog);
+    return { ...jiraTicketDetails(issue, site.url, estimateField), estimateUnavailable };
+  }
+  private async boardIssue(selection: Pick<JiraSprintSelection, 'cloudId' | 'boardId'>, key: string, fields: string[], backlog: boolean) {
+    if (!/^[A-Z][A-Z0-9_]*-\d+$/.test(key) || key.length > 100) throw new WorkspaceError(400, 'Clé Jira invalide.');
+    await this.authorize(selection.cloudId, selection.boardId, true);
     const query = new URLSearchParams({ maxResults: '1', jql: `key = "${key}"`, fields: fields.join(',') });
     const result = jiraObject(await this.get(`/ex/jira/${selection.cloudId}/rest/software/1.0/board/${selection.boardId}/${backlog ? 'backlog' : 'issue'}?${query}`));
     if (!Array.isArray(result.issues) || result.issues.length !== 1 || jiraObject(result.issues[0]).key !== key) throw new WorkspaceError(404, 'Ce ticket n’est plus disponible sur ce tableau.');
-    return { ...jiraTicketDetails(result.issues[0], site.url, estimateField), estimateUnavailable };
+    return result.issues[0];
+  }
+  async transitions(selection: Pick<JiraSprintSelection, 'cloudId' | 'boardId'>, key: string, backlog = false): Promise<JiraTransition[]> {
+    await this.boardIssue(selection, key, ['summary'], backlog);
+    const body = jiraObject(await this.get(`/ex/jira/${selection.cloudId}/rest/api/3/issue/${key}/transitions?expand=transitions.fields`));
+    if (!Array.isArray(body.transitions) || body.transitions.length > 100) throw new WorkspaceError(502, 'Transitions Jira invalides.');
+    return body.transitions.map(value => {
+      const transition = jiraObject(value);
+      const id = jiraText(transition.id, 100);
+      if (!/^\d+$/.test(id)) throw new WorkspaceError(502, 'Transition Jira invalide.');
+      const fields = transition.fields == null ? {} : jiraObject(transition.fields);
+      return { id, name: jiraText(transition.name, 200), status: jiraText(jiraObject(transition.to).name, 100),
+        requiresFields: Object.values(fields).some(field => { const metadata = jiraObject(field); return metadata.required === true && metadata.hasDefaultValue !== true; }) };
+    });
+  }
+  async transition(selection: Pick<JiraSprintSelection, 'cloudId' | 'boardId'>, key: string, transitionId: string, backlog = false) {
+    if (!/^\d{1,100}$/.test(transitionId)) throw new WorkspaceError(400, 'Transition Jira invalide.');
+    const available = await this.transitions(selection, key, backlog);
+    const transition = available.find(item => item.id === transitionId);
+    if (!transition) throw new WorkspaceError(409, 'Cette transition n’est plus disponible. Actualisez les statuts.');
+    if (transition.requiresFields) throw new WorkspaceError(422, 'Cette transition nécessite des champs supplémentaires. Ouvrez le ticket dans Jira.');
+    await ticketCache.mutate(() => jiraFetch(`https://api.atlassian.com/ex/jira/${selection.cloudId}/rest/api/3/issue/${key}/transitions`, {
+      method: 'POST', headers: { Authorization: `Bearer ${this.token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transition: { id: transitionId } }), signal: this.signal,
+    }));
+    return { status: transition.status };
   }
   private async issues(path: string, siteUrl: string, name: string, jql?: string) {
     const issues: unknown[] = []; const seen = new Set<string>(); let token = '';
     for (let page = 0; page < 100; page++) {
-      const query = new URLSearchParams({ maxResults: '100', fields: 'summary,status,priority,assignee,issuetype' });
+      const query = new URLSearchParams({ maxResults: '100', fields: 'summary,status,priority,assignee,issuetype,parent' });
       if (jql) query.set('jql', jql);
       if (token) query.set('nextPageToken', token);
       const body = jiraObject(await this.get(`${path}?${query}`));

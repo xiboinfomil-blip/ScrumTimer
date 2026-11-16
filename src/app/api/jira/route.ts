@@ -24,15 +24,16 @@ export async function GET(request: Request) {
     const service = await jiraService(database(), request);
     if (action === 'sites') return response({ options: (await service.sites()).map(({ id, name }) => ({ id, name })) });
     const cloudId = query.get('cloudId') ?? '';
-    if (!/^[a-f0-9-]{36}$/i.test(cloudId) && action !== 'tickets' && action !== 'ticket') throw new WorkspaceError(400, 'Site Jira invalide.');
+    if (!/^[a-f0-9-]{36}$/i.test(cloudId) && !['tickets', 'ticket', 'transitions'].includes(action)) throw new WorkspaceError(400, 'Site Jira invalide.');
     if (action === 'boards') return response({ options: await service.boards(cloudId, query.get('display') === '1') });
     const boardId = Number(query.get('boardId'));
     if (action === 'sprints' && Number.isSafeInteger(boardId) && boardId > 0 && boardId <= 2_147_483_647) return response({ options: await service.sprints(cloudId, boardId) });
-    if (action === 'tickets' || action === 'ticket') {
+    if (action === 'tickets' || action === 'ticket' || action === 'transitions') {
       const id = await selectedTeam(request); const sprint = await jiraTeamSprint(database(), id);
       if (!sprint) throw new WorkspaceError(400, 'Cette équipe n’est pas liée à un sprint Jira.');
       const selection = { ...sprint, boardId: sprint.display?.boardId ?? sprint.boardId };
       const backlog = sprint.display?.scope === 'backlog';
+      if (action === 'transitions') return response({ transitions: await service.transitions(selection, query.get('key') ?? '', backlog) });
       if (action === 'ticket') return response({ ticket: await service.ticket(selection, query.get('key') ?? '', backlog) });
       if (['display', 'board', 'backlog'].includes(query.get('scope') ?? '')) return response(await service.boardTickets(selection, query.get('status') ?? 'all', request.headers.get('X-Jira-Refresh') === '1', backlog));
       const participantId = query.get('participantId');
@@ -52,6 +53,15 @@ export async function POST(request: Request) {
       const result = response({ connected: false });
       result.cookies.set(jiraCookie, '', { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 0 });
       return result;
+    }
+    if (body?.action === 'transition') {
+      const input = strictObject(body, ['action', 'key', 'transitionId']);
+      if (typeof input.key !== 'string' || typeof input.transitionId !== 'string') throw new WorkspaceError(400, 'Transition Jira invalide.');
+      const id = await selectedTeam(request);
+      const sprint = await jiraTeamSprint(database(), id);
+      if (!sprint) throw new WorkspaceError(400, 'Cette équipe n’est pas liée à un sprint Jira.');
+      const service = await jiraService(database(), request);
+      return response(await service.transition({ ...sprint, boardId: sprint.display?.boardId ?? sprint.boardId }, input.key, input.transitionId, sprint.display?.scope === 'backlog'));
     }
     const input = strictObject(body, ['action', 'revision', 'sprint']);
     if (input.action !== 'sync' || !Number.isSafeInteger(input.revision) || Number(input.revision) < 0) throw new WorkspaceError(400, 'Synchronisation Jira invalide.');

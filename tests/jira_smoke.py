@@ -36,6 +36,10 @@ class JiraMock(DirectoryMock):
         self.ticket_error = False
         self.detail_reads = []
         self.long_title = False
+        self.hierarchy = False
+        self.status_changes = {}
+        self.transition_writes = []
+        self.transition_error = False
         self.connected = True
         self.sites = [{'id': CLOUD, 'name': 'Infomil Jira'},
                   {'id': '98765432-4321-4321-4321-cba987654321', 'name': 'Autre site Jira'}]
@@ -65,6 +69,17 @@ class JiraMock(DirectoryMock):
                 return
             if method == 'POST':
                 body = request.post_data_json
+                if body.get('action') == 'transition':
+                    assert request.headers.get('x-team-id') == SPRINT
+                    assert set(body) == {'action', 'key', 'transitionId'}
+                    assert body['transitionId'] == '21'
+                    if self.transition_error:
+                        route.fulfill(status=409, json={'error': 'Transition refusée par le workflow Jira.'})
+                        return
+                    self.transition_writes.append(body['key'])
+                    self.status_changes[body['key']] = ('Terminé', 'done')
+                    route.fulfill(json={'status': 'Terminé'})
+                    return
                 assert body == {'action': 'sync', 'revision': self.revision,
                                 'sprint': {**SELECTION, 'sprintId': 3}}
                 assert request.headers.get('x-team-id') == SPRINT
@@ -94,6 +109,12 @@ class JiraMock(DirectoryMock):
             elif action == 'team':
                 assert request.headers.get('x-team-id') == SPRINT
                 payload = {'sprint': {**self.selection, 'name': f"Sprint {self.selection['sprintId']}"}}
+            elif action == 'transitions':
+                assert request.headers.get('x-team-id') == SPRINT
+                payload = {'transitions': [
+                    {'id': '21', 'name': 'Clôturer', 'status': 'Terminé', 'requiresFields': False},
+                    {'id': '31', 'name': 'Résoudre', 'status': 'Résolu', 'requiresFields': True},
+                ]}
             elif action == 'ticket':
                 assert request.headers.get('x-team-id') == SPRINT
                 key = query['key'][0]
@@ -136,6 +157,15 @@ class JiraMock(DirectoryMock):
                      'url': f'https://example.atlassian.net/browse/{prefix}-{index}'}
                     for person, prefix in [('jira:a', 'DEV'), ('jira:b', 'BOB'), (None, 'FREE')]
                     for index in range(1, 8 if person else 2) if source[1] == 'board' or index <= 2]}
+                if self.hierarchy:
+                    for ticket in payload['tickets']:
+                        prefix, index = ticket['key'].split('-')
+                        if index in ('2', '3', '5'):
+                            ticket.update(subtask=True, parent=f'{prefix}-{"99" if index == "5" else "1"}', issueType='Sous-tâche')
+                        if index == '3':
+                            ticket['summary'] += ' W' + 'x' * 180
+                        if ticket['key'] in self.status_changes:
+                            ticket['status'], ticket['statusCategory'] = self.status_changes[ticket['key']]
             else:
                 raise AssertionError(action)
             route.fulfill(json=payload)
@@ -397,10 +427,11 @@ def site_case(browser, unavailable):
         context.close()
 
 
-def ticket_layout_case(browser, width, height, motion, screenshots):
+def ticket_layout_case(browser, width, height, motion, screenshots, hierarchy=False, scrolling=False):
     context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion=motion, service_workers='block')
     bootstrap = install_browser_bootstrap(context)
     db = JiraMock()
+    db.hierarchy = hierarchy
     db.active = SPRINT
     db.teams.append({'id': SPRINT, 'name': 'Équipe sprint', 'kind': 'sprint', 'sprintName': 'Sprint 2', 'memberCount': 2})
     db.states[SPRINT] = team_fixture(roster=[{'id': f'jira:{account}', 'name': name, 'present': True, 'mood': 2, 'moodUpdatedAt': None} for account, name in [('a', 'Alice <texte>'), ('b', 'Bob')]])
@@ -436,7 +467,18 @@ def ticket_layout_case(browser, width, height, motion, screenshots):
         sidebar = page.locator('[data-speaker-sidebar]')
         first_ticket = sidebar.get_by_role('button', name=re.compile(first_prefix + '-1 :'))
         expect(first_ticket).to_be_visible()
+        if scrolling:
+            page_scroll_checks(page, sidebar, first_ticket, width, height, motion, screenshots)
+            bootstrap.assert_no_unexpected_api()
+            assert not errors, errors
+            return
+        if hierarchy:
+            hierarchy_checks(page, sidebar, db, first_prefix, width, height, motion, screenshots)
+            bootstrap.assert_no_unexpected_api()
+            assert not errors, errors
+            return
         pagination = sidebar.get_by_role('navigation', name='Pagination des tickets Jira', exact=True)
+        pagination.scroll_into_view_if_needed()
         expect(pagination).to_be_in_viewport(ratio=1)
         if motion == 'reduce':
             page.screenshot(path=str(screenshots / f'jira-pagination-{width}.png'))
@@ -457,7 +499,6 @@ def ticket_layout_case(browser, width, height, motion, screenshots):
         expect(dialog.locator('script, iframe, img')).to_have_count(0)
         expect(dialog.get_by_role('link', name='Ouvrir dans Jira', exact=True)).to_have_attribute('href', f'https://example.atlassian.net/browse/{first_prefix}-1')
         expect(dialog.get_by_role('button', name='Fermer le ticket', exact=True)).to_be_focused()
-        expect(dialog).to_contain_text('Lecture seule')
         expect(dialog.locator('input, textarea, select, [contenteditable=true]')).to_have_count(0)
         description = dialog.get_by_role('region', name='Description', exact=True)
         expect(description.get_by_role('heading', name='Résumé technique', exact=True)).to_be_visible()
@@ -498,7 +539,7 @@ def ticket_layout_case(browser, width, height, motion, screenshots):
         expect(sidebar.get_by_role('button', name=re.compile(first_prefix + '-6 :'))).to_be_visible()
         pagination = sidebar.get_by_role('navigation', name='Pagination des tickets Jira', exact=True)
         expect(pagination).to_contain_text('Page 2 sur 2')
-        expect(pagination).to_contain_text('6–7 sur 7 tickets')
+        expect(pagination).to_contain_text('7 groupes · 7 tickets')
         expect(pagination.get_by_role('button', name='Tickets suivants', exact=True)).to_have_count(0)
         expect(pagination.get_by_role('button', name='Tickets précédents', exact=True)).to_be_enabled()
         status = sidebar.get_by_role('combobox', name='Sous-statut des tickets Jira', exact=True)
@@ -584,6 +625,181 @@ def ticket_layout_case(browser, width, height, motion, screenshots):
         context.close()
 
 
+def page_scroll_checks(page, sidebar, first_ticket, width, height, motion, screenshots):
+    main = page.locator('#main-content')
+    def reset_scroll():
+        main.evaluate("""element => {
+            element.scrollTo({top: 0, behavior: 'instant'});
+            return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        }""")
+    metrics = main.evaluate("""element => ({
+        height: element.clientHeight, scroll: element.scrollHeight, width: element.clientWidth,
+        outerWidth: element.offsetWidth, right: element.getBoundingClientRect().right,
+        top: element.getBoundingClientRect().top, overflow: getComputedStyle(element).overflowY
+    })""")
+    assert metrics['overflow'] == 'auto', metrics
+    assert metrics['scroll'] > metrics['height'], metrics
+    assert abs(metrics['right'] - width) <= 1, metrics
+    assert metrics['outerWidth'] - metrics['width'] >= 10, metrics
+    assert first_ticket.evaluate("""element => {
+        for (let parent = element.parentElement; parent && parent.id !== 'main-content'; parent = parent.parentElement) {
+            if (['auto', 'scroll'].includes(getComputedStyle(parent).overflowY) && parent.scrollHeight > parent.clientHeight) return false;
+        }
+        return true;
+    }"""), 'Tickets must use the page scrollbar, not a nested scrolling panel'
+    first_ticket.scroll_into_view_if_needed()
+    first_ticket.hover()
+    before_wheel = main.evaluate('element => element.scrollTop')
+    page.mouse.wheel(0, 320)
+    page.wait_for_function('(before) => document.querySelector("#main-content").scrollTop > before', arg=before_wheel)
+    before_up = main.evaluate('element => element.scrollTop')
+    page.mouse.wheel(0, -240)
+    page.wait_for_function('(before) => document.querySelector("#main-content").scrollTop < before', arg=before_up)
+    main.focus()
+    reset_scroll()
+    page.keyboard.press('PageDown')
+    expected = min(metrics['height'] * .5, metrics['scroll'] - metrics['height'])
+    page.wait_for_function('(minimum) => document.querySelector("#main-content").scrollTop >= minimum', arg=expected)
+    if width >= 1100 and height > 650:
+        timer_box = page.locator('.timer-panel').bounding_box()
+        assert timer_box['y'] >= metrics['top'] - 1 and timer_box['y'] + timer_box['height'] <= height + 1, timer_box
+    page.keyboard.press('PageUp')
+    page.wait_for_function('document.querySelector("#main-content").scrollTop === 0')
+    reset_scroll()
+    thumb_height = metrics['height'] ** 2 / metrics['scroll']
+    scrollbar_x = metrics['right'] - (metrics['outerWidth'] - metrics['width']) / 2
+    page.mouse.click(scrollbar_x, metrics['top'] + metrics['height'] - 30)
+    page.wait_for_function('document.querySelector("#main-content").scrollTop > 0')
+    reset_scroll()
+    thumb_y = metrics['top'] + max(24, thumb_height / 2)
+    page.mouse.move(scrollbar_x, thumb_y)
+    page.mouse.down()
+    page.mouse.move(scrollbar_x, min(height - 24, thumb_y + metrics['height'] * .4), steps=8)
+    page.mouse.up()
+    page.wait_for_function('document.querySelector("#main-content").scrollTop > 0')
+    pagination = sidebar.get_by_role('navigation', name='Pagination des tickets Jira')
+    pagination.scroll_into_view_if_needed()
+    pagination.get_by_role('button', name='Tickets suivants').click()
+    expect(pagination).to_contain_text('Page 2 sur 2')
+    expect(page.locator('#start-button')).to_contain_text('Pause')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if motion == 'reduce':
+        page.screenshot(path=str(screenshots / f'jira-page-scroll-{width}.png'))
+    if width >= 1100 and height > 650 and motion == 'reduce':
+        page.get_by_role('button', name='Réglages et outils', exact=True).click()
+        page.get_by_role('menuitem', name='Diffusion', exact=True).click()
+        page.get_by_role('dialog', name='Diffusion et présentation').get_by_role('button', name='Présentation', exact=True).click()
+        expect(page.locator('#timer-page')).not_to_have_attribute('data-page-scroll', '')
+        expect(main).to_have_css('overflow-y', 'hidden')
+        expect(pagination).to_be_visible()
+        page.get_by_role('button', name='Réglages et outils', exact=True).click()
+        page.get_by_role('menuitem', name='Quitter la présentation', exact=True).click()
+        expect(page.locator('#timer-page')).to_have_attribute('data-page-scroll', '')
+        expect(main).to_have_css('overflow-y', 'auto')
+    print(f'PASS native Jira page scroll {width}x{height} {motion}: wheel/down/up, PageDown/PageUp, edge scrollbar drag, pagination; timer still running', flush=True)
+
+
+def hierarchy_checks(page, sidebar, db, prefix, width, height, motion, screenshots):
+    root = sidebar.get_by_role('button', name=re.compile(prefix + '-1 :')).locator('xpath=ancestor::li[1]')
+    accordion = root.locator('details')
+    child = root.get_by_role('button', name=re.compile(prefix + '-2 :'))
+    expect(accordion).to_have_count(1)
+    expect(accordion).not_to_have_attribute('open', '')
+    expect(child).not_to_be_visible()
+    parent_article = root.locator(':scope > article')
+    parent_status = parent_article.get_by_role('button', name=re.compile('^Changer le statut de ' + prefix + '-1 '))
+    expect(parent_status).to_have_text('En cours')
+    expect(parent_article.get_by_role('button')).to_have_count(2)
+    assert parent_article.bounding_box()['height'] <= 140
+    status_box = parent_status.bounding_box()
+    assert round(status_box['height'], 3) >= 44 and round(status_box['width'], 3) >= 44, status_box
+    accordion.locator('summary').focus()
+    page.keyboard.press('Enter')
+    expect(child).to_be_visible()
+    expect(root.get_by_role('button', name=re.compile(prefix + '-3 :'))).to_be_visible()
+    expect(sidebar.get_by_role('button', name=re.compile(prefix + '-4 :')).locator('xpath=ancestor::li[1]').locator('details')).to_have_count(0)
+    expect(sidebar.get_by_role('button', name=re.compile(prefix + '-5 :'))).to_be_visible()
+    expect(sidebar).to_contain_text('Sous-tâche de ' + prefix + '-99')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    assert root.evaluate('element => element.scrollWidth <= element.clientWidth'), root.evaluate("""element => ({
+        client: element.clientWidth, scroll: element.scrollWidth,
+        overflow: [...element.querySelectorAll('*')].filter(child => child.scrollWidth > child.clientWidth && child.clientWidth > 0).map(child => ({tag: child.tagName, classes: child.className, client: child.clientWidth, scroll: child.scrollWidth}))
+    })""")
+    search = sidebar.get_by_role('searchbox', name='Rechercher un ticket Jira')
+    search.fill(prefix + '-2')
+    expect(root).to_contain_text('Parent affiché pour le contexte')
+    expect(root.get_by_role('button', name=re.compile(prefix + '-3 :'))).to_have_count(0)
+    if not child.is_visible():
+        root.locator('summary').click()
+    expect(child).to_be_visible()
+    change = root.get_by_role('button', name=re.compile('^Changer le statut de ' + prefix + '-2 '))
+    change.click()
+    dialog = page.get_by_role('dialog', name='Changer le statut', exact=True)
+    expect(dialog).to_be_visible()
+    select = dialog.get_by_role('combobox', name='Nouveau statut')
+    expect(dialog.get_by_role('button', name='Appliquer')).to_be_disabled()
+    select.select_option('31')
+    expect(dialog).to_contain_text('Des champs supplémentaires sont requis.')
+    expect(dialog.get_by_role('link', name='Ouvrir dans Jira')).to_have_attribute('href', f'https://example.atlassian.net/browse/{prefix}-2')
+    expect(dialog.get_by_role('button', name='Appliquer')).to_have_count(0)
+    assert not db.transition_writes
+    page.keyboard.press('Escape')
+    expect(change).to_be_focused()
+    change.click()
+    select.select_option('21')
+    db.transition_error = True
+    dialog.get_by_role('button', name='Appliquer').click()
+    expect(dialog.get_by_role('alert')).to_contain_text('Transition refusée')
+    expect(dialog).to_be_visible()
+    assert not db.transition_writes
+    db.transition_error = False
+    dialog.get_by_role('button', name='Appliquer').click()
+    expect(dialog).not_to_be_visible()
+    expect(sidebar.get_by_role('status').filter(has_text='statut changé')).to_contain_text(prefix + '-2')
+    expect(sidebar.get_by_role('button', name=re.compile('^Changer le statut de ' + prefix + '-2 '))).to_be_visible()
+    expect(root).to_contain_text('Terminé')
+    assert db.transition_writes == [prefix + '-2']
+    assert db.ticket_reads == ['initial', '1']
+    search.fill('')
+    parent_change = sidebar.get_by_role('button', name=re.compile('^Changer le statut de ' + prefix + '-1 '))
+    parent_change.click()
+    select.select_option('21')
+    dialog.get_by_role('button', name='Appliquer').click()
+    expect(dialog).not_to_be_visible()
+    expect(parent_change).to_be_visible()
+    assert db.transition_writes == [prefix + '-2', prefix + '-1']
+    sidebar.get_by_role('combobox', name='Sous-statut des tickets Jira').select_option('Terminé')
+    expect(root).not_to_contain_text('hors filtres')
+    sidebar.get_by_role('combobox', name='Sous-statut des tickets Jira').select_option('')
+    if not child.is_visible():
+        accordion.locator('summary').click()
+    expect(child).to_be_visible()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    assert root.evaluate('element => element.scrollWidth <= element.clientWidth')
+    if motion == 'reduce':
+        root.locator('summary').scroll_into_view_if_needed()
+        assert_contrast(page, f'Jira hierarchy {width}x{height}')
+        page.screenshot(path=str(screenshots / f'jira-hierarchy-{width}.png'))
+    for issue_prefix in ('DEV', 'BOB'):
+        for index in range(1, 8):
+            db.status_changes[f'{issue_prefix}-{index}'] = ('Terminé', 'done')
+    db.status_changes[prefix + '-1'] = ('Statut unique', 'new')
+    sidebar.get_by_role('button', name='Actualiser les tickets Jira').click()
+    expect(parent_change).to_have_text('Statut unique')
+    status_filter = sidebar.get_by_role('combobox', name='Sous-statut des tickets Jira')
+    status_filter.select_option('Statut unique')
+    parent_change.click()
+    select.select_option('21')
+    dialog.get_by_role('button', name='Appliquer').click()
+    expect(dialog).not_to_be_visible()
+    expect(sidebar.get_by_role('status').filter(has_text='Aucun ticket ne correspond')).to_be_visible()
+    expect(status_filter).to_have_value('Statut unique')
+    expect(status_filter.locator('option:checked')).to_have_text('Statut unique')
+    status_filter.select_option('')
+    expect(parent_change).to_have_text('Terminé')
+    print(f'PASS Jira hierarchy/status {width}x{height} {motion}: grouping, orphan, standalone, filtering, keyboard/focus, required fields, write/retry/refresh', flush=True)
+
+
 def display_settings_case(browser, width, height, motion, screenshots):
     context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion=motion, service_workers='block')
     bootstrap = install_browser_bootstrap(context)
@@ -660,7 +876,7 @@ def display_settings_case(browser, width, height, motion, screenshots):
         expect(sidebar.get_by_role('listitem')).to_have_count(2)
         assert db.ticket_sources == [('2', 'backlog')]
         expect(sidebar.get_by_role('navigation', name='Pagination des tickets Jira', exact=True)).to_have_count(0)
-        sidebar.get_by_role('listitem').first.get_by_role('button').click()
+        sidebar.get_by_role('listitem').first.get_by_role('button', name=re.compile('Voir le ticket$')).click()
         dialog = page.get_by_role('dialog', name=re.compile('ticket 1'))
         expect(dialog.get_by_role('heading', name='Description', exact=True)).to_be_visible()
         assert db.detail_sources == [('2', 'backlog')]
@@ -687,12 +903,26 @@ def main():
         raise ValueError('Local mocked preview only')
     parser = ArgumentParser()
     parser.add_argument('--tickets-only', action='store_true', help='Validate the timer sidebar independently of team creation.')
+    parser.add_argument('--hierarchy-only', action='store_true', help='Validate nested subtasks and status transitions with mocked Jira.')
+    parser.add_argument('--scroll-only', action='store_true', help='Validate native page scrolling by wheel, page keys and the edge scrollbar.')
     parser.add_argument('--settings-only', action='store_true', help='Validate saved Jira display settings in creation and management, then the read-only timer source.')
     args = parser.parse_args()
     screenshots = Path(tempfile.mkdtemp(prefix='scrum-jira-'))
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
+        browser = playwright.chromium.launch(ignore_default_args=['--hide-scrollbars'] if args.scroll_only else None)
         try:
+            if args.scroll_only:
+                for motion in ('reduce', 'no-preference'):
+                    for width, height in SIZES + [(568, 320)]:
+                        ticket_layout_case(browser, width, height, motion, screenshots, scrolling=True)
+                print(f'PASS native Jira page scrolling. Screenshots: {screenshots}', flush=True)
+                return
+            if args.hierarchy_only:
+                for motion in ('reduce', 'no-preference'):
+                    for width, height in SIZES + [(568, 320)]:
+                        ticket_layout_case(browser, width, height, motion, screenshots, hierarchy=True)
+                print(f'PASS Jira hierarchy journeys. Screenshots: {screenshots}', flush=True)
+                return
             if args.settings_only:
                 for motion in ('reduce', 'no-preference'):
                     for width, height in (SIZES[0], SIZES[3]):
