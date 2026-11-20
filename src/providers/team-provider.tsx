@@ -450,10 +450,8 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   }, [changeTeam, notify]);
   const syncSprint = useCallback(async (sprint: JiraSprintSelection) => {
     if (!selectedId.current) return false;
-    const confirmed = await changeTeam('PATCH', { teamId: selectedId.current }, sprint);
-    if (confirmed) notify('Participants du sprint synchronisés.');
-    return confirmed;
-  }, [changeTeam, notify]);
+    return changeTeam('PATCH', { teamId: selectedId.current }, sprint);
+  }, [changeTeam]);
 
   const updateTeamDirectory = useCallback(async (update: TeamDirectoryUpdate) => {
     if (busy.current || !hydrated.current || !teams.some(team => team.id === update.teamId)) return false;
@@ -519,7 +517,6 @@ export function TeamProvider({ children }: { children: ReactNode }) {
           await hydrateTeam(list.activeTeamId, controller, token);
         }
       } else setCloudStatus('saved');
-      notify('Équipe et toutes ses données associées supprimées.');
       return true;
     } catch (error) {
       if (generation.current === token) {

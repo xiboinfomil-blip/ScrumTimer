@@ -8,7 +8,6 @@ import { useRef, useState, type FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useTeam } from '@/providers/team-provider';
-import { useNotify } from '@/providers/notification-provider';
 import { createId } from '@/lib/team/team-storage';
 import { validatePersonName } from '@/lib/team/action-validation';
 import { primaryButton } from '@/components/ui/styles';
@@ -19,7 +18,6 @@ export function AddPersonForm() {
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const { state, updateTeam } = useTeam();
-  const notify = useNotify();
   function submit(event: FormEvent) {
     event.preventDefault();
     const validationError = validatePersonName(name);
@@ -29,7 +27,6 @@ export function AddPersonForm() {
     if (!updateTeam(current => current.roster.length >= 100 ? current : ({ ...current, roster: [...current.roster, person], session: [] }))) { setError('Ajout impossible. Réessayez après le chargement de l’équipe.'); return; }
     setError(null);
     setName('');
-    notify(`${person.name} ajouté(e) à l’équipe.`);
     input.current?.focus();
   }
   return <form className="add-person flex w-full shrink-0 flex-col gap-1" onSubmit={submit} noValidate>

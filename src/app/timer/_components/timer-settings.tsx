@@ -29,16 +29,15 @@ export function TimerSettings({ timer }: { timer: StandupTimer }) {
     const mins = Number(minutes);
     const secs = Number(seconds);
     if (!minutes.trim() || !seconds.trim() || !Number.isInteger(mins) || !Number.isInteger(secs) || mins < 0 || mins > 60 || secs < 0 || secs > 59) {
-      notify('Choisissez de 0 à 60 minutes et de 0 à 59 secondes.');
+      notify('Choisissez de 0 à 60 minutes et de 0 à 59 secondes.', 'error');
       return;
     }
     const total = mins * 60 + secs;
     if (total < 1) {
-      notify('Prévoyez au moins une seconde par personne.');
+      notify('Prévoyez au moins une seconde par personne.', 'error');
       return;
     }
     timer.setDuration(total);
-    notify('Durée par personne mise à jour. Le minuteur a été réinitialisé.');
   }
 
   return (

@@ -210,19 +210,7 @@ with sync_playwright() as p:
             button = page.get_by_role('button', name=f'Humeur {value} pour Alice', exact=True)
             button.click()
             expect(button).to_have_attribute('aria-pressed', 'true')
-            notice = page.locator('[data-notification]')
-            expect(notice).to_be_visible()
-            notice_box = notice.bounding_box()
-            continue_box = page.get_by_role('button', name='Continuer vers le minuteur', exact=True).bounding_box()
-            assert continue_box['y'] + continue_box['height'] <= notice_box['y'] + 1, (width, 'Notification overlaps next step', continue_box, notice_box)
-            assert notice_box['y'] + notice_box['height'] <= height + 1, (width, 'Notification outside viewport', notice_box)
-            assert person_row.evaluate('''row => {
-                const list = row.closest('ul').getBoundingClientRect();
-                return [...row.querySelectorAll('button')].every(button => {
-                    const box = button.getBoundingClientRect();
-                    return box.top >= list.top - 1 && box.bottom <= list.bottom + 1;
-                });
-            }'''), (width, 'Notification must not clip voting controls')
+            expect(page.locator('[data-notification]')).to_have_count(0)
             page.wait_for_function("document.querySelector('.site-header [role=status]')?.title === 'Équipe enregistrée dans Neon.'")
             button.evaluate('async element => { await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {}))); }')
             colors = mood_contrast(button)

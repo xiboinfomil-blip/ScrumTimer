@@ -13,7 +13,6 @@ import { UserRoundCog as ManageAccountsRounded } from 'lucide-react';
 import { RotateCcw as RestartAltRounded } from 'lucide-react';
 import { CircleHelp as HelpOutlineRounded } from 'lucide-react';
 import { useTeam } from '@/providers/team-provider';
-import { useNotify } from '@/providers/notification-provider';
 import { freshRound } from '@/lib/team/attendance';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ParticipantLinkButton } from '@/components/ui/participant-link-button';
@@ -24,7 +23,6 @@ export function TeamNavbarActions({ timerTools, onOpenChange }: { timerTools?: R
   const [open, setOpen] = useState(false);
   const [fresh, setFresh] = useState(false);
   const router = useRouter();
-  const notify = useNotify();
   const close = () => setOpen(false);
   useEffect(() => { onOpenChange?.(open); }, [open, onOpenChange]);
   if (!ready || !activeTeamId) return null;
@@ -34,7 +32,6 @@ export function TeamNavbarActions({ timerTools, onOpenChange }: { timerTools?: R
       if (await resetToday()) router.push(`/participants?team=${activeTeamId}`);
     } else if (updateTeam(freshRound)) {
       setParticipantOrder([]);
-      notify('Nouveau bilan prêt. Confirmez les présences et choisissez les humeurs du jour.');
       router.push(`/participants?team=${activeTeamId}`);
     }
   };

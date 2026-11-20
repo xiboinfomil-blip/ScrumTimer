@@ -7,7 +7,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTeam } from '@/providers/team-provider';
-import { useNotify } from '@/providers/notification-provider';
 import { AttendanceList } from './attendance-list';
 import { ParticipantsActions, ParticipantsHeading } from './participants-controls';
 import { ParticipantIcon } from './participant-icon';
@@ -19,7 +18,6 @@ import { useRemotePage } from '@/providers/remote-host-provider';
 
 export function ParticipantsPage() {
   const { state, activeTeamId, todayRound, updateTeam, participantOrder, setParticipantOrder } = useTeam();
-  const notify = useNotify();
   const router = useRouter();
   const [reveal, setReveal] = useState<{ people: RevealPerson[]; order: string[] } | null>(null);
   const [attendanceView, setAttendanceView] = useState(true);
@@ -41,9 +39,7 @@ export function ParticipantsPage() {
   function toggleAttendance(id: string) {
     const person = state.roster.find(person => person.id === id);
     if (!person) return;
-    if (updateTeam(current => toggleTeamAttendance(current, id))) {
-      notify(`${person.name} : ${person.present ? 'absent(e)' : 'présent(e)'}.`);
-    }
+    updateTeam(current => toggleTeamAttendance(current, id));
   }
   function continueToMood() {
     if (reveal || !present.length) return;

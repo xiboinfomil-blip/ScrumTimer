@@ -88,15 +88,13 @@ export function useStandupTimer() {
     const penalized = penalizeCurrentTimer(current);
     if (penalized === current) return;
     commit(penalized);
-    notify('Pénalité manuelle : −50 points pour la personne en cours, avec un score minimum de 0.');
-  }, [tick, commit, notify]);
+  }, [tick, commit]);
   const restartCurrent = useCallback(() => {
     const current = tick();
     const restarted = restartCurrentTimer(current, preferences.current.duration);
     if (restarted === current) return;
     commit(restarted);
-    notify('Minuteur actuel remis à sa durée complète, en pause. Temps de parole et pénalités conservés ; le prochain démarrage compte comme une relance.');
-  }, [tick, commit, notify]);
+  }, [tick, commit]);
   const toggle = useCallback(() => {
     let current = latest.current;
     if (!current.activeId) return;
@@ -127,8 +125,7 @@ export function useStandupTimer() {
     const current = tick();
     const prepared = previousTimer(current, preferences.current.duration);
     commit(prepared);
-    notify(`Retour à ${prepared.people.find(person => person.id === prepared.activeId)?.name}. Temps restant conservé.`);
-  }, [tick, commit, notify]);
+  }, [tick, commit]);
   const finishWithoutPostponed = useCallback(() => {
     const finished = finishWaitingRound(latest.current);
     if (!finished) return;
@@ -148,21 +145,18 @@ export function useStandupTimer() {
     const current = latest.current;
     roundId.current = null;
     commit(cleared({ ...current, focusMode: false, managing: false, previousId: null, people: current.people.map(p => ({ ...p, turn: undefined, done: false, started: false, speakingSeconds: 0, budgetSeconds: 0, timeUp: false, attempts: 0, manualPenalty: 0 })), activeId: current.people.find(p => !p.postponed)?.id ?? null }));
-    notify('Un nouveau tour commence. Faisons le point.');
-  }, [cleared, commit, notify]);
+  }, [cleared, commit]);
   const addTime = useCallback(() => {
     if (latest.current.focusMode && !latest.current.managing) return;
     const current = tick();
     commit({ ...current, remaining: current.remaining + 30, turnTotal: current.turnTotal + 30, ended: false, warned: false, deadline: current.running ? Date.now() + (current.remaining + 30) * 1000 : current.deadline });
-    notify('Un peu plus de temps : 30 secondes ajoutées.');
-  }, [tick, commit, notify]);
+  }, [tick, commit]);
   const setDuration = useCallback((duration: number) => {
     if (latest.current.focusMode && !latest.current.managing) return;
     if (!Number.isInteger(duration) || duration < 1 || duration > 3659) return;
     updateTeam(current => ({ ...current, duration }));
     commit(cleared(latest.current, duration));
-    notify('Durée par personne mise à jour. Le minuteur a été réinitialisé.');
-  }, [cleared, commit, notify, updateTeam]);
+  }, [cleared, commit, updateTeam]);
   const setWarning = useCallback((warning: number) => {
     if (latest.current.focusMode && !latest.current.managing) return;
     if (![0, 10, 15, 30, 60].includes(warning)) return;
@@ -203,8 +197,7 @@ export function useStandupTimer() {
       if (!following) setLateChecking(true);
       commit({ ...switchTimerSpeaker({ ...current, people }, following?.id ?? null, preferences.current.duration), focusMode: false });
     } else commit({ ...current, people });
-    notify(`${target.name} : passage reporté, sans être marqué terminé.`);
-  }, [tick, commit, notify]);
+  }, [tick, commit]);
   const rejoin = useCallback((id: string, mood?: Mood) => {
     const current = latest.current;
     const target = current.people.find(p => p.id === id && p.postponed && !p.done);
@@ -213,8 +206,7 @@ export function useStandupTimer() {
     if (!updateTeam(value => ({ ...value, postponed: value.postponed?.filter(candidate => candidate !== id), roster: value.roster.map(p => p.id === id && mood !== undefined ? { ...p, mood, moodUpdatedAt: timestamp, moodSlide: value.currentMoodSlide ?? null } : p) }))) return;
     const person = { ...target, postponed: false, ...(mood !== undefined ? { mood, moodUpdatedAt: timestamp, moodSlide: preferences.current.currentMoodSlide ?? null } : {}) };
     commit(rejoinTimer(current, person, preferences.current.session));
-    notify(`${person.name} rejoint le tour. Son minuteur attend Démarrer ou Suivant.`);
-  }, [updateTeam, commit, notify]);
+  }, [updateTeam, commit]);
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (visibleModalDialogs().length || (event.target instanceof Element && event.target.closest('input,select,textarea,button,a,[contenteditable]')) || event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;

@@ -12,7 +12,6 @@ import { Button as IconButton } from '@/components/ui/button';
 import { ArrowLeft as ArrowBackIcon } from 'lucide-react';
 import { ArrowRight as ArrowForwardIcon } from 'lucide-react';
 import { useTeam } from '@/providers/team-provider';
-import { useNotify } from '@/providers/notification-provider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DeleteTeamButton } from '@/components/ui/delete-team-button';
 import { PaginatedList } from '@/components/ui/paginated-list';
@@ -28,7 +27,6 @@ const searchable = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, 
 export function ManageTeamPage({ modal = false }: { modal?: boolean } = {}) {
   const { state, teams, activeTeamName, activeTeamId, updateTeam, cloudStatus } = useTeam();
   const isSprint = teams.find(team => team.id === activeTeamId)?.kind === 'sprint';
-  const notify = useNotify();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState<string[]>([]);
@@ -38,7 +36,7 @@ export function ManageTeamPage({ modal = false }: { modal?: boolean } = {}) {
   const selectedIds = state.roster.filter(person => selected.has(person.id)).map(person => person.id);
   function remove() {
     if (updateTeam(current => ({ ...current, session: [], roster: current.roster.filter(person => !deleting.includes(person.id)) }))) {
-      setSelected(new Set()); notify('Membres supprimés de l’équipe.');
+      setSelected(new Set());
     }
   }
   function saveName(id: string, name: string): string | null {
@@ -46,7 +44,7 @@ export function ManageTeamPage({ modal = false }: { modal?: boolean } = {}) {
     if (error) return error;
     if (!state.roster.some(person => person.id === id)) return 'Cette personne ne fait plus partie de l’équipe.';
     if (!updateTeam(current => ({ ...current, session: [], roster: current.roster.map(person => person.id === id ? { ...person, name: name.trim() } : person) }))) return 'Modification impossible. Vérifiez la connexion et les sauvegardes.';
-    notify('Nom du participant modifié.'); return null;
+    return null;
   }
   return <div className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto pb-5" aria-labelledby="manage-team-heading">
     <header className="relative isolate flex shrink-0 flex-wrap items-end justify-between gap-x-5 gap-y-4 overflow-hidden rounded-xl border border-line bg-[linear-gradient(112deg,#f7fbff_0%,#ffffff_64%,#fff8ef_100%)] px-4 py-4 sm:px-6 sm:py-5">

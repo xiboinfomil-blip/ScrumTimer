@@ -55,6 +55,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
   const seconds = Math.ceil(Math.abs(remaining));
   const minutes = Math.floor(seconds / 60);
   const secs = seconds % 60;
+  const handRotation = Math.max(0, remaining) * 6;
   const urgency = timerUrgency(remaining, warning, ended, turnStarted);
   const critical = urgency === 'critical';
   const nearly = urgency === 'warning' || critical;
@@ -86,7 +87,6 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
             </div>
             <span aria-hidden="true" className="absolute -right-[1%] top-[6%] -z-10 h-[6%] w-[13%] rotate-45 rounded-[3px] border border-[#b8cbd8] bg-[linear-gradient(#ffffff,#dce6ee)]" />
             <div aria-hidden="true" className="absolute inset-[2%] rounded-full border border-white bg-[#fbfdff] shadow-[inset_0_0_24px_#dce6ee80]" />
-            <div aria-hidden="true" className="absolute inset-[24%] rounded-full bg-white shadow-[0_0_24px_#205f9d05]" />
             <svg aria-hidden="true" viewBox="0 0 200 200" className="absolute inset-0 size-full text-[#46697f]" fill="none">{dialMarks}<circle cx="100" cy="100" r="60" stroke="currentColor" strokeWidth=".5" strokeDasharray=".5 3" opacity=".2" /></svg>
             <span aria-hidden="true" className="absolute left-1/2 top-[4.5%] h-[4%] w-[1.4%] -translate-x-1/2 rounded-full bg-accent" />
             <div aria-hidden="true" className="absolute inset-[11%]">
@@ -98,6 +98,11 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
                 <span className="absolute left-1/2 top-[3.2%] size-[5%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-[0_0_0_2px_#ffffff,0_2px_4px_#173c5130]" />
               </div>
             </div>
+            <div aria-hidden="true" data-stopwatch-hand className="absolute inset-[3%] rounded-full transition-transform duration-[250ms] ease-linear motion-reduce:transition-none" style={{ transform: `rotate(${handRotation}deg)` }}>
+              <span className="absolute left-1/2 top-[2%] h-[48%] w-[1px] -translate-x-1/2 rounded-full bg-[#d76521] shadow-[0_0_2px_#ffffff]" />
+              <span className="absolute left-1/2 top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-[#d76521] shadow-sm" />
+            </div>
+            <div aria-hidden="true" className="absolute inset-[17%] rounded-full bg-white shadow-[0_0_24px_#205f9d05]" />
             <div data-stopwatch-readout className="pointer-events-none absolute inset-[17%] flex min-w-0 flex-col items-center justify-center gap-2 [@media(max-height:650px)]:gap-0.5">
               <span id="timer-label" className="text-[11px] font-medium text-muted max-[650px]:text-[10px] [@media(max-height:650px)]:text-[9px]">{ended ? 'Dépassement' : critical ? 'Concluez maintenant' : nearly ? 'Bientôt la fin' : running ? 'Temps restant' : 'Temps par personne'}</span>
               <span id="timer-display" className="block whitespace-nowrap text-[min(5.5rem,20cqw,22cqh)] font-bold leading-none tabular-nums" role="timer" aria-live="off" aria-label={`${ended ? 'Dépassement' : 'Temps restant'} : ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} et ${secs} ${secs === 1 ? 'seconde' : 'secondes'}`}>
@@ -116,7 +121,7 @@ export function TimerPanel({ timer, notes, className = '' }: { timer: StandupTim
             <span className={`flex min-w-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium max-[650px]:sr-only ${statusColor}`} id="status-pill" data-status={status} role="status"><span className={`size-1.5 shrink-0 rounded-full bg-current ${running ? 'motion-safe:animate-pulse' : ''} motion-reduce:animate-none`} aria-hidden="true" />{status}</span>
           </div>
         </div>
-        <Button type="button" id="start-button" className="mx-auto size-16! min-w-0! flex-col! gap-0.5! rounded-full! border! border-white/40! px-1! text-[11px]! font-bold! shadow-[inset_0_1px_0_#ffffff40,0_6px_16px_-4px_#205f9d55]!" disabled={!person} onClick={timer.toggle} aria-keyshortcuts="Space" variant="default">
+        <Button type="button" id="start-button" className="mx-auto h-11! min-h-11! w-full! max-w-[116px]! min-w-0! justify-center! gap-2! rounded-lg! border! border-white/40! px-3! text-xs! font-semibold! normal-case! shadow-[inset_0_1px_0_#ffffff40,0_6px_16px_-4px_#205f9d55]! max-[650px]:gap-1! max-[650px]:px-2!" disabled={!person} onClick={timer.toggle} aria-keyshortcuts="Space" variant="default">
           <TimerIcon name={running ? 'pause' : 'play'} className="size-5 shrink-0" /><span className="truncate">{running ? 'Pause' : turnStarted ? 'Reprendre' : 'Démarrer'}</span>
         </Button>
         <div className="flex min-w-0 items-center justify-end gap-1">

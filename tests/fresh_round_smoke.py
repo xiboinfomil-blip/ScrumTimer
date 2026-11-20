@@ -9,6 +9,15 @@ from browser_bootstrap import install_browser_bootstrap
 from contrast_helpers import assert_contrast
 from postponement_smoke import WorkspaceMock, saved
 
+
+def assert_toast_well_placed(page, width, height):
+    toast = page.locator('[data-notification]')
+    box = toast.bounding_box()
+    header = page.locator('.site-header').bounding_box()
+    assert toast.evaluate("element => getComputedStyle(element.parentElement).position") == 'fixed'
+    assert box and header and box['x'] >= 0 and box['x'] + box['width'] <= width + 1
+    assert header['y'] + header['height'] <= box['y'] and box['y'] + box['height'] <= height
+
 BASE = os.environ.get('BROWSER_TEST_URL', 'http://localhost:3001').rstrip('/')
 
 
@@ -151,6 +160,7 @@ def run_warning_change(browser, width, height):
         assert state()['warned']
         notification = page.locator('[data-notification]')
         expect(notification).to_contain_text('Il reste 25 secondes')
+        assert_toast_well_placed(page, width, height)
         assert_contrast(page, f'warning-notification-{width}', '[data-notification]')
         page.locator('#next-button').click()
         assert state()['people'][0]['turn']['warned']
@@ -167,6 +177,7 @@ def run_warning_change(browser, width, height):
         expect(page.locator('#timer-display')).to_have_text('00:09')
         assert state()['warned']
         expect(notification).to_contain_text('Il reste 9 secondes')
+        assert_toast_well_placed(page, width, height)
         assert_contrast(page, f'changed-warning-notification-{width}', '[data-notification]')
         bootstrap.assert_no_unexpected_api()
         assert not db.unexpected, db.unexpected
@@ -563,6 +574,8 @@ def run_timer_design(browser, width, height, motion, long_names=False):
             box = control.bounding_box()
             assert box['height'] >= 43.99 and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (label, state, box)
             assert box['y'] >= 0 and box['y'] + box['height'] <= height + 1, (label, state, box)
+        start_box = page.locator('#start-button').bounding_box()
+        assert start_box['width'] > start_box['height'], (label, state, 'start/pause control should be a rounded rectangle', start_box)
         assert page.locator('[data-active-speaker]').evaluate('el => { const name = el.querySelector("h2").getBoundingClientRect(); const action = el.querySelector("button").getBoundingClientRect(); return name.right <= action.left + 1; }'), (label, 'name overlaps report action')
         if motion == 'reduce' and not long_names and width in (320, 1366):
             assert_contrast(page, f'{label}-{state}', '.timer-panel')
@@ -574,20 +587,36 @@ def run_timer_design(browser, width, height, motion, long_names=False):
         saved(page)
         expect(page.locator('#timer-display')).to_have_text('02:00')
         check_layout('ready')
+        hand = page.locator('[data-stopwatch-hand]')
+        assert hand.get_attribute('style') == 'transform: rotate(720deg);', 'Hand must reflect 02:00 remaining'
         page.locator('#start-button').click()
         expect(page.locator('#start-button')).to_have_text('Pause')
         check_layout('running')
         page.locator('#timer-display').evaluate('el => { window.__timerDigits = el; }')
         indicator = page.locator('[data-stopwatch-indicator]')
         previous_rotation = indicator.get_attribute('style')
-        for seconds, urgency, value in [(95, 'warning', '00:25'), (16, 'critical', '00:09'), (13, 'expired', '+00:04')]:
+        for seconds, urgency, value, hand_rotation in [(95, 'warning', '00:25', 150), (15, 'critical', '00:09', 54), (13, 'expired', '+00:04', 0)]:
             page.evaluate('seconds => { window.__timerNow += seconds * 1000; document.dispatchEvent(new Event("visibilitychange")); }', seconds)
             expect(page.locator('.timer-panel')).to_have_attribute('data-urgency', urgency)
             expect(page.locator('#timer-display')).to_have_text(value)
             assert page.locator('#timer-display').evaluate('el => el === window.__timerDigits'), 'Digits must not remount on each tick'
             assert indicator.get_attribute('style') != previous_rotation, 'Stopwatch indicator must follow the countdown'
+            assert hand.get_attribute('style') == f'transform: rotate({hand_rotation}deg);', 'Second hand must match time remaining'
             previous_rotation = indicator.get_attribute('style')
             check_layout(urgency)
+            if urgency == 'warning':
+                page.locator('#start-button').click()
+                saver = page.get_by_role('dialog', name='Économiseur d’écran', exact=True)
+                expect(saver).to_be_visible()
+                saver.get_by_role('button', name='Revenir au minuteur', exact=True).click()
+                paused_rotation = hand.get_attribute('style')
+                page.evaluate('window.__timerNow += 2000; document.dispatchEvent(new Event("visibilitychange"));')
+                assert hand.get_attribute('style') == paused_rotation, 'Second hand must stop while paused'
+                page.locator('#start-button').click()
+                expect(page.locator('#start-button')).to_have_text('Pause')
+                page.evaluate('window.__timerNow += 1000; document.dispatchEvent(new Event("visibilitychange"));')
+                expect(page.locator('#timer-display')).to_have_text('00:24')
+                assert hand.get_attribute('style') == 'transform: rotate(144deg);', 'Second hand must resume with the countdown'
         page.locator('#start-button').click()
         saver = page.get_by_role('dialog', name='Économiseur d’écran', exact=True)
         expect(saver).to_be_visible()
@@ -595,6 +624,9 @@ def run_timer_design(browser, width, height, motion, long_names=False):
         expect(saver).not_to_be_visible()
         expect(page.locator('#start-button')).to_have_text('Reprendre')
         check_layout('paused')
+        paused_rotation = hand.get_attribute('style')
+        page.evaluate('window.__timerNow += 2000; document.dispatchEvent(new Event("visibilitychange"));')
+        assert hand.get_attribute('style') == paused_rotation, 'Second hand must stop while paused'
         bootstrap.assert_no_unexpected_api()
         assert not db.unexpected and not errors, (db.unexpected, errors)
         print(f'PASS {label}: dial, stable digits, 44px controls, ready/running/warning/critical/overtime/paused')
